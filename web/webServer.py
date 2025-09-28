@@ -87,10 +87,6 @@ def replace_num(initial,new_num):   #Call this function to replace data in '.txt
         f.writelines(newline)
 
 
-def ap_thread():
-    os.system("sudo create_ap wlan0 eth0 Adeept_Robot 12345678")
-
-
 def functionSelect(command_input, response):
     global functionMode
     if 'scan' == command_input:
@@ -318,18 +314,6 @@ def configPWM(command_input, response):
         scGear.initConfig(2,90,1)
         replace_num('init_pwm2 = ', 90)
             
-def wifi_check():
-    try:
-        s =socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
-        s.connect(("1.1.1.1",80))
-        ipaddr_check=s.getsockname()[0]
-        s.close()
-        print(ipaddr_check)
-        
-    except:
-        ap_threading=threading.Thread(target=ap_thread)   #Define a thread for data receiving
-        ap_threading.setDaemon(True)                          #'True' means it is a front thread,it would close when the mainloop() closes
-        ap_threading.start()                                  #Thread starts
 
 async def check_permit(websocket):
     while True:
@@ -445,7 +429,6 @@ if __name__ == '__main__':
     RL=robotLight.RobotLight()
 
     while  1:
-        wifi_check()
         try:                  #Start server,waiting for client
             start_server = websockets.serve(main_logic, '0.0.0.0', 8888)
             asyncio.get_event_loop().run_until_complete(start_server)
