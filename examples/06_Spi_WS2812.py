@@ -1,7 +1,7 @@
 import time
 from rpi_ws281x import *
 
-    class LED:
+class LED:
         def __init__(self):
             self.LED_COUNT = 14 # Set to the total number of LED lights on the robot
             # which can be more than the total number of LED lights
