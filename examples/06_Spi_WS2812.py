@@ -28,15 +28,15 @@ class LED:
 # This code will control all the WS2812 lights to switch among the three colors
 # Press CTRL+C to exit the program.
 
-        def piloter(self, num_led, color):
+        def piloter(self, num_led, color, bright):
             if color == "R":
-                self.strip.setPixelColor(num_led, Color(255,0,0))
+                self.strip.setPixelColor(num_led, Color(bright,0,0))
 
             elif color == "G":
-                self.strip.setPixelColor(num_led, Color(0,255,0))
+                self.strip.setPixelColor(num_led, Color(0,bright,0))
 
             elif color == "B":
-                self.strip.setPixelColor(num_led, Color(0,0,255))
+                self.strip.setPixelColor(num_led, Color(0,0,bright))
 
             elif color == "N":
                 self.strip.setPixelColor(num_led, Color(0,0,0))
@@ -49,9 +49,9 @@ if __name__ == '__main__':
     led = LED()
 
     led.piloter(0, "R")
-    time.sleep(1)
+    time.sleep(1000)
 
     led.piloter(1, "G")
-    time.sleep(1)
+    time.sleep(1000)
 
     led.piloter(2, "B")
