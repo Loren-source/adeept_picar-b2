@@ -94,10 +94,16 @@ def set_angle(canal: int, angle: float):
 
 
 def centrer_servos():
-    """Met les 3 servos du robot en position centrale (90°)."""
-    print("[INFO] Centrage CH0, CH1, CH2 à 90°...")
+    """Ramène progressivement les 3 servos du robot en position centrale (90°)."""
+    print("[INFO] Centrage progressif CH0, CH1, CH2 → 90°...")
     for canal in CANAUX_ROBOT:
-        set_angle(canal, 90)
+        angle_actuel = _angles.get(canal, 90)
+        cible = 90
+        pas = 1 if cible > angle_actuel else -1
+        for a in range(int(angle_actuel), cible + pas, pas):
+            get_servo(canal).angle = a
+            _angles[canal] = a
+            time.sleep(0.01)
     print("[INFO] Servos centrés.")
 
 
@@ -210,7 +216,7 @@ def main():
                     cible = arg if arg == 'all' else int(arg)
                     reset_canal(cible)
 
-                # ── Démonstration de mouvements sur CH0-CH2
+                # ── Démonstration de mouvements sur CH0-CH2 
                 elif cmd == 'demo':
                     demo_robot()
 
