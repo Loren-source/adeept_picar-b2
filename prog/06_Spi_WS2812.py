@@ -48,9 +48,9 @@ class LED:
 if __name__ == '__main__':
     led = LED()
 
-    while True:
-        num_led = int(input("Numéro de LED (0-13) : "))
-        couleur = input("Couleur (R/G/B/N) - saisir la lettre corespondant ce que vous désirez : ")
+    while True:                                                                                        #si la saisie est fausse, le code boucle sans erreur
+        num_led = int(input("Numéro de LED (0-13) : "))        
+        couleur = input("Couleur (R/G/B/N) - saisir la lettre corespondant ce que vous désirez : ")    #necessite une lettre majuscule OBLIGATOIREMENT
         bright = int(input("Intensité (0-255) : "))
 
         led.piloter(num_led, couleur, bright)
