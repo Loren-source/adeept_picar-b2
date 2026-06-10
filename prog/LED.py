@@ -17,9 +17,9 @@ def switchSetup():
 def led_rgb():
     global r_rgb1, r_rgb2, r_rgb3
     global l_rgb1, l_rgb2, l_rgb3
-    r_rgb3 = LED(1)    # Right Rouge → GPIO 1
+    r_rgb1 = LED(1)    # Right Rouge → GPIO 1
     r_rgb2 = LED(5)    # Right Vert  → GPIO 5
-    r_rgb1 = LED(6)    # Right Bleu  → GPIO 6
+    r_rgb3 = LED(6)    # Right Bleu  → GPIO 6
     l_rgb1 = LED(0)    # Left Rouge  → GPIO 0
     l_rgb2 = LED(19)   # Left Vert   → GPIO 19
     l_rgb3 = LED(13)   # Left Bleu   → GPIO 13
@@ -54,41 +54,41 @@ def switch(port, status):
     # LED RGB droite — logique inversée + extinction des autres canaux
     elif port == 4:      # Right Rouge
         if status == 1:
-            right_off()
-            r_rgb1.off()
-        else:
-            r_rgb1.on()
-    elif port == 5:      # Right Vert
-        if status == 1:
-            right_off()
-            r_rgb2.off()
-        else:
-            r_rgb2.on()
-    elif port == 6:      # Right Bleu
-        if status == 1:
-            right_off()
-            r_rgb3.off()
-        else:
-            r_rgb3.on()
-    # LED RGB gauche — logique inversée + extinction des autres canaux
-    elif port == 7:      # Left Rouge
-        if status == 1:
             left_off()
             l_rgb1.off()
         else:
             l_rgb1.on()
-    elif port == 8:      # Left Vert
+    elif port == 5:      # Right Vert
         if status == 1:
             left_off()
             l_rgb2.off()
         else:
             l_rgb2.on()
-    elif port == 9:      # Left Bleu
+    elif port == 6:      # Right Bleu
         if status == 1:
             left_off()
             l_rgb3.off()
         else:
             l_rgb3.on()
+    # LED RGB gauche — logique inversée + extinction des autres canaux
+    elif port == 7:      # Left Rouge
+        if status == 1:
+            right_off()
+            r_rgb1.off()
+        else:
+            r_rgb1.on()
+    elif port == 8:      # Left Vert
+        if status == 1:
+            right_off()
+            r_rgb2.off()
+        else:
+            r_rgb2.on()
+    elif port == 9:      # Left Bleu
+        if status == 1:
+            right_off()
+            r_rgb3.off()
+        else:
+            r_rgb3.on()
     else:
         print("Commande incorrecte")
 
