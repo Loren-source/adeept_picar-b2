@@ -3,7 +3,7 @@ from time import sleep
 
 Tr = 23
 Ec = 24
-sensor = DistanceSensor(echo=Ec, trigger=Tr,max_distance=2) # Maximum detection distance 2m.
+#sensor = DistanceSensor(echo=Ec, trigger=Tr, max_distance=2) # Maximum detection distance 2m.
 
 # Get the distance of ultrasonic detection.
 #def checkdist():
