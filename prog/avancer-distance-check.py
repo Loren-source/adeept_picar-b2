@@ -52,5 +52,6 @@ except KeyboardInterrupt:
     print("Fin de programme par Ctrl-C")
 
 finally:
+    ultrasonic.close()  # libère GPIO24
     motor.stop()
     print("Nettoyage final réalisé")

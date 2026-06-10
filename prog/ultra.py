@@ -16,8 +16,8 @@ Ec = 24
     #    sleep(0.05)
 
 class Ultrasonic:
-    def __init__(self, trigger_pin=Tr, echo_pin=Ec, max_distance=2):
-        self.sensor = DistanceSensor(echo=echo_pin, trigger=trigger_pin, max_distance=max_distance)
+    def __init__(self, echo=Ec, trigger=Tr, max_distance=2):
+        self.sensor = DistanceSensor(echo=echo, trigger=trigger, max_distance=max_distance)
 
     def get_distance(self):
         return self.sensor.distance * 10  # Return distance in mm
