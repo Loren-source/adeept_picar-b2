@@ -51,14 +51,13 @@ def switch(port, status):
         led2.on() if status == 1 else led2.off()
     elif port == 3:
         led3.on() if status == 1 else led3.off()
-        
-    # LED RGB droite (Ports 4, 5, 6) — logique inversée (off=allumé, on=éteint)
+    # LED RGB droite — logique inversée
     elif port == 4:      # Right Rouge
         if status == 1:
-            right_off()   # Éteint les autres couleurs du même côté
-            r_rgb1.off()  # Allume le rouge droit
+            right_off()
+            r_rgb1.off()
         else:
-            r_rgb1.on()   # Éteint le rouge droit
+            r_rgb1.on()
     elif port == 5:      # Right Vert
         if status == 1:
             right_off()
@@ -71,14 +70,13 @@ def switch(port, status):
             r_rgb3.off()
         else:
             r_rgb3.on()
-            
-    # LED RGB gauche (Ports 7, 8, 9) — logique inversée
+    # LED RGB gauche — logique inversée
     elif port == 7:      # Left Rouge
         if status == 1:
-            left_off()    # Éteint les autres couleurs du même côté
-            l_rgb1.off()  # Allume le rouge gauche
+            left_off()
+            l_rgb1.off()
         else:
-            l_rgb1.on()   # Éteint le rouge gauche
+            l_rgb1.on()
     elif port == 8:      # Left Vert
         if status == 1:
             left_off()
@@ -93,6 +91,7 @@ def switch(port, status):
             l_rgb3.on()
     else:
         print("Commande incorrecte")
+
 # ==========================
 # Tout éteindre
 # ==========================
