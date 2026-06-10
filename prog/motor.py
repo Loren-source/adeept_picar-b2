@@ -61,9 +61,7 @@ class RobotMotor:
 if __name__ == '__main__':
     robot = RobotMotor()
     servos = RobotServos()
-    print("VERSION MOTOR AVEC INPUT ANGLE")
-    angle = int(input("Veuillez saisir l'angle de recentrage : "))
-    servos.set_angle(0, angle)
+    servos.set_angle(0, 98)
 
     try:
         while True:
