@@ -1,25 +1,12 @@
 #!/usr/bin/env python3
 import time
 from gpiozero import LED
-
-# ==========================
-# Initialisation LED HAL3.1
-# ==========================
 def switchSetup():
     global led1, led2, led3
     led1 = LED(9)
     led2 = LED(25)
     led3 = LED(11)
 
-# ==========================
-# Initialisation LED RGB
-# Port 4 = left_R   → GPIO 13
-# Port 5 = left_G   → GPIO 19
-# Port 6 = left_B   → GPIO 0
-# Port 7 = right_R  → GPIO 1
-# Port 8 = right_G  → GPIO 5
-# Port 9 = right_B  → GPIO 6
-# ==========================
 def led_rgb():
     global l_rgb1, l_rgb2, l_rgb3
     global r_rgb1, r_rgb2, r_rgb3
@@ -30,25 +17,16 @@ def led_rgb():
     r_rgb2 = LED(5)    # Right Vert  → GPIO 5
     r_rgb3 = LED(6)    # Right Bleu  → GPIO 6
 
-# ==========================
-# Éteindre tout le feu gauche
-# ==========================
 def left_off():
     l_rgb1.on()   # logique inversée : on() = éteinte
     l_rgb2.on()
     l_rgb3.on()
-
-# ==========================
-# Éteindre tout le feu droit
-# ==========================
+    
 def right_off():
     r_rgb1.on()   # logique inversée : on() = éteinte
     r_rgb2.on()
     r_rgb3.on()
 
-# ==========================
-# Commande des LED
-# ==========================
 def switch(port, status):
     # LED HAL3.1 — logique normale (1=allumée, 0=éteinte)
     if port == 1:
@@ -98,16 +76,10 @@ def switch(port, status):
     else:
         print("Commande incorrecte")
 
-# ==========================
-# Tout éteindre
-# ==========================
 def set_all_switch_off():
     for port in range(1, 10):
         switch(port, 0)
 
-# ==========================
-# Nom des LED
-# ==========================
 PORT_NAMES = {
     1: "LED1",
     2: "LED2",
@@ -120,9 +92,6 @@ PORT_NAMES = {
     9: "right_B"
 }
 
-# ==========================
-# Programme principal
-# ==========================
 def main():
     print("=== Contrôle manuel des LED ===")
     print("11 à 19 : allumer")
@@ -163,9 +132,6 @@ def main():
         else:
             print("Commande incorrecte")
 
-# ==========================
-# Lancement du programme
-# ==========================
 if __name__ == "__main__":
     switchSetup()
     led_rgb()
