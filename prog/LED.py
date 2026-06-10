@@ -17,9 +17,9 @@ def switchSetup():
 def led_rgb():
     global r_rgb1, r_rgb2, r_rgb3
     global l_rgb1, l_rgb2, l_rgb3
-    r_rgb1 = LED(1)    # Right Rouge → GPIO 1
-    r_rgb2 = LED(5)    # Right Vert  → GPIO 6
-    r_rgb3 = LED(6)    # Right Bleu  → GPIO 5
+    r_rgb3 = LED(1)    # Right Rouge → GPIO 1
+    r_rgb2 = LED(5)    # Right Vert  → GPIO 5
+    r_rgb1 = LED(6)    # Right Bleu  → GPIO 6
     l_rgb1 = LED(0)    # Left Rouge  → GPIO 0
     l_rgb2 = LED(19)   # Left Vert   → GPIO 19
     l_rgb3 = LED(13)   # Left Bleu   → GPIO 13
