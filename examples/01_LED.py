@@ -172,6 +172,20 @@ if __name__ == "__main__":
 
     switchSetup()
     led_rgb()
+    print("Test Left Rouge")
+    l_rgb1.off()
+    time.sleep(2)
+    l_rgb1.on()
+
+    print("Test Left Vert")
+    l_rgb2.off()
+    time.sleep(2)
+    l_rgb2.on()
+
+    print("Test Left Bleu")
+    l_rgb3.off()
+    time.sleep(2)
+    l_rgb3.on()
 
     # Tout éteindre au démarrage
     set_all_switch_off()
