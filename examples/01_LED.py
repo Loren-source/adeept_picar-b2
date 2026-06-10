@@ -39,34 +39,34 @@ def switch(port, status):
         elif status == 0:
             led3.off()
     elif port == 4:
-        if status == 1:
+        if status == 0:
             r_rgb1.on()
-        elif status == 0:
+        elif status == 1:
             r_rgb1.off()
     elif port == 5:
-        if status == 1:
+        if status == 0:
             r_rgb2.on()
-        elif status == 0:
+        elif status == 1:
             r_rgb2.off()
     elif port == 6:
-        if status == 1:
+        if status == 0:
             r_rgb3.on()
-        elif status == 0:
+        elif status == 1:
             r_rgb3.off()
     elif port == 7:
-        if status == 1:
+        if status == 0:
             l_rgb1.on()
         elif status == 0:
             l_rgb1.off()
     elif port == 8:
         if status == 1:
             l_rgb2.on()
-        elif status == 0:
+        elif status == 1:
             l_rgb2.off()
     elif port == 9:
-        if status == 1:
+        if status == 0:
             l_rgb3.on()
-        elif status == 0:
+        elif status == 1:
             l_rgb3.off()
     else:
         print('Wrong Command: Example--switch(3, 1)->to switch on port3')
