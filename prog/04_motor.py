@@ -74,11 +74,12 @@ class RobotMotors:
         self.stop()
         self.pwm_motor.deinit()
 
+
 if __name__ == '__main__':
+    robot = RobotMotors()
+
     try:
-
         while True:
-
             moteur = input("Quel moteur tester (1-4, q pour quitter) ? ")
 
             if moteur.lower() == "q":
@@ -95,15 +96,15 @@ if __name__ == '__main__':
 
             vitesse = int(input("Vitesse (0-100) ? "))
 
-            Motor(moteur, direction, vitesse)
+            robot.set_motor(moteur, direction, vitesse)
 
             input("Appuie sur Entrée pour arrêter le moteur...")
 
-            Motor(moteur, 1, 0)
+            robot.set_motor(moteur, 1, 0)
 
     except KeyboardInterrupt:
         pass
 
     finally:
-        motorStop()
-        destroy()
+        robot.stop()
+        robot.destroy()
