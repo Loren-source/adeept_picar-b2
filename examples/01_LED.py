@@ -134,7 +134,7 @@ def main():
 
 if __name__ == "__main__":
     switchSetup()
-    led_rgb_setup()
+    led_rgb()
     try:
         main()
     except KeyboardInterrupt:
