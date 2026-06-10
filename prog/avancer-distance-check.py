@@ -1,4 +1,3 @@
-
 import time
 import threading
 from ultra import Ultrasonic
@@ -6,12 +5,10 @@ from Spi_WS2812 import LED
 from motor import RobotMotor
 
 try:
-    # instanciation
-    led      = LED()
-    motor    = RobotMotor()
+    led        = LED()
+    motor      = RobotMotor()
     ultrasonic = Ultrasonic()
 
-    # création des threads feux de détresse
     def feux_detresse():
         threads = [
             threading.Thread(target=led.piloter, args=(2, 'R', 255)),
@@ -32,17 +29,16 @@ try:
         if movement == "M":
             motor.drive_with_ramp(1, 60, 5)
 
-            distance = ultrasonic.get_distance()
-            print(f"Distance : {distance:.2f} mm")
-            time.sleep(0.05)
+            while True:                          # surveillance continue
+                distance = ultrasonic.get_distance()
+                print(f"Distance : {distance:.2f} mm")
+                time.sleep(0.05)
 
-            if distance < 200:
-                print("Obstacle détecté — arrêt + feux détresse")
-                motor.stop()
-                feux_detresse()
-
-                # attendre un nouveau 'M' pour redémarrer
-                movement = input("Envoie M pour redémarrer : ")
+                if distance < 200:
+                    motor.stop()
+                    feux_detresse()
+                    movement = input("Envoie M pour redémarrer : ")
+                    break                        # sort de la surveillance
 
         elif movement in ("A", "a"):
             motor.stop()
