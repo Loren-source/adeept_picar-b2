@@ -20,7 +20,7 @@ class Ultrasonic:
         self.sensor = DistanceSensor(echo=echo, trigger=trigger, max_distance=max_distance)
 
     def get_distance(self):
-        return self.sensor.distance * 10  # Return distance in mm
+        return self.sensor.distance * 1000  # Return distance in mm
 
 if __name__ == "__main__":
     ultrasonic = Ultrasonic()
