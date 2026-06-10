@@ -87,7 +87,7 @@ PORT_NAMES = {
 }
  
 def main():
-print("=== Contrôle manuel des LEDs ===")
+    print("=== Contrôle manuel des LEDs ===")
     print("11 à 19 → allumer LED 1 à 9")
     print("21 à 29 → éteindre LED 1 à 9")
     print("00       → éteindre toutes les LEDs")
