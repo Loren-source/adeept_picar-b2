@@ -4,6 +4,7 @@ from board import SCL, SDA
 import busio
 from adafruit_pca9685 import PCA9685
 from adafruit_motor import motor
+from servo import RobotServos
 
 
 MOTOR_M1_IN1 = 15
@@ -59,6 +60,8 @@ class RobotMotor:
 
 if __name__ == '__main__':
     robot = RobotMotor()
+    servos = RobotServos()                        #corection du probleme d'angle, a retirer si necessaire
+    servos.set_angle(0, 98)                       #pareil que ci-dessus
 
     try:
         while True:
@@ -66,17 +69,13 @@ if __name__ == '__main__':
 
             if sens == "Q":
                 break
-
             elif sens == "S":
                 robot.stop()
                 continue
-
             elif sens == "A":
                 direction = 1
-
             elif sens == "R":
                 direction = -1
-
             else:
                 print("Commande inconnue.")
                 continue
@@ -91,3 +90,4 @@ if __name__ == '__main__':
 
     finally:
         robot.destroy()
+        servos.pca.deinit()
