@@ -60,8 +60,8 @@ class RobotMotor:
 
 if __name__ == '__main__':
     robot = RobotMotor()
-    servos = RobotServos()
-    servos.set_angle(0, 98)
+    servos = RobotServos()                        #corection du probleme d'angle, a retirer si necessaire
+    servos.set_angle(0, 98)                       #pareil que ci-dessus
 
     try:
         while True:
