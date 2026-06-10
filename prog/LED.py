@@ -13,24 +13,22 @@ def switchSetup():
 
 # ==========================
 # Initialisation LED RGB
+# Port 4 = left_R   → GPIO 13
+# Port 5 = left_G   → GPIO 19
+# Port 6 = left_B   → GPIO 0
+# Port 7 = right_R  → GPIO 1
+# Port 8 = right_G  → GPIO 5
+# Port 9 = right_B  → GPIO 6
 # ==========================
 def led_rgb():
-    global r_rgb1, r_rgb2, r_rgb3
     global l_rgb1, l_rgb2, l_rgb3
-    r_rgb1 = LED(1)    # Right Rouge → GPIO 1
-    r_rgb2 = LED(5)    # Right Vert  → GPIO 5
-    r_rgb3 = LED(6)    # Right Bleu  → GPIO 6
+    global r_rgb1, r_rgb2, r_rgb3
     l_rgb1 = LED(13)   # Left Rouge  → GPIO 13
     l_rgb2 = LED(19)   # Left Vert   → GPIO 19
     l_rgb3 = LED(0)    # Left Bleu   → GPIO 0
-
-# ==========================
-# Éteindre tout le feu droit
-# ==========================
-def right_off():
-    r_rgb1.on()   # logique inversée : on() = éteinte
-    r_rgb2.on()
-    r_rgb3.on()
+    r_rgb1 = LED(1)    # Right Rouge → GPIO 1
+    r_rgb2 = LED(5)    # Right Vert  → GPIO 5
+    r_rgb3 = LED(6)    # Right Bleu  → GPIO 6
 
 # ==========================
 # Éteindre tout le feu gauche
@@ -39,6 +37,14 @@ def left_off():
     l_rgb1.on()   # logique inversée : on() = éteinte
     l_rgb2.on()
     l_rgb3.on()
+
+# ==========================
+# Éteindre tout le feu droit
+# ==========================
+def right_off():
+    r_rgb1.on()   # logique inversée : on() = éteinte
+    r_rgb2.on()
+    r_rgb3.on()
 
 # ==========================
 # Commande des LED
@@ -51,44 +57,44 @@ def switch(port, status):
         led2.on() if status == 1 else led2.off()
     elif port == 3:
         led3.on() if status == 1 else led3.off()
-    # LED RGB droite — logique inversée
-    elif port == 4:      # Right Rouge
-        if status == 1:
-            right_off()
-            r_rgb1.off()
-        else:
-            r_rgb1.on()
-    elif port == 5:      # Right Vert
-        if status == 1:
-            right_off()
-            r_rgb2.off()
-        else:
-            r_rgb2.on()
-    elif port == 6:      # Right Bleu
-        if status == 1:
-            right_off()
-            r_rgb3.off()
-        else:
-            r_rgb3.on()
-    # LED RGB gauche — logique inversée
-    elif port == 7:      # Left Rouge
+    # LED RGB gauche (ports 4,5,6) — logique inversée
+    elif port == 4:      # left_R
         if status == 1:
             left_off()
             l_rgb1.off()
         else:
             l_rgb1.on()
-    elif port == 8:      # Left Vert
+    elif port == 5:      # left_G
         if status == 1:
             left_off()
             l_rgb2.off()
         else:
             l_rgb2.on()
-    elif port == 9:      # Left Bleu
+    elif port == 6:      # left_B
         if status == 1:
             left_off()
             l_rgb3.off()
         else:
             l_rgb3.on()
+    # LED RGB droite (ports 7,8,9) — logique inversée
+    elif port == 7:      # right_R
+        if status == 1:
+            right_off()
+            r_rgb1.off()
+        else:
+            r_rgb1.on()
+    elif port == 8:      # right_G
+        if status == 1:
+            right_off()
+            r_rgb2.off()
+        else:
+            r_rgb2.on()
+    elif port == 9:      # right_B
+        if status == 1:
+            right_off()
+            r_rgb3.off()
+        else:
+            r_rgb3.on()
     else:
         print("Commande incorrecte")
 
@@ -106,12 +112,12 @@ PORT_NAMES = {
     1: "LED1",
     2: "LED2",
     3: "LED3",
-    4: "Right Rouge",
-    5: "Right Vert",
-    6: "Right Bleu",
-    7: "Left Rouge",
-    8: "Left Vert",
-    9: "Left Bleu"
+    4: "left_R",
+    5: "left_G",
+    6: "left_B",
+    7: "right_R",
+    8: "right_G",
+    9: "right_B"
 }
 
 # ==========================
