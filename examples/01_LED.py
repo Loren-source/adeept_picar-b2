@@ -1,5 +1,9 @@
-import time
 from gpiozero import LED
+import time
+
+# ==========================
+# Initialisation LED HAL3.1
+# ==========================
 
 def switchSetup():
     global led1, led2, led3
@@ -7,6 +11,10 @@ def switchSetup():
     led1 = LED(9)
     led2 = LED(25)
     led3 = LED(11)
+
+# ==========================
+# Initialisation LED RGB
+# ==========================
 
 def led_rgb():
     global r_rgb1, r_rgb2, r_rgb3
@@ -20,10 +28,12 @@ def led_rgb():
     l_rgb2 = LED(13)    # Left Vert
     l_rgb3 = LED(0)     # Left Bleu
 
+# ==========================
+# Commande des LED
+# ==========================
 
 def switch(port, status):
 
-    # LED HAL
     if port == 1:
         if status == 1:
             led1.on()
@@ -42,58 +52,57 @@ def switch(port, status):
         else:
             led3.off()
 
-    # Right RGB
     elif port == 4:
         if status == 1:
-            r_rgb1.off()      # logique inversée
-        else:
             r_rgb1.on()
+        else:
+            r_rgb1.off()
 
     elif port == 5:
         if status == 1:
-            r_rgb2.off()
-        else:
             r_rgb2.on()
+        else:
+            r_rgb2.off()
 
     elif port == 6:
         if status == 1:
-            r_rgb3.off()
-        else:
             r_rgb3.on()
+        else:
+            r_rgb3.off()
 
-    # Left RGB
     elif port == 7:
         if status == 1:
-            l_rgb1.off()
-        else:
             l_rgb1.on()
+        else:
+            l_rgb1.off()
 
     elif port == 8:
         if status == 1:
-            l_rgb2.off()
-        else:
             l_rgb2.on()
+        else:
+            l_rgb2.off()
 
     elif port == 9:
         if status == 1:
-            l_rgb3.off()
-        else:
             l_rgb3.on()
+        else:
+            l_rgb3.off()
 
     else:
         print("Wrong Command : Exemple switch(3,1)")
 
+# ==========================
+# Tout éteindre
+# ==========================
 
 def set_all_switch_off():
 
-    # LED HAL
-    for port in range(1, 4):
+    for port in range(1, 10):
         switch(port, 0)
 
-    # LED RGB (logique inversée)
-    for port in range(4, 10):
-        switch(port, 1)
-
+# ==========================
+# Nom des LED
+# ==========================
 
 PORT_NAMES = {
     1: "LED1",
@@ -107,25 +116,28 @@ PORT_NAMES = {
     9: "Left Bleu"
 }
 
+# ==========================
+# Programme principal
+# ==========================
 
 def main():
 
-    print("=== Commande manuelle des LED ===")
-    print("11 à 19 : allumer les LED")
-    print("21 à 29 : éteindre les LED")
+    print("=== Contrôle manuel des LED ===")
+    print("11 à 19 : allumer")
+    print("21 à 29 : éteindre")
     print("00 : tout éteindre")
     print("99 : quitter")
 
     while True:
 
-        commande = input("\nCommande : ")
+        commande = input("\nCommande : ").strip()
 
         if commande == "99":
             print("Fin du programme")
             set_all_switch_off()
             break
 
-        elif commande == "00":
+        if commande == "00":
             set_all_switch_off()
             print("Toutes les LED sont éteintes")
             continue
@@ -141,12 +153,10 @@ def main():
             print("Port incorrect")
             continue
 
-        # Allumer
         if action == 1:
             switch(port, 1)
             print(PORT_NAMES[port], "allumée")
 
-        # Éteindre
         elif action == 2:
             switch(port, 0)
             print(PORT_NAMES[port], "éteinte")
@@ -154,10 +164,17 @@ def main():
         else:
             print("Commande incorrecte")
 
+# ==========================
+# Lancement
+# ==========================
+
 if __name__ == "__main__":
 
     switchSetup()
     led_rgb()
+
+    # Tout éteindre au démarrage
+    set_all_switch_off()
 
     try:
         main()
