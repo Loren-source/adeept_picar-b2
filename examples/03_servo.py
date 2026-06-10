@@ -1,43 +1,43 @@
 #!/usr/bin/env python3
-
-
+ 
+ 
 import time
 from board import SCL, SDA
 import busio
 from adafruit_motor import servo
 from adafruit_pca9685 import PCA9685
-
+ 
 #  CONSTANTES DE CONFIGURATION
-
+ 
 PCA_ADDRESS   = 0x5f       # Adresse I²C de la carte Adeept
 PWM_FREQ      = 50         # Hz – fréquence standard servomoteur
-
+ 
 MIN_PULSE     = 500        # µs – impulsion mini (0°)
 MAX_PULSE     = 2400       # µs – impulsion maxi (180°)
 ACTUATION     = 180        # degrés – plage totale du servo
-
+ 
 ANGLE_MIN     = 0          # limite basse de sécurité
 ANGLE_MAX     = 180        # limite haute de sécurité
-
+ 
 # Canaux des servos sur le robot
 CANAL_TEST    = 15         # servo libre, sans mécanique
 CANAUX_ROBOT  = [0, 1, 2]  # servos montés sur le robot
-
-
-
+ 
+ 
+ 
 #  INITIALISATION
-
+ 
 i2c = busio.I2C(SCL, SDA)
 pca = PCA9685(i2c, address=PCA_ADDRESS)
 pca.frequency = PWM_FREQ
-
+ 
 # Dictionnaire : canal → objet Servo  (créés à la demande)
 _servos: dict[int, servo.Servo] = {}
-
+ 
 # Mémorisation des derniers angles positionnés
 _angles: dict[int, float] = {}
-
-
+ 
+ 
 def get_servo(canal: int) -> servo.Servo:
     """Retourne l'objet Servo du canal, en le créant si besoin."""
     if canal not in _servos:
@@ -48,11 +48,11 @@ def get_servo(canal: int) -> servo.Servo:
             actuation_range=ACTUATION
         )
     return _servos[canal]
-
-
+ 
+ 
 #  SOUS-TÂCHE 1 – Test sur servo libre (CH15)
-
-
+ 
+ 
 def test_servo_libre(canal: int = CANAL_TEST):
     """
     Test aller-retour sur le servo du canal donné (défaut : CH15, libre de toute mécanique).
@@ -69,30 +69,30 @@ def test_servo_libre(canal: int = CANAL_TEST):
         time.sleep(0.01)
     time.sleep(0.5)
     print("[TEST] Terminé.")
-
-
+ 
+ 
 #  SOUS-TÂCHE 2 – Fonction set_angle(canal, angle)
-
-
+ 
+ 
 def set_angle(canal: int, angle: float):
     """
     Positionne le servomoteur du canal à l'angle demandé.
     Sécurité : l'angle est automatiquement limité à [ANGLE_MIN, ANGLE_MAX].
     """
     angle_safe = max(ANGLE_MIN, min(ANGLE_MAX, angle))
-
+ 
     if angle_safe != angle:
         print(f"[SECURITE] Angle {angle}° corrigé → {angle_safe}° (hors plage)")
-
+ 
     s = get_servo(canal)
     s.angle = angle_safe
     _angles[canal] = angle_safe
     print(f"[CH{canal:02d}] → {angle_safe}°")
-
-
+ 
+ 
 #  COMMANDES COMPOSÉES
-
-
+ 
+ 
 def centrer_servos():
     """Ramène progressivement les 3 servos du robot en position centrale (90°)."""
     print("[INFO] Centrage progressif CH0, CH1, CH2 → 90°...")
@@ -103,10 +103,10 @@ def centrer_servos():
         for a in range(int(angle_actuel), cible + pas, pas):
             get_servo(canal).angle = a
             _angles[canal] = a
-            time.sleep(0.01)
+            time.sleep(0.02)
     print("[INFO] Servos centrés.")
-
-
+ 
+ 
 def reset_canal(cible):
     """Remet un canal spécifique à 90°, ou tous les canaux robot si cible='all'."""
     if str(cible).lower() == 'all':
@@ -116,8 +116,8 @@ def reset_canal(cible):
         set_angle(cible, 90)
     else:
         print("[ERREUR] Canal invalide. Usage : reset <0-15> ou reset all")
-
-
+ 
+ 
 def afficher_info():
     """Affiche l'état de tous les servos actuellement initialisés."""
     if not _angles:
@@ -127,16 +127,16 @@ def afficher_info():
     for canal in sorted(_angles):
         tag = "(robot)" if canal in CANAUX_ROBOT else "(test) " if canal == CANAL_TEST else "       "
         print(f"  CH{canal:02d} {tag}  {_angles[canal]:6.1f}°")
-
-
+ 
+ 
 def scan_canaux():
     """Liste les canaux ayant un objet Servo initialisé."""
     if not _servos:
         print("[SCAN] Aucun canal initialisé.")
         return
     print(f"[SCAN] Canaux initialisés : {sorted(_servos.keys())}")
-
-
+ 
+ 
 def demo_robot():
     """
     Enchaîne une séquence de mouvements sur CH0, CH1, CH2 :
@@ -151,41 +151,41 @@ def demo_robot():
             time.sleep(0.4)
         time.sleep(0.3)
     print("[DEMO] Terminée. Servos repositionnés à 90°.")
-
-
+ 
+ 
 #  BOUCLE PRINCIPALE
-
-
+ 
+ 
 def main():
     centrer_servos()
-
+ 
     try:
         while True:
             try:
                 commande = input("\ncommande> ").strip()
             except EOFError:
                 break
-
+ 
             if not commande:
                 continue
-
+ 
             tokens = commande.lower().split()
             cmd = tokens[0]
-
+ 
             try:
                 # ── Quitter 
                 if cmd in ('q', 'quit', 'exit'):
                     break
-
-
+ 
+ 
                 # ── Test servo libre CH15 
                 elif cmd == 'test':
                     test_servo_libre()
-
+ 
                 # ── Centrage CH0/CH1/CH2 
                 elif cmd == 'centre':
                     centrer_servos()
-
+ 
                 # ── Positionnement : set <canal> <angle> 
                 elif cmd == 'set':
                     if len(tokens) < 3:
@@ -198,15 +198,15 @@ def main():
                         print("[ERREUR] Canal invalide (0 à 15).")
                         continue
                     set_angle(canal, angle)
-
+ 
                 # ── Informations sur les angles courants 
                 elif cmd == 'info':
                     afficher_info()
-
+ 
                 # ── Scan des canaux initialisés 
                 elif cmd == 'scan':
                     scan_canaux()
-
+ 
                 # ── Reset d'un canal (ou tous) à 90° 
                 elif cmd == 'reset':
                     if len(tokens) < 2:
@@ -215,24 +215,26 @@ def main():
                     arg = tokens[1]
                     cible = arg if arg == 'all' else int(arg)
                     reset_canal(cible)
-
+ 
                 # ── Démonstration de mouvements sur CH0-CH2 
                 elif cmd == 'demo':
                     demo_robot()
-
+ 
                 else:
                     print(f"[ERREUR] Commande inconnue : '{cmd}'")
-
+ 
             except (ValueError, IndexError) as e:
                 print(f"[ERREUR] Paramètre invalide : {e}")
-
+ 
     finally:
         centrer_servos()
         pca.deinit()
         print("\nAu revoir.")
-
-
+ 
+ 
 if __name__ == "__main__":
     for channel in CANAUX_ROBOT:
         test_servo_libre(channel)
     main()
+ 
+        
