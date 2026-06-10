@@ -54,48 +54,48 @@ def switch(port, status):
             led3.on()
         else:
             led3.off()
+    elif port == 4:      # Right Rouge
+        if status == 1:
+           right_off()
+           r_rgb1.off()
+        else:
+           r_rgb1.on()
 
-   elif port == 4:      # Right Rouge
-    if status == 1:
-        right_off()
-        r_rgb1.off()
-    else:
-        r_rgb1.on()
+    elif port == 5:      # Right Vert
+        if status == 1:
+            right_off()
+            r_rgb2.off()
+        else:
+            r_rgb2.on()
+    
+    elif port == 6:      # Right Bleu
+        if status == 1:
+            right_off()
+            r_rgb3.off()
+        else:
+            r_rgb3.on()
+    
+    elif port == 7:      # Left Rouge
+        if status == 1:
+            left_off()
+            l_rgb1.off()
+        else:
+            l_rgb1.on()
+    
+    elif port == 8:      # Left Vert
+        if status == 1:
+            left_off()
+            l_rgb2.off()
+        else:
+            l_rgb2.on()
+    
+    elif port == 9:      # Left Bleu
+        if status == 1:
+            left_off()
+            l_rgb3.off()
+        else:
+            l_rgb3.on()
 
-elif port == 5:      # Right Vert
-    if status == 1:
-        right_off()
-        r_rgb2.off()
-    else:
-        r_rgb2.on()
-
-elif port == 6:      # Right Bleu
-    if status == 1:
-        right_off()
-        r_rgb3.off()
-    else:
-        r_rgb3.on()
-
-elif port == 7:      # Left Rouge
-    if status == 1:
-        left_off()
-        l_rgb1.off()
-    else:
-        l_rgb1.on()
-
-elif port == 8:      # Left Vert
-    if status == 1:
-        left_off()
-        l_rgb2.off()
-    else:
-        l_rgb2.on()
-
-elif port == 9:      # Left Bleu
-    if status == 1:
-        left_off()
-        l_rgb3.off()
-    else:
-        l_rgb3.on()
 
 # ==========================
 # Tout éteindre
