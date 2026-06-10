@@ -56,10 +56,10 @@ def switch(port, status):
     elif port == 7:
         if status == 0:
             l_rgb1.on()
-        elif status == 0:
+        elif status == 1:
             l_rgb1.off()
     elif port == 8:
-        if status == 1:
+        if status == 0:
             l_rgb2.on()
         elif status == 1:
             l_rgb2.off()
