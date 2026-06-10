@@ -17,39 +17,78 @@ def switchSetup():
 def led_rgb():
     global r_rgb1, r_rgb2, r_rgb3
     global l_rgb1, l_rgb2, l_rgb3
-    # Feu droit
     r_rgb1 = LED(1)    # Right Rouge
     r_rgb2 = LED(5)    # Right Vert
     r_rgb3 = LED(6)    # Right Bleu
-    # Feu gauche
     l_rgb1 = LED(0)    # Left Rouge
     l_rgb2 = LED(19)   # Left Vert
     l_rgb3 = LED(13)   # Left Bleu
 
 # ==========================
+# Éteindre tout le feu droit
+# ==========================
+def right_off():
+    r_rgb1.on()   # logique inversée : on() = éteinte
+    r_rgb2.on()
+    r_rgb3.on()
+
+# ==========================
+# Éteindre tout le feu gauche
+# ==========================
+def left_off():
+    l_rgb1.on()   # logique inversée : on() = éteinte
+    l_rgb2.on()
+    l_rgb3.on()
+
+# ==========================
 # Commande des LED
 # ==========================
 def switch(port, status):
-    # LED HAL3.1 — logique normale (1=allumée, 0=éteinte)
+    # LED HAL3.1 — logique normale
     if port == 1:
         led1.on() if status == 1 else led1.off()
     elif port == 2:
         led2.on() if status == 1 else led2.off()
     elif port == 3:
         led3.on() if status == 1 else led3.off()
-    # LED RGB — logique inversée (1=off(), 0=on())
+    # LED RGB droite — logique inversée + extinction des autres canaux
     elif port == 4:
-        r_rgb1.off() if status == 1 else r_rgb1.on()
+        if status == 1:
+            right_off()      # éteindre vert et bleu d'abord
+            r_rgb1.off()     # allumer rouge
+        else:
+            r_rgb1.on()      # éteindre rouge
     elif port == 5:
-        r_rgb2.off() if status == 1 else r_rgb2.on()
+        if status == 1:
+            right_off()
+            r_rgb2.off()     # allumer vert
+        else:
+            r_rgb2.on()
     elif port == 6:
-        r_rgb3.off() if status == 1 else r_rgb3.on()
+        if status == 1:
+            right_off()
+            r_rgb3.off()     # allumer bleu
+        else:
+            r_rgb3.on()
+    # LED RGB gauche — logique inversée + extinction des autres canaux
     elif port == 7:
-        l_rgb1.off() if status == 1 else l_rgb1.on()
+        if status == 1:
+            left_off()
+            l_rgb1.off()     # allumer rouge
+        else:
+            l_rgb1.on()
     elif port == 8:
-        l_rgb2.off() if status == 1 else l_rgb2.on()
+        if status == 1:
+            left_off()
+            l_rgb2.off()     # allumer vert
+        else:
+            l_rgb2.on()
     elif port == 9:
-        l_rgb3.off() if status == 1 else l_rgb3.on()
+        if status == 1:
+            left_off()
+            l_rgb3.off()     # allumer bleu
+        else:
+            l_rgb3.on()
     else:
         print("Commande incorrecte")
 
