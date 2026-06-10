@@ -73,3 +73,37 @@ class RobotMotors:
     def destroy(self):
         self.stop()
         self.pwm_motor.deinit()
+
+if __name__ == '__main__':
+    try:
+
+        while True:
+
+            moteur = input("Quel moteur tester (1-4, q pour quitter) ? ")
+
+            if moteur.lower() == "q":
+                break
+
+            moteur = int(moteur)
+
+            sens = input("Sens (A=avant, R=arriere) ? ").upper()
+
+            if sens == "A":
+                direction = 1
+            else:
+                direction = -1
+
+            vitesse = int(input("Vitesse (0-100) ? "))
+
+            Motor(moteur, direction, vitesse)
+
+            input("Appuie sur Entrée pour arrêter le moteur...")
+
+            Motor(moteur, 1, 0)
+
+    except KeyboardInterrupt:
+        pass
+
+    finally:
+        motorStop()
+        destroy()
