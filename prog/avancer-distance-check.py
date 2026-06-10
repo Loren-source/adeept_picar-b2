@@ -27,7 +27,9 @@ try:
 
     while True:
         if movement == "M":
+            print("test 1")
             motor.drive_with_ramp(1, 60, 5)
+            print("test 2")
 
             while True:                          # surveillance continue
                 distance = ultrasonic.get_distance()
