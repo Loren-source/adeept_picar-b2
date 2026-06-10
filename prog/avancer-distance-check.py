@@ -2,13 +2,13 @@
 import time
 import threading
 from ultra import Ultrasonic
-from Spi_ws2812 import LED
-from motor import Robotmotor
+from Spi_WS2812 import LED
+from motor import RobotMotor
 
 try:
     # instanciation
     led      = LED()
-    motor    = Robotmotor()
+    motor    = RobotMotor()
     ultrasonic = Ultrasonic()
 
     # création des threads feux de détresse
