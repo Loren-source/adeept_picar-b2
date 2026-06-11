@@ -22,10 +22,10 @@ try:
                 motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, angle + 25)
-                motor.set_motor(1, 20)
+                motor.forward_slow()
             elif ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 1)):
                 servos.set_angle(0, angle - 25)
-                motor.set_motor(1, 20)
+                motor.forward_slow()
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 0)):
                 motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 0)):
@@ -46,10 +46,8 @@ try:
                 break
 
 except KeyboardInterrupt:
-    print("Fin du programme")
-
-finally:
     ultrasonic.close()
     motor.stop()
     servos.centrer_servos(0)
     print("Nettoyage final réalisé")
+    print("Fin du programme")
