@@ -73,6 +73,7 @@ try:
                     while status['right'] != 0 or status['left'] != 0 or status['middle'] != 0:
                         angle = 90
                         servos.set_angle(0, angle)
+                        motor.stop()
                         motor.drive_with_ramp(20, -1, 0)
                         status = tracker.get_status()
 
@@ -81,6 +82,7 @@ try:
                     while status['right'] != 0 or status['left'] != 0 or status['middle'] != 0:
                         angle = 90
                         servos.set_angle(0, angle)
+                        motor.stop()
                         motor.drive_with_ramp(20, -1, 0)
                         status = tracker.get_status()
 
