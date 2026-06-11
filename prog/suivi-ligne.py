@@ -28,28 +28,30 @@ try:
 
 
                 elif ((status['right'] == 0) and (status['left'] == 1) and (status['middle'] == 0)):
-                    while status['left'] != 0:
-                        servos.set_angle(0, angle + 20)
+                    while status['left'] ==1:
+                        servos.set_angle(0, angle - 20)
                         motor.drive_with_ramp(20, 1, 0)
                         status = tracker.get_status()
 
                 elif ((status['right'] == 0) and (status['left'] == 1) and (status['middle'] == 1)):
-                    servos.set_angle(0, angle - 20)
-                    motor.drive_with_ramp(20, -1, 0)
-                    status = tracker.get_status()
+                    while ((status['left'] == 1) and (status['middle'] == 1)):
+                        target = servos.set_angle(0, angle + 20)
+                        motor.drive_with_ramp(20, -1, 0)
+                        status = tracker.get_status()
 
 
                 elif ((status['right'] == 1) and (status['left'] == 0) and (status['middle'] == 0)):
-                    while status['left'] != 0:
-                        servos.set_angle(0, angle - 20)
+                    while status['right'] ==1:
+                        servos.set_angle(0, angle + 20)
                         motor.drive_with_ramp(20, 1, 0)
                         status = tracker.get_status()
 
 
                 elif ((status['right'] == 1) and (status['left'] == 0) and (status['middle'] == 1)):
-                    target=servos.set_angle(0, angle + 20)
-                    motor.drive_with_ramp(20, -1, 0)
-                    status = tracker.get_status()
+                    while ((status['right'] ==1) and (status['middle'] ==1)):
+                        target=servos.set_angle(0, angle - 20)
+                        motor.drive_with_ramp(20, -1, 0)
+                        status = tracker.get_status()
 
 
                 elif ((status['right'] == 1) and (status['left'] == 1) and (status['middle'] == 0)):
