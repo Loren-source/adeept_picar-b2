@@ -19,13 +19,13 @@ try:
             time.sleep(0.05)
 
             status = tracker.get_status()
-            if status['right'] == 0:
-                motor.stop()
-                servos.set_angle(0,angle + 20)
-                motor.drive_with_ramp(20,1, 1)
-            if status['left'] == 0:
+            if status['right'] == 1:
                 motor.stop()
                 servos.set_angle(0,angle - 20)
+                motor.drive_with_ramp(20,1, 1)
+            if status['left'] == 1:
+                motor.stop()
+                servos.set_angle(0,angle + 20)
                 motor.drive_with_ramp(20,1, 1)
 
         while True:  # surveillance continue
