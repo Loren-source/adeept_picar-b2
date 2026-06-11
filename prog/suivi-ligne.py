@@ -46,7 +46,7 @@ try:
                 motor.forward_slow()
                 print("Détection à gauche et à droite, avance droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
-                motor.backward_slow()
+                motor.forward_slow()
                 print("Détection à gauche, au centre et à droite, recule lentement")
             else :
                 motor.backward_slow()
