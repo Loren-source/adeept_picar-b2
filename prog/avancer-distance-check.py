@@ -9,20 +9,6 @@ try:
     motor      = RobotMotor()
     ultrasonic = Ultrasonic()
 
-    def feux_detresse():
-        threads = [
-            threading.Thread(target=led.piloter, args=(2, 'R', 255)),
-            threading.Thread(target=led.piloter, args=(3, 'R', 255)),
-            threading.Thread(target=led.piloter, args=(4, 'R', 255)),
-            threading.Thread(target=led.piloter, args=(5, 'R', 255)),
-            threading.Thread(target=led.piloter, args=(6, 'R', 255)),
-            threading.Thread(target=led.piloter, args=(7, 'R', 255)),
-        ]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
     movement = input("Appuie sur M pour démarrer : ")
 
     while True:
@@ -36,7 +22,6 @@ try:
 
                 if distance < 200:
                     motor.stop()
-                    feux_detresse()
                     movement = input("Envoie M pour redémarrer : ")
                     break                        # sort de la surveillance
 

@@ -2,6 +2,8 @@
 import time
 from board import SCL, SDA
 import busio
+import Spi_WS2812
+import threading
 from adafruit_pca9685 import PCA9685
 from adafruit_motor import motor
 from servo import RobotServos
@@ -24,6 +26,35 @@ class RobotMotor:
         )
 
         self.motor1.decay_mode = motor.SLOW_DECAY
+        self.led = Spi_WS2812.LED()
+
+    def feux_detresse(self):
+        threads = [
+            threading.Thread(target=self.led.piloter, args=(2, 'R', 255)),
+            threading.Thread(target=self.led.piloter, args=(3, 'R', 255)),
+            threading.Thread(target=self.led.piloter, args=(4, 'R', 255)),
+            threading.Thread(target=self.led.piloter, args=(5, 'R', 255)),
+            threading.Thread(target=self.led.piloter, args=(6, 'R', 255)),
+            threading.Thread(target=self.led.piloter, args=(7, 'R', 255)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+    def stop_feux(self):
+        threads = [
+            threading.Thread(target=self.led.piloter, args=(2, 'N', 255)),
+            threading.Thread(target=self.led.piloter, args=(3, 'N', 255)),
+            threading.Thread(target=self.led.piloter, args=(4, 'N', 255)),
+            threading.Thread(target=self.led.piloter, args=(5, 'N', 255)),
+            threading.Thread(target=self.led.piloter, args=(6, 'N', 255)),
+            threading.Thread(target=self.led.piloter, args=(7, 'N', 255)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
     def set_motor(self, direction, speed):
         speed = max(0, min(100, speed))
@@ -35,6 +66,7 @@ class RobotMotor:
         self.motor1.throttle = throttle
 
     def stop(self):
+        self.feux_detresse()
         self.motor1.throttle = 0
 
     def forward_slow(self):
@@ -44,6 +76,7 @@ class RobotMotor:
         self.set_motor(-1, 25)
 
     def drive_with_ramp(self, speed, direction, ramp_time):
+        self.stop_feux()
         speed = max(0, min(100, speed))
 
         steps = 20
