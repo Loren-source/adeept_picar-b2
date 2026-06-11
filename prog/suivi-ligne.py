@@ -19,10 +19,38 @@ try:
                 distance = ultrasonic.get_distance()
                 tracker.print_status()
                 time.sleep(0.05)
-                if status['right'] == 0:
-                    servos.set_angle(0,angle - 20)
-                if status['left'] == 0:
-                    servos.set_angle(0,angle + 20)
+                if status['right'] == 0 and status['left'] == 0  and status['middle'] == 0:
+                    print(status)
+                if status['right'] == 0 and status['left'] == 0 and status['middle'] == 1:
+                    print(status)
+                    while status['middle'] != 0:
+                        motor.drive_with_ramp(20, -1, 1)
+                if status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
+                    print(status)
+                    while status['left'] != 0:
+                        servos.set_angle(0, angle + 20)
+                if status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
+                    print(status)
+                    while status['left'] != 0 and status['middle'] != 0:
+                        servos.set_angle(0, angle - 20)
+                        motor.drive_with_ramp(20, -1, 1)
+                if status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
+                    print(status)
+                    while status['right'] != 0:
+                        servos.set_angle(0, angle - 20)
+                if status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
+                    print(status)
+                    while status['right'] != 0 and status['middle'] != 0:
+                        servos.set_angle(0, angle + 20)
+                        motor.drive_with_ramp(20, -1, 1)
+                if status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
+                    print(status)
+                    while status['right'] != 0 and status['left'] != 0:
+                        motor.drive_with_ramp(20, -1, 1)
+                if status['right'] == 1 and status['left'] == 1 and status['middle'] == 1:
+                    print(status)
+                    while status['right'] != 0 and status['left'] != 0 and status['middle'] != 0:
+                        motor.drive_with_ramp(20, -1, 1)
                 if distance < 200:
                     motor.stop()
                     movement = input("Envoie M pour redémarrer : ")
