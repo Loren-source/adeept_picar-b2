@@ -13,7 +13,7 @@ try:
 
     while True:
         if movement == "M":
-            motor.drive_with_ramp(60, 1, 5)
+            motor.drive_with_ramp((50), 1, 5)
 
             while True:                          # surveillance continue
                 distance = ultrasonic.get_distance()
