@@ -1,10 +1,12 @@
 from lineTracking import LineTracker
 from motor import RobotMotor
 from servo import RobotServos
+from ultra import Ultrasonic
 
 try:
     motor = RobotMotor()
     tracker = LineTracker()
+    ultrasonic = Ultrasonic()
     servos = RobotServos()
     angle = 90
     while True :
