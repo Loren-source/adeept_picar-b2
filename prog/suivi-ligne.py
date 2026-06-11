@@ -14,6 +14,8 @@ try:
     servos.set_angle(0, angle)  # position initiale du servo
     while True :
         movement = input("Appuie sur M pour démarrer : ")
+        if movement=='M' or movement=='m' :
+            motor.drive_with_ramp(30, 1, 5)
         while movement=='M' or movement=='m' :
                 status = tracker.get_status()
                 distance = ultrasonic.get_distance()
@@ -21,21 +23,21 @@ try:
                 if status['right'] == 0 and status['left'] == 0  and status['middle'] == 0:
                     angle = 90
                     servos.set_angle(0, angle)
-                    motor.drive_with_ramp(30, 1, 1)
+                    motor.drive_with_ramp(30, 1, 0)
                     status = tracker.get_status()
 
 
                 elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
                     while status['left'] != 0:
                         t1=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                        t2=Thread(target=motor.drive_with_ramp, args=(20, 1, 1), daemon=True)
+                        t2=Thread(target=motor.drive_with_ramp, args=(20, 1, 0), daemon=True)
                         t1.start()
                         t2.start()
                         status = tracker.get_status()
 
                 elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
                     t3=Thread(target=servos.set_angle, args=(0, angle - 20),daemon=True)
-                    t4=Thread(target=motor.drive_with_ramp,args=(20, -1, 1),daemon=True)
+                    t4=Thread(target=motor.drive_with_ramp,args=(20, -1, 0),daemon=True)
                     t3.start()
                     t4.start()
                     status = tracker.get_status()
@@ -44,7 +46,7 @@ try:
                 elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
                     while status['left'] != 0:
                         t5=Thread(target=servos.set_angle,args=(0, angle - 20),daemon=True)
-                        t6=Thread(target=motor.drive_with_ramp, args=(20, 1, 1),daemon=True)
+                        t6=Thread(target=motor.drive_with_ramp, args=(20, 1, 0),daemon=True)
                         t5.start()
                         t6.start()
                         status = tracker.get_status()
@@ -52,7 +54,7 @@ try:
 
                 elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
                     t7=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                    t8=Thread(target=motor.drive_with_ramp, args=(20, -1, 1), daemon=True)
+                    t8=Thread(target=motor.drive_with_ramp, args=(20, -1, 0), daemon=True)
                     t7.start()
                     t8.start()
                     status = tracker.get_status()
@@ -61,7 +63,7 @@ try:
                 elif status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
                     while status['left'] != 0:
                         t9=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                        t10=Thread(target=motor.drive_with_ramp, args=(20, 1, 1), daemon=True)
+                        t10=Thread(target=motor.drive_with_ramp, args=(20, 1, 0), daemon=True)
                         t9.start()
                         t10.start()
                         status = tracker.get_status()
@@ -71,7 +73,7 @@ try:
                     while status['right'] != 0 or status['left'] != 0 or status['middle'] != 0:
                         angle = 90
                         servos.set_angle(0, angle)
-                        motor.drive_with_ramp(20, -1, 1)
+                        motor.drive_with_ramp(20, -1, 0)
                         status = tracker.get_status()
 
 
@@ -79,7 +81,7 @@ try:
                     while status['right'] != 0 or status['left'] != 0 or status['middle'] != 0:
                         angle = 90
                         servos.set_angle(0, angle)
-                        motor.drive_with_ramp(20, -1, 1)
+                        motor.drive_with_ramp(20, -1, 0)
                         status = tracker.get_status()
 
 
