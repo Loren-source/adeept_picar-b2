@@ -29,43 +29,33 @@ try:
 
                 elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
                     while status['left'] != 0:
-                        t1=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                        t2=Thread(target=motor.drive_with_ramp, args=(20, 1, 0), daemon=True)
-                        t1.start()
-                        t2.start()
+                        servos.set_angle(0, angle + 20)
+                        motor.drive_with_ramp(20, 1, 0)
                         status = tracker.get_status()
 
                 elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
-                    t3=Thread(target=servos.set_angle, args=(0, angle - 20),daemon=True)
-                    t4=Thread(target=motor.drive_with_ramp,args=(20, -1, 0),daemon=True)
-                    t3.start()
-                    t4.start()
+                    servos.set_angle(0, angle - 20)
+                    motor.drive_with_ramp(20, -1, 0)
                     status = tracker.get_status()
 
 
                 elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
                     while status['left'] != 0:
-                        t5=Thread(target=servos.set_angle,args=(0, angle - 20),daemon=True)
-                        t6=Thread(target=motor.drive_with_ramp, args=(20, 1, 0),daemon=True)
-                        t5.start()
-                        t6.start()
+                        servos.set_angle(0, angle - 20)
+                        motor.drive_with_ramp(20, 1, 0)
                         status = tracker.get_status()
 
 
                 elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
-                    t7=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                    t8=Thread(target=motor.drive_with_ramp, args=(20, -1, 0), daemon=True)
-                    t7.start()
-                    t8.start()
+                    target=servos.set_angle(0, angle + 20)
+                    motor.drive_with_ramp(20, -1, 0)
                     status = tracker.get_status()
 
 
                 elif status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
                     while status['left'] != 0:
-                        t9=Thread(target=servos.set_angle, args=(0, angle + 20), daemon=True)
-                        t10=Thread(target=motor.drive_with_ramp, args=(20, 1, 0), daemon=True)
-                        t9.start()
-                        t10.start()
+                        servos.set_angle(0, angle + 20)
+                        motor.drive_with_ramp(20, 1, 0)
                         status = tracker.get_status()
 
 
