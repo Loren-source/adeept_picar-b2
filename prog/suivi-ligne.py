@@ -18,6 +18,8 @@ try:
             status = tracker.get_status()
             tracker.print_status()
             distance = ultrasonic.get_distance()
+            angle = 98
+            servos.set_angle(0, angle)  # réinitialise l'angle à chaque boucle
             if ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 0)):
                 motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 0)):
