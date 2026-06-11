@@ -2,13 +2,6 @@ import time
 from gpiozero import InputDevice
 
 class LineTracker:
-    """Gère les 3 capteurs IR réfléchissants du robot.
-    
-    Valeur retournée par chaque capteur :
-        0 = ligne noire détectée (infrarouge absorbé)
-        1 = sol blanc détecté   (infrarouge réfléchi)
-    """
-
     def __init__(self, pin_left=22, pin_middle=27, pin_right=17):
         self.left   = InputDevice(pin=pin_left)
         self.middle = InputDevice(pin=pin_middle)
