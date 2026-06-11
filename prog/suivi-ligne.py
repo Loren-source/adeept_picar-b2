@@ -61,13 +61,11 @@ try:
                     print(status)
                     while status['right'] != 0 and status['left'] != 0:
                         status = tracker.get_status()
-                        motor.drive_with_ramp(20, -1, 1)
                 elif status['right'] == 1 and status['left'] == 1 and status['middle'] == 1:
                     status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['left'] != 0 and status['middle'] != 0:
                         status = tracker.get_status()
-                        motor.drive_with_ramp(20, -1, 1)
                 if distance < 200:
                     motor.stop()
                     movement = input("Envoie M pour redémarrer : ")
