@@ -1,7 +1,6 @@
 import time
 import smbus
 
-
 class ADS7830(object):
     def __init__(self):
         self.cmd = 0x84
@@ -14,8 +13,15 @@ class ADS7830(object):
 
 if __name__ == "__main__":
     adc = ADS7830()
-    while True:
-        adc_value = adc.analogRead(1)
-        print(f"Light Tracking Value: {adc_value}")
-        time.sleep(0.5)
+    try:
+        while True:
+            ldr_gauche = adc.analogRead(1)   
+            ldr_droite = adc.analogRead(2)   
+            print(f"Gauche: {ldr_gauche:3d}   Droite: {ldr_droite:3d}")
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+           
+        
+   
 
