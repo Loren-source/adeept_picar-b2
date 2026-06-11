@@ -20,36 +20,51 @@ try:
                 tracker.print_status()
                 time.sleep(0.05)
                 if status['right'] == 0 and status['left'] == 0  and status['middle'] == 0:
+                    status = tracker.get_status()
                     print(status)
                 if status['right'] == 0 and status['left'] == 0 and status['middle'] == 1:
+                    status = tracker.get_status()
                     print(status)
                     while status['middle'] != 0:
+                        status = tracker.get_status()
                         motor.drive_with_ramp(20, -1, 1)
                 if status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
+                    status = tracker.get_status()
                     print(status)
                     while status['left'] != 0:
+                        status = tracker.get_status()
                         servos.set_angle(0, angle + 20)
                 if status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
+                    status = tracker.get_status()
                     print(status)
                     while status['left'] != 0 and status['middle'] != 0:
+                        status = tracker.get_status()
                         servos.set_angle(0, angle - 20)
                         motor.drive_with_ramp(20, -1, 1)
                 if status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
+                    status = tracker.get_status()
                     print(status)
                     while status['right'] != 0:
+                        status = tracker.get_status()
                         servos.set_angle(0, angle - 20)
                 if status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
+                    status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['middle'] != 0:
+                        status = tracker.get_status()
                         servos.set_angle(0, angle + 20)
                         motor.drive_with_ramp(20, -1, 1)
                 if status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
+                    status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['left'] != 0:
+                        status = tracker.get_status()
                         motor.drive_with_ramp(20, -1, 1)
                 if status['right'] == 1 and status['left'] == 1 and status['middle'] == 1:
+                    status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['left'] != 0 and status['middle'] != 0:
+                        status = tracker.get_status()
                         motor.drive_with_ramp(20, -1, 1)
                 if distance < 200:
                     motor.stop()
