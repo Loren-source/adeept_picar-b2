@@ -10,7 +10,7 @@ try:
     ultrasonic = Ultrasonic()
     servos = RobotServos()
     angle = 98
-    servos.set_angle(0, angle)  # position initiale du servo
+    servos.set_angle(0, angle)
 
     while True:
         movement = input("Appuie sur M pour démarrer : ")
@@ -30,36 +30,36 @@ try:
                 status = tracker.get_status()
 
             elif ((status['right'] == 1) and (status['left'] == 0) and (status['middle'] == 1)):
-                while ((status['left'] == 0) and (status['middle'] == 0)):
-                    servos.set_angle(0, angle + 20)
+                servos.set_angle(0, angle + 20)
+                while ((status['right'] == 1) and (status['middle'] == 1)):
                     motor.drive_with_ramp(20, 1, 0)
                     status = tracker.get_status()
 
             elif ((status['right'] == 1) and (status['left'] == 0) and (status['middle'] == 0)):
-                while ((status['left'] == 0) and (status['middle'] == 0)):
-                    target = servos.set_angle(0, angle - 20)
-                    motor.drive_with_ramp(20, -1, 0)
+                servos.set_angle(0, angle - 20)
+                while ((status['right'] == 1)):
+                    motor.drive_with_ramp(30, -1, 0)
                     status = tracker.get_status()
 
             elif ((status['right'] == 0) and (status['left'] == 1) and (status['middle'] == 1)):
-                while (status['right'] == 0):
-                    target = servos.set_angle(0, angle + 20)
-                    motor.drive_with_ramp(20, 1, 0)
+                servos.set_angle(0, angle + 20)
+                while ((status['left'] == 1) and (status['middle'] == 1)):
+                    motor.drive_with_ramp(30, 1, 0)
                     status = tracker.get_status()
 
             elif ((status['right'] == 0) and (status['left'] == 1) and (status['middle'] == 0)):
-                while status['right'] == 0:
-                    servos.set_angle(0, angle - 20)
+                servos.set_angle(0, angle - 20)
+                while status['right'] == 1:
                     motor.stop()
-                    motor.drive_with_ramp(20, -1, 0)
+                    motor.drive_with_ramp(30, -1, 0)
                     status = tracker.get_status()
 
             elif ((status['right'] == 0) and (status['left'] == 0) and (status['middle'] == 1)):
-                while ((status['right'] != 1) or (status['left'] != 1) or (status['middle'] != 1)):
+                servos.set_angle(0, angle)
+                while ((status['right'] != 0) or (status['left'] != 0) or (status['middle'] != 0)):
                     angle = 98
-                    servos.set_angle(0, angle)
                     motor.stop()
-                    motor.drive_with_ramp(20, -1, 0)
+                    motor.drive_with_ramp(30, -1, 0)
                     status = tracker.get_status()
 
             if distance < 200:
