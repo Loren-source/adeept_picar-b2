@@ -20,47 +20,49 @@ try:
                 tracker.print_status()
                 time.sleep(0.05)
                 if status['right'] == 0 and status['left'] == 0  and status['middle'] == 0:
+                    angle = 90
+                    servos.set_angle(0, angle)
                     status = tracker.get_status()
                     print(status)
-                if status['right'] == 0 and status['left'] == 0 and status['middle'] == 1:
+                elif status['right'] == 0 and status['left'] == 0 and status['middle'] == 1:
                     status = tracker.get_status()
                     print(status)
                     while status['middle'] != 0:
                         status = tracker.get_status()
                         motor.drive_with_ramp(20, -1, 1)
-                if status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
+                elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 0:
                     status = tracker.get_status()
                     print(status)
                     while status['left'] != 0:
                         status = tracker.get_status()
                         servos.set_angle(0, angle + 20)
-                if status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
+                elif status['right'] == 0 and status['left'] == 1 and status['middle'] == 1:
                     status = tracker.get_status()
                     print(status)
                     while status['left'] != 0 and status['middle'] != 0:
                         status = tracker.get_status()
                         servos.set_angle(0, angle - 20)
                         motor.drive_with_ramp(20, -1, 1)
-                if status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
+                elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 0:
                     status = tracker.get_status()
                     print(status)
                     while status['right'] != 0:
                         status = tracker.get_status()
                         servos.set_angle(0, angle - 20)
-                if status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
+                elif status['right'] == 1 and status['left'] == 0 and status['middle'] == 1:
                     status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['middle'] != 0:
                         status = tracker.get_status()
                         servos.set_angle(0, angle + 20)
                         motor.drive_with_ramp(20, -1, 1)
-                if status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
+                elif status['right'] == 1 and status['left'] == 1 and status['middle'] == 0:
                     status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['left'] != 0:
                         status = tracker.get_status()
                         motor.drive_with_ramp(20, -1, 1)
-                if status['right'] == 1 and status['left'] == 1 and status['middle'] == 1:
+                elif status['right'] == 1 and status['left'] == 1 and status['middle'] == 1:
                     status = tracker.get_status()
                     print(status)
                     while status['right'] != 0 and status['left'] != 0 and status['middle'] != 0:
@@ -70,11 +72,14 @@ try:
                     motor.stop()
                     movement = input("Envoie M pour redémarrer : ")
                     break  # sort de la surveillance
-except :
-    print("Fin de programme par Ctrl-C")
+
+
+except KeyboardInterrupt:
+    print("Fin du programme")
+
 
 finally:
-    ultrasonic.close()  # libère GPIO24
+    ultrasonic.close()
     motor.stop()
     servos.centrer_servos(0)
     print("Nettoyage final réalisé")
