@@ -20,7 +20,7 @@ try:
                 print(f"Distance : {distance:.2f} mm")
                 time.sleep(0.05)
 
-                if distance < 200:
+                if distance < 600:
                     motor.stop()
                     movement = input("Envoie M pour redémarrer : ")
                     break                        # sort de la surveillance
