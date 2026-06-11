@@ -30,7 +30,7 @@ try:
 
         while True:  # surveillance continue
             distance = ultrasonic.get_distance()
-            print(f"Distance : {distance:.2f} mm")
+            tracker.print_status()
             time.sleep(0.05)
 
             if distance < 200:
