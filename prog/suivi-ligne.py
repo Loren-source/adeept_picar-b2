@@ -32,15 +32,17 @@ try:
                 motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 0)):
                 servos.set_angle(0, angle - 25)
-                motor.backward_slow()
+                motor.forward_slow()
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 1)):
                 servos.set_angle(0, angle + 25)
-                motor.backward_slow()
+                motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 1)):
                 motor.forward_slow()
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
                 angle = 98
                 servos.set_angle(0, angle)
+                motor.backward_slow()
+            else :
                 motor.backward_slow()
             if distance < 200:
                 motor.stop()
