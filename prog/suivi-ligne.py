@@ -19,10 +19,10 @@ try:
                 distance = ultrasonic.get_distance()
                 tracker.print_status()
                 time.sleep(0.05)
-                if status['right'] == 0:
+                while status['right'] == 0:
                     motor.stop()
                     servos.set_angle(0,angle - 20)
-                if status['left'] == 0:
+                while status['left'] == 0:
                     motor.stop()
                     servos.set_angle(0,angle + 20)
                 if distance < 200:
