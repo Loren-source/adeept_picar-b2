@@ -36,11 +36,11 @@ try:
                 print("Détection au centre, avance droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 0)):
                 servos.set_angle(0, angle - 25)
-                motor.forward_slow()
+                motor.backward_slow()
                 print("Détection à gauche et au centre, tourne à gauche")
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 1)):
                 servos.set_angle(0, angle + 25)
-                motor.forward_slow()
+                motor.backward_slow()
                 print("Détection à droite et au centre, tourne à droite")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 1)):
                 motor.forward_slow()
