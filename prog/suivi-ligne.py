@@ -48,9 +48,11 @@ try:
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
                 angle = 98
                 servos.set_angle(0, angle)
+                motor.stop()
                 motor.backward_slow()
                 print("Détection à gauche, au centre et à droite, recule lentement")
             else :
+                motor.stop()
                 motor.backward_slow()
                 print("Situation inattendue, recule lentement")
             if distance < 200:
