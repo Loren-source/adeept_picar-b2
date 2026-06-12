@@ -4,7 +4,7 @@ import select
 from motor import RobotMotor
 from servo import RobotServos
 from ultra import Ultrasonic
-from ldr import ADS7830
+from lightTracking import ADS7830
 
 DISTANCE_OBSTACLE = 200  
 ANGLE_CENTRE         = 90 
