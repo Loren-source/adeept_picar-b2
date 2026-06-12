@@ -13,8 +13,8 @@ try:
 
     while True:
         if movement == "M":
-            motor.stop_feux()                        # CORRECTION 2 : éteint les feux avant de repartir
-            motor.drive_with_ramp(20, 1, 1)          # CORRECTION 3 : rampe 1s au lieu de 5s
+            motor.stop_feux()                        
+            motor.drive_with_ramp(20, 1, 1)          
             distance1 = ultrasonic.get_distance()
             print(f"Distance : {distance1:.2f} mm")
             time.sleep(0.05)
@@ -25,7 +25,7 @@ try:
                 time.sleep(0.05)
 
                 if distance < 200:
-                    motor.stop()                     # arrêt + feux de détresse (défini dans motor.py)
+                    motor.stop()                     # arrêt + feux de détresse 
                     movement = input("Envoie M pour redémarrer : ")
                     break                            # sort de la surveillance
 
@@ -41,6 +41,5 @@ except KeyboardInterrupt:
     print("Fin de programme")
 
 finally:
-    # CORRECTION 1 : suppression de ultrasonic.close() qui n'existe pas
     motor.stop()
     print("Nettoyage final réalisé")
