@@ -111,13 +111,12 @@ try:
                 break
 
             else:
-                # Situation transitoire : capteurs entre deux états
                 servos.set_angle(0, ANGLE_CENTRE)
-                motor.forward_slow()
-                print("Situation transitoire, continue doucement")
-                time.sleep(0.02)  # petite pause pour stabiliser les capteurs
+                motor.backward_slow()
+                print("Situation inattendue, recule")
 
             time.sleep(0.05)
+
 
 except KeyboardInterrupt:
     motor.stop()
