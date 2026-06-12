@@ -22,9 +22,10 @@ try:
             angle = 98
             servos.set_angle(0, angle)
             if ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 0)):
-                servos.set_angle(0, last_angle)
-                motor.backward_slow()
-                print("ligne -> tout droit")
+                while ((status['left'] != 1) and (status['middle'] != 1) and (status['right'] != 1)):
+                    servos.set_angle(0, last_angle)
+                    motor.backward_slow()
+                print("pas de ligne -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, angle + 45)
                 motor.forward_slow()
@@ -49,9 +50,8 @@ try:
                 print("gauche et droite -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
                 motor.stop()
-                while ((status['left']!= 0) and (status['middle'] != 0) and (status['right'] != 0)) :
-                    motor.backward_slow()
-                print("tout blanc -> recul")
+                motor.forward_slow()
+                print("ligne -> recul")
             else :
                 motor.backward_slow()
                 print("Situation inattendue, recule lentement")
