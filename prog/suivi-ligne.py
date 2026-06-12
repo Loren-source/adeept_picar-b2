@@ -50,7 +50,7 @@ try:
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
                 motor.stop()
                 while ((status['left']!= 0) and (status['middle'] != 0) and (status['right'] != 0)) :
-                    motor.forward_slow()
+                    motor.backward_slow()
                 print("tout blanc -> recul")
             else :
                 motor.backward_slow()
