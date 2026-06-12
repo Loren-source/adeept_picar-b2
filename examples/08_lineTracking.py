@@ -19,7 +19,7 @@ try:
     servos.set_angle(0, ANGLE_CENTRE)
 
     #  Calibration rapide au démarrage 
-    print("=== Calibration des angles ===")
+    print(" Calibration des angles ")
     print("Entre un angle de correction à tester (ex: 25), ou 'ok' pour démarrer")
 
     while True:
@@ -45,7 +45,7 @@ try:
         except ValueError:
             print("Entre un nombre entier ou 'ok'")
 
-    # === Boucle principale de suivi de ligne ===
+    #  Boucle principale de suivi de ligne 
     while True:
         movement = input("\nAppuie sur M pour démarrer (A pour arrêter) : ")
         if movement not in ('M', 'm'):
@@ -62,13 +62,13 @@ try:
             m = status['middle']
             r = status['right']
 
-            # --- Arrêt obstacle ---
+            #  Arrêt obstacle 
             if distance < DISTANCE_ARRET:
                 motor.stop()
                 print(f"Obstacle détecté à {distance} mm, arrêt.")
                 break
 
-            # --- Suivi de ligne ---
+            #  Suivi de ligne 
             if l==0 and m==0 and r==0:
                 servos.set_angle(0, ANGLE_CENTRE)
                 motor.backward_slow()
