@@ -24,34 +24,34 @@ try:
             if ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, last_angle)
                 motor.backward_slow()
-                print("Pas de ligne détectée, avance lentement")
+                print("ligne -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, angle + 45)
                 motor.forward_slow()
-                print("Détection à gauche, tourne à gauche")
+                print("blanc a gauche -> tourne a droite")
             elif ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 1)):
                 servos.set_angle(0, angle - 45)
                 motor.forward_slow()
-                print("Détection à droite, tourne à droite")
+                print("blanc a droite tourne a gauche")
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 0)):
                 motor.forward_slow()
-                print("Détection au centre, avance droit")
+                print("imporbable -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 0)):
                 servos.set_angle(0, angle - 45)
                 motor.forward_slow()
-                print("Détection à gauche et au centre, tourne à gauche")
+                print("blanc a gauche et au centre -> tourne a droite")
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 1)):
                 servos.set_angle(0, angle + 45)
                 motor.forward_slow()
-                print("Détection à droite et au centre, tourne à droite")
+                print("blacn a droite et au centre -> tourne a gauche")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 1)):
                 motor.forward_slow()
-                print("Détection à gauche et à droite, avance droit")
+                print("gauche et droite -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 1)):
                 motor.stop()
                 while ((status['left']!= 0) and (status['middle'] != 0) and (status['right'] != 0)) :
                     motor.forward_slow()
-                print("Détection à gauche, au centre et à droite, recule lentement")
+                print("tout blanc -> recul")
             else :
                 motor.backward_slow()
                 print("Situation inattendue, recule lentement")
