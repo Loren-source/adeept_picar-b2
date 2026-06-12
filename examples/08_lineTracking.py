@@ -1,38 +1,126 @@
 import time
-import argparse
-from gpiozero import InputDevice
+from lineTracking import LineTracker
+from motor import RobotMotor
+from servo import RobotServos
+from ultra import Ultrasonic
 
-import time
-from gpiozero import InputDevice
+#  Paramètres ajustables 
+DISTANCE_ARRET = 200  # mm (20 cm par défaut)
+ANGLE_CENTRE = 98
+ANGLE_LEGER = 25      # à calibrer
+ANGLE_FORT  = 45      # à calibrer
 
-class LineSensor:
+try:
+    motor = RobotMotor()
+    tracker = LineTracker()
+    ultrasonic = Ultrasonic()
+    servos = RobotServos()
 
-    def __init__(self, pin_left=22, pin_middle=27, pin_right=17):
-        # Les pins deviennent des attributs de l'objet
-        self.left   = InputDevice(pin=pin_left)
-        self.middle = InputDevice(pin=pin_middle)
-        self.right  = InputDevice(pin=pin_right)
+    servos.set_angle(0, ANGLE_CENTRE)
 
-    def read(self):
-        """Retourne un dictionnaire avec l'état des 3 capteurs."""
-        return {
-            "left":   self.left.value,
-            "middle": self.middle.value,
-            "right":  self.right.value,
-        }
+    #  Calibration rapide au démarrage 
+    print("=== Calibration des angles ===")
+    print("Entre un angle de correction à tester (ex: 25), ou 'ok' pour démarrer")
 
-    def print_status(self):
-        """Affiche l'état des capteurs dans le terminal."""
-        values = self.read()
-        print("left: %(left)d   middle: %(middle)d   right: %(right)d" % values)
+    while True:
+        val = input("Angle à tester (ou 'ok') : ")
+        if val.lower() == 'ok':
+            break
+        try:
+            angle = int(val)
+            print(f"  → Test correction gauche : CENTRE + {angle}")
+            servos.set_angle(0, ANGLE_CENTRE + angle)
+            time.sleep(2)
+            print(f"  → Test correction droite : CENTRE - {angle}")
+            servos.set_angle(0, ANGLE_CENTRE - angle)
+            time.sleep(2)
+            servos.set_angle(0, ANGLE_CENTRE)
+            print("  → Recentré")
 
+            confirmer = input(f"  Utiliser {angle} comme ANGLE_FORT ? (o/n) : ")
+            if confirmer.lower() == 'o':
+                ANGLE_FORT = angle
+                ANGLE_LEGER = max(10, angle // 2)
+                print(f"  ✓ ANGLE_FORT={ANGLE_FORT}, ANGLE_LEGER={ANGLE_LEGER}")
+        except ValueError:
+            print("Entre un nombre entier ou 'ok'")
 
-if __name__ == "__main__":
-    sensor = LineSensor()          # On instancie l'objet une seule fois
+    # === Boucle principale de suivi de ligne ===
+    while True:
+        movement = input("\nAppuie sur M pour démarrer (A pour arrêter) : ")
+        if movement not in ('M', 'm'):
+            continue
 
-    try:
+        print("Démarrage du suivi de ligne...")
+
         while True:
-            sensor.print_status()  # On appelle la méthode sur l'objet
-            time.sleep(0.3)
-    except KeyboardInterrupt:
-        pass
+            status = tracker.get_status()
+            tracker.print_status()
+            distance = ultrasonic.get_distance()
+
+            l = status['left']
+            m = status['middle']
+            r = status['right']
+
+            # --- Arrêt obstacle ---
+            if distance < DISTANCE_ARRET:
+                motor.stop()
+                print(f"Obstacle détecté à {distance} mm, arrêt.")
+                break
+
+            # --- Suivi de ligne ---
+            if l==0 and m==0 and r==0:
+                servos.set_angle(0, ANGLE_CENTRE)
+                motor.backward_slow()
+                print("Aucune ligne, recule pour chercher")
+
+            elif l==0 and m==1 and r==0:
+                servos.set_angle(0, ANGLE_CENTRE)
+                motor.forward_slow()
+                print("Centre : avance droit")
+
+            elif l==1 and m==0 and r==0:
+                servos.set_angle(0, ANGLE_CENTRE + ANGLE_LEGER)
+                motor.forward_slow()
+                print("Gauche légère")
+
+            elif l==0 and m==0 and r==1:
+                servos.set_angle(0, ANGLE_CENTRE - ANGLE_LEGER)
+                motor.forward_slow()
+                print("Droite légère")
+
+            elif l==1 and m==1 and r==0:
+                servos.set_angle(0, ANGLE_CENTRE + ANGLE_FORT)
+                motor.forward_slow()
+                print("Virage gauche")
+
+            elif l==0 and m==1 and r==1:
+                servos.set_angle(0, ANGLE_CENTRE - ANGLE_FORT)
+                motor.forward_slow()
+                print("Virage droite")
+
+            elif l==1 and m==0 and r==1:
+                servos.set_angle(0, ANGLE_CENTRE)
+                motor.forward_slow()
+                print("Intersection, tout droit")
+
+            elif l==1 and m==1 and r==1:
+                motor.stop()
+                servos.set_angle(0, ANGLE_CENTRE)
+                print("Fin de ligne, arrêt")
+                break
+
+            else:
+                # Situation transitoire : capteurs entre deux états
+                servos.set_angle(0, ANGLE_CENTRE)
+                motor.forward_slow()
+                print("Situation transitoire, continue doucement")
+                time.sleep(0.02)  # petite pause pour stabiliser les capteurs
+
+            time.sleep(0.05)
+
+except KeyboardInterrupt:
+    motor.stop()
+    servos.set_angle(0, ANGLE_CENTRE)
+    print("\nArrêt propre.")
+           
