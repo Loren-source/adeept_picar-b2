@@ -73,7 +73,7 @@ class RobotMotor:
         self.set_motor(1, 50)
 
     def backward_slow(self):
-        self.set_motor(-1, 35)
+        self.set_motor(-1, 50)
 
     def drive_with_ramp(self, speed, direction, ramp_time):
         self.stop_feux()
