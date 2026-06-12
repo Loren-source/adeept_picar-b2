@@ -15,8 +15,6 @@ try:
     while True:
         movement = input("Appuie sur M pour démarrer : ")
         while movement == 'M' or 'm' :
-            servos.set_angle(2, 90-30)
-            servos.set_angle(2, 90+30)
             status = tracker.get_status()
             tracker.print_status()
             distance = ultrasonic.get_distance()
