@@ -13,20 +13,21 @@ try:
 
     while True:
         if movement == "M":
-            motor.drive_with_ramp(20, 1, 5)
+            motor.stop_feux()                        
+            motor.drive_with_ramp(20, 1, 1)          
             distance1 = ultrasonic.get_distance()
             print(f"Distance : {distance1:.2f} mm")
             time.sleep(0.05)
 
-            while True:                          # surveillance continue
+            while True:                              # surveillance continue
                 distance = ultrasonic.get_distance()
                 print(f"Distance : {distance:.2f} mm")
                 time.sleep(0.05)
 
                 if distance < 200:
-                    motor.stop()
+                    motor.stop()                     # arrêt + feux de détresse 
                     movement = input("Envoie M pour redémarrer : ")
-                    break                        # sort de la surveillance
+                    break                            # sort de la surveillance
 
         elif movement in ("A", "a"):
             motor.stop()
@@ -37,9 +38,8 @@ try:
             movement = input("Commande inconnue. M pour démarrer : ")
 
 except KeyboardInterrupt:
-    print("Fin de programme par Ctrl-C")
+    print("Fin de programme")
 
 finally:
-    ultrasonic.close()  # libère GPIO24
     motor.stop()
     print("Nettoyage final réalisé")
