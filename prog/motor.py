@@ -70,7 +70,7 @@ class RobotMotor:
         self.motor1.throttle = 0
 
     def forward_slow(self):
-        self.set_motor(1, 35)
+        self.set_motor(1, 50)
 
     def backward_slow(self):
         self.set_motor(-1, 35)
