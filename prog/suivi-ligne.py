@@ -22,7 +22,7 @@ try:
             angle = 98
             servos.set_angle(0, angle)
             if ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 0)):
-                while ((status['left'] != 1) and (status['middle'] != 1) and (status['right'] != 1)):
+                while ((status['left'] != 1) or (status['middle'] != 1) or (status['right'] != 1)):
                     servos.set_angle(0, last_angle)
                     motor.backward_slow()
                 print("pas de ligne -> tout droit")
