@@ -23,14 +23,17 @@ try:
             servos.set_angle(0, angle)
             if ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, last_angle)
+                servos.set_angle(1, last_angle)
                 motor.backward_slow()
                 print("pas de ligne -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 0)):
                 servos.set_angle(0, angle + 60)
+                servos.set_angle(1, angle + 60)
                 motor.forward_slow()
                 print("blanc a gauche -> tourne a droite")
             elif ((status['left']== 0) and (status['middle'] == 0) and (status['right'] == 1)):
                 servos.set_angle(0, angle - 60)
+                servos.set_angle(1, angle - 60)
                 motor.forward_slow()
                 print("blanc a droite tourne a gauche")
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 0)):
@@ -38,10 +41,12 @@ try:
                 print("imporbable -> tout droit")
             elif ((status['left']== 1) and (status['middle'] == 1) and (status['right'] == 0)):
                 servos.set_angle(0, angle - 60)
+                servos.set_angle(1, angle - 60)
                 motor.forward_slow()
                 print("blanc a gauche et au centre -> tourne a droite")
             elif ((status['left']== 0) and (status['middle'] == 1) and (status['right'] == 1)):
                 servos.set_angle(0, angle + 60)
+                servos.set_angle(1, angle + 60)
                 motor.forward_slow()
                 print("blacn a droite et au centre -> tourne a gauche")
             elif ((status['left']== 1) and (status['middle'] == 0) and (status['right'] == 1)):
