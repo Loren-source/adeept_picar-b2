@@ -4,126 +4,79 @@ from motor import RobotMotor
 from servo import RobotServos
 from ultra import Ultrasonic
 
-BASE_ANGLE = 98
-TURN = 50
-SEARCH_TIME = 0.5
-
 try:
     motor = RobotMotor()
     tracker = LineTracker()
     ultrasonic = Ultrasonic()
     servos = RobotServos()
 
-    angle = BASE_ANGLE
-    last_angle = BASE_ANGLE
-
-    servos.set_angle(0, angle)
+    angle_centre = 98
+    servos.set_angle(0, angle_centre)
 
     while True:
         movement = input("Appuie sur M pour démarrer : ")
 
-        while movement.lower() == "m":
+        # Si on redémarre après un arrêt sur obstacle, on éteint les feux de détresse
+        motor.stop_feux()
 
-            distance = ultrasonic.get_distance()
-
-            if distance < 20:
-                motor.stop()
-                movement = input("Obstacle détecté EN TEST ")
-                break
-
+        while movement in ('M', 'm'):
             status = tracker.get_status()
             tracker.print_status()
+            distance = ultrasonic.get_distance()  # en mm
 
-            left = status["left"]
-            middle = status["middle"]
-            right = status["right"]
+            angle = angle_centre
+            servos.set_angle(0, angle)
 
+            # --- Logique de suivi de ligne ---
+            if status['left'] == 0 and status['middle'] == 0 and status['right'] == 0:
+                motor.backward_slow()
+                print("pas de ligne -> tout droit")
 
-            if left == 0 and middle == 1 and right == 0:
-                angle = BASE_ANGLE
-                servos.set_angle(0, angle)
+            elif status['left'] == 1 and status['middle'] == 0 and status['right'] == 0:
+                servos.set_angle(0, angle + 60)  # tester prudemment, roues décollées
                 motor.forward_slow()
-                last_angle = angle
-                print("ligne au centre -> tout droit")
+                print("blanc a gauche -> tourne a droite")
 
-
-            elif left == 1 and middle == 1 and right == 0:
-                angle = BASE_ANGLE - TURN
-                servos.set_angle(0, angle)
+            elif status['left'] == 0 and status['middle'] == 0 and status['right'] == 1:
+                servos.set_angle(0, angle - 60)
                 motor.forward_slow()
-                last_angle = angle
-                print("ligne vers gauche -> tourne gauche")
+                print("blanc a droite -> tourne a gauche")
 
-            elif left == 1 and middle == 0 and right == 0:
-                angle = BASE_ANGLE - TURN
-                servos.set_angle(0, angle)
+            elif status['left'] == 0 and status['middle'] == 1 and status['right'] == 0:
                 motor.forward_slow()
-                last_angle = angle
-                print("ligne très à gauche -> tourne gauche")
+                print("improbable -> tout droit")
 
-
-            elif left == 0 and middle == 1 and right == 1:
-                angle = BASE_ANGLE + TURN
-                servos.set_angle(0, angle)
+            elif status['left'] == 1 and status['middle'] == 1 and status['right'] == 0:
+                servos.set_angle(0, angle - 60)
                 motor.forward_slow()
-                last_angle = angle
-                print("ligne vers droite -> tourne droite")
+                print("blanc a gauche et au centre -> tourne a droite")
 
-            elif left == 0 and middle == 0 and right == 1:
-                angle = BASE_ANGLE + TURN
-                servos.set_angle(0, angle)
+            elif status['left'] == 0 and status['middle'] == 1 and status['right'] == 1:
+                servos.set_angle(0, angle + 60)
                 motor.forward_slow()
-                last_angle = angle
-                print("ligne très à droite -> tourne droite")
+                print("blanc a droite et au centre -> tourne a gauche")
 
+            elif status['left'] == 1 and status['middle'] == 0 and status['right'] == 1:
+                motor.forward_slow()
+                print("gauche et droite -> tout droit")
 
-            elif left == 0 and middle == 0 and right == 0:
-                print("ligne perdue -> avance un peu pour chercher un pointillé")
-
-                servos.set_angle(0, last_angle)
-
-                start = time.time()
-                found_line = False
-
-
-                while time.time() - start < 2:  # à ajuster selon ta vitesse
-                    motor.forward_slow()
-
-                    status = tracker.get_status()
-                    tracker.print_status()
-
-                    if status["left"] == 1 or status["middle"] == 1 or status["right"] == 1:
-                        print("ligne retrouvée")
-                        found_line = True
-                        break
-
-                    time.sleep(0.05)
-
-
-                if not found_line:
-                    print("aucune ligne retrouvée -> recule avec la même trajectoire")
-                    servos.set_angle(0, last_angle)
-                    motor.backward_slow()
-                    time.sleep(0.8)
-                    motor.stop()
-
-
-            elif left == 1 and middle == 1 and right == 1:
-                angle = BASE_ANGLE
-                servos.set_angle(0, angle)
-                #motor.forward_slow()
-                last_angle = angle
-                print("a TESTER, 3 capteurs detectent !")
-                #tester tourner a droite/gauche
-
+            elif status['left'] == 1 and status['middle'] == 1 and status['right'] == 1:
+                # A valider physiquement : sortie complete de ligne ou intersection ?
+                motor.stop()
+                print("3 capteurs actifs -> arret de securite")
 
             else:
-                print("cas inattendu -> ralentir ou reculer")
-                servos.set_angle(0, last_angle)
                 motor.backward_slow()
+                print("Situation inattendue, recule lentement")
+
+            # --- Détection d'obstacle (Tâche 9) ---
+            if distance < 200:  # 200 mm = 20 cm
+                motor.stop()  # déclenche déjà les feux de détresse
+                movement = input("Obstacle détecté. Envoie M pour redémarrer : ")
+                break
 
 except KeyboardInterrupt:
     motor.stop()
-    servos.fermer(0)
+    servos.fermer()
     print("Nettoyage final réalisé")
     print("Fin du programme")
