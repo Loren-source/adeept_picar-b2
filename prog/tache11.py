@@ -12,8 +12,13 @@ tracker = LineTracker()
 servos  = RobotServos()
 
 # --- Fonctions de direction ---
+angle_actuel = None
+
 def braquer(angle):
-    servos.set_angle(0, angle)
+    global angle_actuel
+    if angle_actuel != angle:
+        servos.set_angle(0, angle)
+        angle_actuel = angle
 
 def corriger_gauche():
     braquer(67)
