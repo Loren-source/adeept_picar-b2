@@ -13,6 +13,7 @@ servos  = RobotServos()
 
 # --- Fonctions de direction ---
 angle_actuel = None
+derniere_direction = "centre"
 
 def braquer(angle):
     global angle_actuel
@@ -21,14 +22,20 @@ def braquer(angle):
         angle_actuel = angle
 
 def corriger_gauche():
+    global derniere_direction
+    derniere_direction = "gauche"
     braquer(84)
     robot.set_motor(1, 30)
 
 def corriger_droite():
+    global derniere_direction
+    derniere_direction = "droite"
     braquer(110)
     robot.set_motor(1, 30)
 
 def corriger_centrer():
+    global derniere_direction
+    derniere_direction = "centre"
     braquer(97)
     robot.set_motor(1, 50)
 
@@ -81,7 +88,13 @@ try:
                 elif l == 1 and m == 0 and r == 0:
                     corriger_gauche()
                 elif l == 0 and m == 0 and r == 0:
-                    robot.stopper()
+                    # Ligne perdue : on continue dans la dernière direction connue
+                    if derniere_direction == "gauche":
+                        corriger_gauche()
+                    elif derniere_direction == "droite":
+                        corriger_droite()
+                    else:
+                        robot.stopper()
 
         time.sleep(0.05)
 
