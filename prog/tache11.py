@@ -59,15 +59,15 @@ try:
                 m = capteurs['middle']
                 r = capteurs['right']
 
-                if l == 1 and m == 0 and r == 1:
-                    corriger_centrer()
-                elif l == 1 and m == 1 and r == 0:
-                    corriger_droite()
-                elif l == 0 and m == 1 and r == 1:
-                    corriger_gauche()
-                elif l == 0 and m == 0 and r == 0:
+                if l == 0 and m == 1 and r == 0:
                     corriger_centrer()
                 elif l == 1 and m == 1 and r == 1:
+                    corriger_centrer()
+                elif l == 0 and m == 1 and r == 1:
+                    corriger_droite()
+                elif l == 1 and m == 1 and r == 0:
+                    corriger_gauche()
+                elif l == 0 and m == 0 and r == 0:
                     robot.stopper()
 
 except KeyboardInterrupt:
