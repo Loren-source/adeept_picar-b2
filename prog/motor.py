@@ -69,6 +69,18 @@ class RobotMotor:
         self.feux_detresse()
         self.motor1.throttle = 0
 
+    def avancer(self):
+        self.stop_feux()
+        self.drive_with_ramp(50, 1, 0.5)
+
+    def reculer(self):
+        self.drive_with_ramp(50, -1, 0.5)
+
+    def stopper(self):
+        # arrêt simple, sans feux de détresse
+        self.motor1.throttle = 0
+
+
     def forward_slow(self):
         self.set_motor(1, 50)
 
@@ -93,8 +105,8 @@ class RobotMotor:
 
 if __name__ == '__main__':
     robot = RobotMotor()
-    servos = RobotServos()                        #corection du probleme d'angle, a retirer si necessaire
-    servos.set_angle(0, 98)                       #pareil que ci-dessus
+    servos = RobotServos()
+    servos.set_angle(0, 98)
 
     try:
         while True:
