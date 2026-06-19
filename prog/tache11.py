@@ -68,6 +68,10 @@ try:
                     corriger_droite()
                 elif l == 1 and m == 1 and r == 0:
                     corriger_gauche()
+                elif l == 0 and m == 0 and r == 1:
+                    corriger_droite()
+                elif l == 1 and m == 0 and r == 0:
+                    corriger_gauche()
                 elif l == 0 and m == 0 and r == 0:
                     robot.stopper()
 
@@ -76,5 +80,5 @@ except KeyboardInterrupt:
 
 finally:
     robot.stopper()
-    servos.set_angle(0, 97)
+    servos.set_angle(0, 90)
     print('Nettoyage final réalisé')
