@@ -39,6 +39,16 @@ def corriger_centrer():
     braquer(97)
     robot.set_motor(1, 40)
 
+def chercher_ligne():
+    """Ligne perdue : recule en braquant dans la dernière direction connue."""
+    if derniere_direction == "gauche":
+        braquer(70)
+    elif derniere_direction == "droite":
+        braquer(120)
+    else:
+        braquer(97)
+    robot.set_motor(-1, 20)  # marche arrière
+
 # --- Thread clavier ---
 actif = False
 
@@ -88,12 +98,7 @@ try:
                 elif l == 1 and m == 0 and r == 0:
                     corriger_gauche()
                 elif l == 0 and m == 0 and r == 0:
-                    if derniere_direction == "gauche":
-                        corriger_gauche()
-                    elif derniere_direction == "droite":
-                        corriger_droite()
-                    else:
-                        robot.stopper()
+                    chercher_ligne()
 
         time.sleep(0.02)
 
