@@ -36,7 +36,7 @@ def ecouter_clavier():
         if commande == 'M':
             actif = True
             robot.stop_feux()
-            robot.avancer()
+            robot.set_motor(1, 50)
             print("Démarrage...")
         elif commande == 'A' or commande == 'a':
             actif = False
