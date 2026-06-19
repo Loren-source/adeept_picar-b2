@@ -25,19 +25,19 @@ def corriger_gauche():
     global derniere_direction
     derniere_direction = "gauche"
     braquer(84)
-    robot.set_motor(1, 30)
+    robot.set_motor(1, 20)
 
 def corriger_droite():
     global derniere_direction
     derniere_direction = "droite"
     braquer(110)
-    robot.set_motor(1, 30)
+    robot.set_motor(1, 20)
 
 def corriger_centrer():
     global derniere_direction
     derniere_direction = "centre"
     braquer(97)
-    robot.set_motor(1, 50)
+    robot.set_motor(1, 40)
 
 # --- Thread clavier ---
 actif = False
@@ -49,7 +49,7 @@ def ecouter_clavier():
         if commande == 'M':
             actif = True
             robot.stop_feux()
-            robot.set_motor(1, 50)
+            robot.set_motor(1, 40)
             print("Démarrage...")
         elif commande == 'A' or commande == 'a':
             actif = False
@@ -88,7 +88,6 @@ try:
                 elif l == 1 and m == 0 and r == 0:
                     corriger_gauche()
                 elif l == 0 and m == 0 and r == 0:
-                    # Ligne perdue : on continue dans la dernière direction connue
                     if derniere_direction == "gauche":
                         corriger_gauche()
                     elif derniere_direction == "droite":
@@ -96,7 +95,7 @@ try:
                     else:
                         robot.stopper()
 
-        time.sleep(0.05)
+        time.sleep(0.02)
 
 except KeyboardInterrupt:
     print('Fin de programme par Ctrl-C')
