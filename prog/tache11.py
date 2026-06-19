@@ -24,13 +24,13 @@ def braquer(angle):
 def corriger_gauche():
     global derniere_direction
     derniere_direction = "gauche"
-    braquer(84)
+    braquer(90)
     robot.set_motor(1, 20)
 
 def corriger_droite():
     global derniere_direction
     derniere_direction = "droite"
-    braquer(110)
+    braquer(104)
     robot.set_motor(1, 20)
 
 def corriger_centrer():
