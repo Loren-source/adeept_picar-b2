@@ -1,36 +1,54 @@
+import threading
 from motor import RobotMotor
 from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
-robot  = RobotMotor()
-ultra  = Ultrasonic()
+# --- Initialisation ---
+robot   = RobotMotor()
+ultra   = Ultrasonic()
 tracker = LineTracker()
-servos = RobotServos()
+servos  = RobotServos()
 
+# --- Fonctions de direction ---
 def braquer(angle):
     servos.set_angle(0, angle)
+
 def corriger_gauche():
     braquer(60)
-    robot.set_motor(1, 30) 
+    robot.set_motor(1, 30)
+
 def corriger_droite():
     braquer(120)
     robot.set_motor(1, 30)
+
 def corriger_centrer():
     braquer(90)
     robot.set_motor(1, 50)
 
+# --- Thread clavier ---
 actif = False
-try:
+
+def ecouter_clavier():
+    global actif
     while True:
         commande = input()
         if commande == 'M':
             actif = True
+            robot.stop_feux()
             robot.avancer()
-        elif commande == 'A':
+            print("Démarrage...")
+        elif commande == 'A' or commande == 'a':
             actif = False
             robot.stopper()
-        
+            print("Arrêt.")
+
+thread_clavier = threading.Thread(target=ecouter_clavier, daemon=True)
+thread_clavier.start()
+
+# --- Boucle principale ---
+try:
+    while True:
         if actif:
             distance = ultra.get_distance()
             if distance < 200:
@@ -54,7 +72,7 @@ try:
                     robot.stopper()
 
 except KeyboardInterrupt:
-    print('Fin de programme')
+    print('Fin de programme par Ctrl-C')
 
 finally:
     robot.stopper()
