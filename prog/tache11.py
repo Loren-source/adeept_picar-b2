@@ -1,3 +1,4 @@
+import time
 import threading
 from motor import RobotMotor
 from ultra import Ultrasonic
@@ -75,10 +76,12 @@ try:
                 elif l == 0 and m == 0 and r == 0:
                     robot.stopper()
 
+        time.sleep(0.05)
+
 except KeyboardInterrupt:
     print('Fin de programme par Ctrl-C')
 
 finally:
     robot.stopper()
-    servos.set_angle(0, 90)
+    servos.set_angle(0, 97)
     print('Nettoyage final réalisé')
