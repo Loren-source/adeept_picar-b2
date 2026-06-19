@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# PiCar-B suivi ligne 2-3 cm
-# 1 = noir, 0 = blanc
-
 import time
 import threading
 
@@ -10,133 +7,87 @@ from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
+robot=RobotMotor()
+ultra=Ultrasonic()
+tracker=LineTracker()
+servos=RobotServos()
 
-# =============================
-# INITIALISATION
-# =============================
+# ===== REGLAGES =====
 
-robot = RobotMotor()
-ultra = Ultrasonic()
-tracker = LineTracker()
-servos = RobotServos()
+ANGLE_CENTRE=97
 
+ANGLE_GAUCHE_LEGER=88
+ANGLE_GAUCHE_FORT=78
 
-# =============================
-# REGLAGES
-# =============================
+ANGLE_DROITE_LEGER=106
+ANGLE_DROITE_FORT=118
 
-ANGLE_CENTRE = 97
+ANGLE_RECH_GAUCHE=70
+ANGLE_RECH_DROITE=125
 
-# correction progressive
-ANGLE_GAUCHE_LEGER = 90
-ANGLE_GAUCHE_FORT = 82
+VITESSE_LIGNE=38
+VITESSE_CORRECTION=30
+VITESSE_VIRAGE=22
+VITESSE_TROU=20
+VITESSE_RECHERCHE=18
 
-ANGLE_DROITE_LEGER = 104
-ANGLE_DROITE_FORT = 112
+TEMPS_TROU=0.15
+TEMPS_SORTIE=0.12
 
-
-# marche arrière seulement si vraie perte
-ANGLE_RECH_GAUCHE = 70
-ANGLE_RECH_DROITE = 125
-
-
-# vitesses adaptées ligne fine
-VITESSE_LIGNE = 40
-VITESSE_CORRECTION = 30
-VITESSE_VIRAGE = 23
-
-VITESSE_TROU = 20
-VITESSE_RECHERCHE = 18
+DISTANCE_STOP=200
 
 
-# tolérance interruption de ligne
-TEMPS_PERTE_MAX = 0.08
+# ===== VARIABLES =====
+
+actif=False
+etat="SUIVI"
+
+angle_actuel=None
+
+dernier_angle=ANGLE_CENTRE
+dernier_virage="centre"
+
+debut_000=None
+debut_sortie=None
 
 
-DISTANCE_STOP = 200
-
-
-# =============================
-# VARIABLES
-# =============================
-
-actif = False
-
-etat = "SUIVI"
-
-angle_actuel = None
-
-dernier_angle = ANGLE_CENTRE
-
-derniere_direction = "centre"
-
-debut_perte = None
-
-
-# =============================
-# MOUVEMENTS
-# =============================
+# ===== MOTEUR / SERVO =====
 
 def braquer(angle):
-
     global angle_actuel
-
-    if angle != angle_actuel:
-        servos.set_angle(0, angle)
-        angle_actuel = angle
-
+    if angle!=angle_actuel:
+        servos.set_angle(0,angle)
+        angle_actuel=angle
 
 
-def avancer(angle, vitesse):
-
+def avancer(angle,vitesse):
     global dernier_angle
-
-    dernier_angle = angle
-
+    dernier_angle=angle
     braquer(angle)
-
-    robot.set_motor(1, vitesse)
-
+    robot.set_motor(1,vitesse)
 
 
-def reculer(angle, vitesse):
-
+def reculer(angle,vitesse):
     braquer(angle)
-
-    robot.set_motor(-1, vitesse)
-
+    robot.set_motor(-1,vitesse)
 
 
-# =============================
-# CLAVIER
-# =============================
+# ===== CLAVIER =====
 
 def clavier():
-
     global actif
-
     while True:
+        c=input().strip().upper()
 
-        c = input().strip().upper()
-
-
-        if c == "M":
-
-            actif = True
-
+        if c=="M":
+            actif=True
             robot.stop_feux()
+            print("START")
 
-            print("DEPART")
-
-
-        elif c == "A":
-
-            actif = False
-
+        elif c=="A":
+            actif=False
             robot.stopper()
-
-            print("ARRET")
-
+            print("STOP")
 
 
 threading.Thread(
@@ -145,123 +96,109 @@ threading.Thread(
 ).start()
 
 
-
-# =============================
-# PROGRAMME PRINCIPAL
-# =============================
+# ===== MAIN =====
 
 try:
-
     while True:
 
-
         if not actif:
-
             time.sleep(0.02)
             continue
 
-
-
-        # obstacle
-
-        if ultra.get_distance() < DISTANCE_STOP:
-
+        if ultra.get_distance()<DISTANCE_STOP:
             robot.stop()
-
-            actif = False
-
+            actif=False
             continue
 
+        cap=tracker.get_status()
 
-
-        # lecture capteurs
-
-        capteurs = tracker.get_status()
-
-        lecture = (
-            capteurs["left"],
-            capteurs["middle"],
-            capteurs["right"]
+        lecture=(
+            cap["left"],
+            cap["middle"],
+            cap["right"]
         )
 
-
-        print(
-            lecture,
-            etat
-        )
+        print(lecture,etat)
 
 
-
-        # =============================
+        # =========================
         # RECHERCHE
-        # =============================
+        # =========================
 
-        if etat == "RECHERCHE":
+        if etat=="RECHERCHE":
 
-
-            if derniere_direction == "gauche":
-
+            if dernier_virage=="gauche":
                 reculer(
                     ANGLE_RECH_GAUCHE,
                     VITESSE_RECHERCHE
                 )
 
-
-            elif derniere_direction == "droite":
-
+            elif dernier_virage=="droite":
                 reculer(
                     ANGLE_RECH_DROITE,
                     VITESSE_RECHERCHE
                 )
 
             else:
-
                 reculer(
                     ANGLE_CENTRE,
                     VITESSE_RECHERCHE
                 )
 
 
-            # ligne retrouvée
-
-            if lecture != (0,0,0):
-
-                debut_perte = None
-
-                etat = "SUIVI"
-
+            if lecture!=(0,0,0):
+                etat="SUIVI"
+                debut_000=None
 
             continue
 
 
 
-        # =============================
-        # SUIVI DE LIGNE
-        # =============================
+        # =========================
+        # SORTIE VIRAGE
+        # =========================
 
-
-        # parfaitement centré
-
-        if lecture == (1,1,1):
-
-            debut_perte = None
-
-            derniere_direction = "centre"
+        if etat=="SORTIE":
 
             avancer(
-                ANGLE_CENTRE,
-                VITESSE_LIGNE
+                dernier_angle,
+                VITESSE_CORRECTION
             )
 
+            if time.time()-debut_sortie>TEMPS_SORTIE:
+
+                etat="SUIVI"
+
+            continue
 
 
-        # dérive droite ou début virage gauche
 
-        elif lecture == (1,1,0):
+        # =========================
+        # SUIVI
+        # =========================
 
-            debut_perte = None
 
-            derniere_direction = "gauche"
+        if lecture==(1,1,1):
+
+            debut_000=None
+
+            if dernier_virage!="centre":
+
+                debut_sortie=time.time()
+                etat="SORTIE"
+
+            else:
+
+                avancer(
+                    ANGLE_CENTRE,
+                    VITESSE_LIGNE
+                )
+
+
+        elif lecture==(1,1,0):
+
+            debut_000=None
+            dernier_virage="gauche"
 
             avancer(
                 ANGLE_GAUCHE_LEGER,
@@ -269,14 +206,10 @@ try:
             )
 
 
+        elif lecture==(1,0,0):
 
-        # virage gauche confirmé
-
-        elif lecture == (1,0,0):
-
-            debut_perte = None
-
-            derniere_direction = "gauche"
+            debut_000=None
+            dernier_virage="gauche"
 
             avancer(
                 ANGLE_GAUCHE_FORT,
@@ -284,14 +217,10 @@ try:
             )
 
 
+        elif lecture==(0,1,1):
 
-        # dérive gauche ou début virage droite
-
-        elif lecture == (0,1,1):
-
-            debut_perte = None
-
-            derniere_direction = "droite"
+            debut_000=None
+            dernier_virage="droite"
 
             avancer(
                 ANGLE_DROITE_LEGER,
@@ -299,14 +228,10 @@ try:
             )
 
 
+        elif lecture==(0,0,1):
 
-        # virage droite confirmé
-
-        elif lecture == (0,0,1):
-
-            debut_perte = None
-
-            derniere_direction = "droite"
+            debut_000=None
+            dernier_virage="droite"
 
             avancer(
                 ANGLE_DROITE_FORT,
@@ -314,54 +239,30 @@ try:
             )
 
 
+        elif lecture==(0,0,0):
 
-        # =============================
-        # INTERRUPTION / PERTE
-        # =============================
+            if debut_000 is None:
+                debut_000=time.time()
 
-        elif lecture == (0,0,0):
-
-
-            if debut_perte is None:
-
-                debut_perte = time.time()
-
-
-
-            temps = time.time() - debut_perte
-
-
-
-            if temps < TEMPS_PERTE_MAX:
-
-
-                # on garde le dernier mouvement
+            if time.time()-debut_000<TEMPS_TROU:
 
                 avancer(
                     dernier_angle,
                     VITESSE_TROU
                 )
 
-
             else:
 
-                etat = "RECHERCHE"
-
+                etat="RECHERCHE"
 
 
         time.sleep(0.02)
 
 
-
 except KeyboardInterrupt:
-
-    print("FIN")
-
+    pass
 
 finally:
-
     robot.stopper()
-
     braquer(ANGLE_CENTRE)
-
-    print("Nettoyage termine")
+    print("FIN")
