@@ -4,7 +4,6 @@ from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
-# --- Initialisation ---
 robot   = RobotMotor()
 ultra   = Ultrasonic()
 tracker = LineTracker()
