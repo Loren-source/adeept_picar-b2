@@ -21,11 +21,11 @@ def braquer(angle):
         angle_actuel = angle
 
 def corriger_gauche():
-    braquer(67)
+    braquer(84)
     robot.set_motor(1, 30)
 
 def corriger_droite():
-    braquer(127)
+    braquer(110)
     robot.set_motor(1, 30)
 
 def corriger_centrer():
