@@ -5,151 +5,162 @@ from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
+# Initialisation des composants
 robot = RobotMotor()
 ultra = Ultrasonic()
 tracker = LineTracker()
 servos = RobotServos()
 
-ANGLE_CENTRE=97
-ANGLE_GAUCHE_LEGER=92
-ANGLE_GAUCHE_FORT=85
-ANGLE_DROITE_LEGER=102
-ANGLE_DROITE_FORT=110
-ANGLE_RECH_GAUCHE=70
-ANGLE_RECH_DROITE=120
+# --- CONFIGURATION TRAJECTOIRE & CORRECTIONS ---
+ANGLE_CENTRE = 97
+GAIN_P = 15  
 
-VITESSE_DROITE=55
-VITESSE_CORRECTION=40
-VITESSE_VIRAGE=28
-VITESSE_RECHERCHE=20
-DISTANCE_STOP=200
+# Vitesses progressives
+VITESSE_MAX = 55       
+VITESSE_MIN = 25       
+DECELERATION = 1.5     
+ACCELERATION = 1.0     
 
-actif=False
-etat="SUIVI"
-angle_actuel=None
-derniere_direction="centre"
+DISTANCE_STOP = 200    
 
-etat_prec=(1,1,1)
-virage_confirme=False
+# --- GESTION DES TIMINGS D'INERTIE (LIGNE PERDUE) ---
+DURÉE_INERTIE_VIRAGE = 0.18  # 180ms pour insister dans un virage avant de reculer
+DURÉE_INERTIE_DROIT  = 0.50  # 500ms pour traverser les coupures en ligne droite !
 
-def braquer(a):
-    global angle_actuel
-    if angle_actuel!=a:
-        servos.set_angle(0,a)
-        angle_actuel=a
+# --- ÉTATS DU SYSTÈME ---
+actif = False
+angle_actuel = ANGLE_CENTRE
+vitesse_actuelle = 0.0
 
-def avance(a,v):
-    braquer(a)
-    robot.set_motor(1,v)
+temps_perte_ligne = None
+dernière_erreur = 0   
 
-def recule(a,v):
-    braquer(a)
-    robot.set_motor(-1,v)
+def piloter_robot(angle_cible, vitesse_cible):
+    """Gère l'évolution fluide (lissage) de la vitesse et applique l'angle."""
+    global angle_actuel, vitesse_actuelle
+    
+    if angle_actuel != angle_cible:
+        servos.set_angle(0, angle_cible)
+        angle_actuel = angle_cible
+        
+    if vitesse_actuelle < vitesse_cible:
+        vitesse_actuelle = min(vitesse_cible, vitesse_actuelle + ACCELERATION)
+    elif vitesse_actuelle > vitesse_cible:
+        vitesse_actuelle = max(vitesse_cible, vitesse_actuelle - DECELERATION)
+        
+    robot.set_motor(1, int(vitesse_actuelle))
 
 def clavier():
     global actif
     while True:
-        c=input().strip().upper()
-        if c=="M":
-            actif=True
+        c = input().strip().upper()
+        if c == "M":
+            actif = True
             robot.stop_feux()
-            print("Demarrage")
-        elif c=="A":
-            actif=False
+            print("[INFO] Démarrage du robot")
+        elif c == "A":
+            actif = False
             robot.stopper()
-            print("Arret")
+            print("[INFO] Arrêt du robot")
 
-threading.Thread(target=clavier,daemon=True).start()
+threading.Thread(target=clavier, daemon=True).start()
+
+print("Prêt. 'M' pour démarrer, 'A' pour arrêter.")
 
 try:
     while True:
-
         if not actif:
-            time.sleep(0.02)
+            vitesse_actuelle = 0.0
+            time.sleep(0.05)
             continue
 
-        if ultra.get_distance()<DISTANCE_STOP:
+        if ultra.get_distance() < DISTANCE_STOP:
+            print("[ALERTE] Obstacle détecté !")
             robot.stop()
-            actif=False
+            actif = False
             continue
 
-        s=tracker.get_status()
-        etat_cap=(s["left"],s["middle"],s["right"])
-        l,m,r=etat_cap
+        # Lecture des capteurs
+        s = tracker.get_status()
+        l, m, r = s["left"], s["middle"], s["right"]
+        etat_cap = (l, m, r)
 
-        if etat=="RECHERCHE":
+        # ─── CALCUL DE L'ERREUR POUR LE CONTRÔLEUR ───
+        if etat_cap == (1, 1, 1):
+            erreur = 0
+            temps_perte_ligne = None 
+            
+        elif etat_cap == (1, 1, 0): 
+            erreur = -1
+            temps_perte_ligne = None
+            
+        elif etat_cap == (1, 0, 0): 
+            erreur = -2
+            temps_perte_ligne = None
+            
+        elif etat_cap == (0, 1, 1): 
+            erreur = 1
+            temps_perte_ligne = None
+            
+        elif etat_cap == (0, 0, 1): 
+            erreur = 2
+            temps_perte_ligne = None
 
-            if derniere_direction=="gauche":
-                recule(ANGLE_RECH_GAUCHE,VITESSE_RECHERCHE)
-            elif derniere_direction=="droite":
-                recule(ANGLE_RECH_DROITE,VITESSE_RECHERCHE)
+        elif etat_cap == (0, 0, 0):
+            # ─── STRATÉGIE DE TRAVERSÉE DE ZONE VIDE (0,0,0) ───
+            if temps_perte_ligne is None:
+                temps_perte_ligne = time.time()
+                
+            durée_perte = time.time() - temps_perte_ligne
+            
+            # Choix du seuil de tolérance selon ce qu'on faisait avant de perdre la ligne
+            if dernière_erreur == 0:
+                seuil_tolerance = DURÉE_INERTIE_DROIT
             else:
-                recule(ANGLE_CENTRE,VITESSE_RECHERCHE)
-
-            if etat_cap==(1,1,1):
-                robot.stopper()
-                braquer(ANGLE_CENTRE)
-                etat="REALIGNEMENT"
-
-            time.sleep(0.02)
-            continue
-
-        if etat=="REALIGNEMENT":
-            avance(ANGLE_CENTRE,30)
-            time.sleep(0.15)
-            etat="SUIVI"
-            virage_confirme=False
-            etat_prec=(1,1,1)
-            continue
-
-        # confirmation des virages
-        if etat_prec==(1,1,1):
-            if etat_cap in [(1,1,0),(0,1,1)]:
-                virage_confirme=False
-
-        elif etat_prec==(1,1,0) and etat_cap==(1,0,0):
-            virage_confirme=True
-
-        elif etat_prec==(0,1,1) and etat_cap==(0,0,1):
-            virage_confirme=True
-
-        # suivi
-        if etat_cap==(1,1,1):
-            virage_confirme=False
-            derniere_direction="centre"
-            avance(ANGLE_CENTRE,VITESSE_DROITE)
-
-        elif etat_cap==(1,1,0):
-            derniere_direction="gauche"
-            if virage_confirme:
-                avance(ANGLE_GAUCHE_LEGER,32)
+                seuil_tolerance = DURÉE_INERTIE_VIRAGE
+            
+            if durée_perte < seuil_tolerance:
+                # On maintient le cap précédent (si dernière_erreur était 0, il reste à 0 et va tout droit)
+                erreur = dernière_erreur
             else:
-                avance(ANGLE_GAUCHE_LEGER,VITESSE_CORRECTION)
+                # VRAIE PERTE : Le délai max est dépassé, on lance la recherche en arrière
+                print("[RECHERCHE] Ligne perdue (délai dépassé), marche arrière...")
+                if dernière_erreur < 0:
+                    servos.set_angle(0, ANGLE_CENTRE - 15) 
+                elif dernière_erreur > 0:
+                    servos.set_angle(0, ANGLE_CENTRE + 15)
+                else:
+                    servos.set_angle(0, ANGLE_CENTRE)
+                robot.set_motor(-1, 20)
+                continue 
+        else:
+            # Cas (0, 1, 0) : ligne fine bien centrée
+            erreur = 0
+            temps_perte_ligne = None
 
-        elif etat_cap==(1,0,0):
-            derniere_direction="gauche"
-            avance(ANGLE_GAUCHE_FORT,VITESSE_VIRAGE)
+        # Mémorisation du dernier état connu (uniquement s'il est stable)
+        if etat_cap != (0, 0, 0):
+            dernière_erreur = erreur
 
-        elif etat_cap==(0,1,1):
-            derniere_direction="droite"
-            if virage_confirme:
-                avance(ANGLE_DROITE_LEGER,32)
-            else:
-                avance(ANGLE_DROITE_LEGER,VITESSE_CORRECTION)
+        # ─── ACTIONNEURS ───
+        angle_cible = ANGLE_CENTRE + (erreur * GAIN_P)
+        
+        # En ligne droite (erreur = 0), on bombarde. En virage ou en coupure, on adapte.
+        if etat_cap == (0, 0, 0) and dernière_erreur == 0:
+            # Si on est dans un blanc des pointillés, on maintient une vitesse stable (ex: 40) 
+            # pour ne pas surprendre les moteurs, au lieu d'accélérer à fond.
+            vitesse_cible = 40 
+        else:
+            vitesse_cible = VITESSE_MAX - (abs(erreur) * 12)
+            vitesse_cible = max(VITESSE_MIN, vitesse_cible)
 
-        elif etat_cap==(0,0,1):
-            derniere_direction="droite"
-            avance(ANGLE_DROITE_FORT,VITESSE_VIRAGE)
+        piloter_robot(angle_cible, vitesse_cible)
 
-        elif etat_cap==(0,0,0):
-            etat="RECHERCHE"
-
-        etat_prec=etat_cap
-        time.sleep(0.02)
+        time.sleep(0.015)
 
 except KeyboardInterrupt:
     pass
-
 finally:
     robot.stopper()
-    braquer(ANGLE_CENTRE)
+    servos.set_angle(0, ANGLE_CENTRE)
+    print("\nProgramme arrêté proprement.")
