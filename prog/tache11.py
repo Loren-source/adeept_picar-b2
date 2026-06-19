@@ -1,4 +1,5 @@
 import time
+import threading
 from motor import RobotMotor
 from ultra import Ultrasonic
 from lineTracking import LineTracker
@@ -31,8 +32,25 @@ def corriger_centrer():
     braquer(97)
     robot.set_motor(1, 50)
 
-# --- TEST : démarrage forcé, sans thread clavier ---
-actif = True
+# --- Thread clavier ---
+actif = False
+
+def ecouter_clavier():
+    global actif
+    while True:
+        commande = input()
+        if commande == 'M':
+            actif = True
+            robot.stop_feux()
+            robot.set_motor(1, 50)
+            print("Démarrage...")
+        elif commande == 'A' or commande == 'a':
+            actif = False
+            robot.stopper()
+            print("Arrêt.")
+
+thread_clavier = threading.Thread(target=ecouter_clavier, daemon=True)
+thread_clavier.start()
 
 # --- Boucle principale ---
 try:
@@ -47,6 +65,8 @@ try:
                 l = capteurs['left']
                 m = capteurs['middle']
                 r = capteurs['right']
+
+                print(f"l={l} m={m} r={r}")  # debug
 
                 if l == 0 and m == 1 and r == 0:
                     corriger_centrer()
