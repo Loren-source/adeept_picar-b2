@@ -16,42 +16,41 @@ servos=RobotServos()
 
 ANGLE_CENTRE=97
 
-# 110 = corriger gauche
-ANGLE_GAUCHE_LEGER=84
-ANGLE_GAUCHE_FORT=72
+# corrections progressives
+ANGLE_GAUCHE=86
+ANGLE_GAUCHE_FORT=78
 
-# 011 = corriger droite
-ANGLE_DROITE_LEGER=110
-ANGLE_DROITE_FORT=122
-
-ANGLE_RECH_GAUCHE=70
-ANGLE_RECH_DROITE=125
+ANGLE_DROITE=108
+ANGLE_DROITE_FORT=116
 
 VITESSE_LIGNE=32
-VITESSE_CORRECTION=28
-VITESSE_VIRAGE=25
+VITESSE_CORRECTION=27
+VITESSE_VIRAGE=24
 VITESSE_TROU=20
 VITESSE_RECHERCHE=18
 
-TEMPS_TROU=0.12
+TEMPS_TROU=0.08
+
 DISTANCE_STOP=200
+
 
 # ===== VARIABLES =====
 
 actif=False
-etat="SUIVI"
 
 angle_actuel=None
+
 dernier_angle=ANGLE_CENTRE
 derniere_direction="centre"
 
-debut_000=None
+temps_000=None
 
 
-# ===== MOUVEMENT =====
+# ===== COMMANDES =====
 
 def braquer(angle):
     global angle_actuel
+
     if angle!=angle_actuel:
         servos.set_angle(0,angle)
         angle_actuel=angle
@@ -59,30 +58,32 @@ def braquer(angle):
 
 def avancer(angle,vitesse):
     global dernier_angle
+
     dernier_angle=angle
+
     braquer(angle)
     robot.set_motor(1,vitesse)
-
-
-def reculer(angle,vitesse):
-    braquer(angle)
-    robot.set_motor(-1,vitesse)
 
 
 # ===== CLAVIER =====
 
 def clavier():
+
     global actif
 
     while True:
+
         c=input().strip().upper()
 
         if c=="M":
+
             actif=True
             robot.stop_feux()
             print("START")
 
+
         elif c=="A":
+
             actif=False
             robot.stopper()
             print("STOP")
@@ -94,16 +95,20 @@ threading.Thread(target=clavier,daemon=True).start()
 # ===== MAIN =====
 
 try:
+
     while True:
 
         if not actif:
             time.sleep(0.02)
             continue
 
+
         if ultra.get_distance()<DISTANCE_STOP:
+
             robot.stop()
             actif=False
             continue
+
 
         cap=tracker.get_status()
 
@@ -113,62 +118,68 @@ try:
             cap["right"]
         )
 
-        print(lecture,etat)
+
+        print(lecture)
 
 
         # ==================
-        # RECHERCHE
-        # ==================
-
-        if etat=="RECHERCHE":
-
-            if derniere_direction=="gauche":
-                reculer(ANGLE_RECH_GAUCHE,VITESSE_RECHERCHE)
-
-            elif derniere_direction=="droite":
-                reculer(ANGLE_RECH_DROITE,VITESSE_RECHERCHE)
-
-            else:
-                reculer(ANGLE_CENTRE,VITESSE_RECHERCHE)
-
-
-            if lecture!=(0,0,0):
-                etat="SUIVI"
-                debut_000=None
-
-            continue
-
-
-
-        # ==================
-        # SUIVI
+        # CENTRE
         # ==================
 
         if lecture==(1,1,1):
 
-            debut_000=None
+            temps_000=None
+
+            # amortissement
+            # on revient doucement au centre
+
+            if dernier_angle<ANGLE_CENTRE:
+
+                avancer(
+                    92,
+                    VITESSE_LIGNE
+                )
+
+
+            elif dernier_angle>ANGLE_CENTRE:
+
+                avancer(
+                    102,
+                    VITESSE_LIGNE
+                )
+
+
+            else:
+
+                avancer(
+                    ANGLE_CENTRE,
+                    VITESSE_LIGNE
+                )
+
+
             derniere_direction="centre"
 
-            avancer(
-                ANGLE_CENTRE,
-                VITESSE_LIGNE
-            )
 
+
+        # ==================
+        # PART A DROITE
+        # donc corrige gauche
+        # ==================
 
         elif lecture==(1,1,0):
 
-            debut_000=None
+            temps_000=None
             derniere_direction="gauche"
 
             avancer(
-                ANGLE_GAUCHE_LEGER,
+                ANGLE_GAUCHE,
                 VITESSE_CORRECTION
             )
 
 
         elif lecture==(1,0,0):
 
-            debut_000=None
+            temps_000=None
             derniere_direction="gauche"
 
             avancer(
@@ -177,20 +188,25 @@ try:
             )
 
 
+        # ==================
+        # PART A GAUCHE
+        # donc corrige droite
+        # ==================
+
         elif lecture==(0,1,1):
 
-            debut_000=None
+            temps_000=None
             derniere_direction="droite"
 
             avancer(
-                ANGLE_DROITE_LEGER,
+                ANGLE_DROITE,
                 VITESSE_CORRECTION
             )
 
 
         elif lecture==(0,0,1):
 
-            debut_000=None
+            temps_000=None
             derniere_direction="droite"
 
             avancer(
@@ -199,35 +215,53 @@ try:
             )
 
 
+        # ==================
+        # TROU / PERTE
+        # ==================
+
         elif lecture==(0,0,0):
 
-            if debut_000 is None:
-                debut_000=time.time()
+            if temps_000 is None:
+
+                temps_000=time.time()
 
 
-            if time.time()-debut_000<TEMPS_TROU:
-
-                # trou ou début de perte :
-                # continue la dernière correction
+            if time.time()-temps_000<TEMPS_TROU:
 
                 avancer(
                     dernier_angle,
                     VITESSE_TROU
                 )
 
+
             else:
 
-                etat="RECHERCHE"
+                if derniere_direction=="gauche":
+
+                    avancer(
+                        ANGLE_GAUCHE_FORT,
+                        VITESSE_TROU
+                    )
+
+                elif derniere_direction=="droite":
+
+                    avancer(
+                        ANGLE_DROITE_FORT,
+                        VITESSE_TROU
+                    )
 
 
         time.sleep(0.02)
 
 
+
 except KeyboardInterrupt:
+
     pass
 
 
 finally:
+
     robot.stopper()
     braquer(ANGLE_CENTRE)
     print("FIN")
