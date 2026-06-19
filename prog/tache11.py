@@ -4,6 +4,7 @@ from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
+# --- Initialisation ---
 robot   = RobotMotor()
 ultra   = Ultrasonic()
 tracker = LineTracker()
@@ -14,15 +15,15 @@ def braquer(angle):
     servos.set_angle(0, angle)
 
 def corriger_gauche():
-    braquer(60)
+    braquer(67)
     robot.set_motor(1, 30)
 
 def corriger_droite():
-    braquer(120)
+    braquer(127)
     robot.set_motor(1, 30)
 
 def corriger_centrer():
-    braquer(90)
+    braquer(97)
     robot.set_motor(1, 50)
 
 # --- Thread clavier ---
@@ -75,5 +76,5 @@ except KeyboardInterrupt:
 
 finally:
     robot.stopper()
-    servos.set_angle(0, 90)
+    servos.set_angle(0, 97)
     print('Nettoyage final réalisé')
