@@ -16,16 +16,16 @@ ANGLE_CENTRE = 97
 GAIN_P = 15  
 
 # Vitesses progressives
-VITESSE_MAX = 55       
+VITESSE_MAX = 52       # Légèrement baissée pour stabiliser le comportement
 VITESSE_MIN = 25       
-DECELERATION = 1.5     
+DECELERATION = 2.0     # Freinage plus réactif
 ACCELERATION = 1.0     
 
 DISTANCE_STOP = 200    
 
-# --- GESTION DES TIMINGS D'INERTIE (LIGNE PERDUE) ---
-DURÉE_INERTIE_VIRAGE = 0.18  # 180ms pour insister dans un virage avant de reculer
-DURÉE_INERTIE_DROIT  = 0.50  # 500ms pour traverser les coupures en ligne droite !
+# --- GESTION DES TIMINGS D'INERTIE ---
+DURÉE_INERTIE_VIRAGE = 0.20  # 200ms pour insister dans le virage
+DURÉE_INERTIE_DROIT  = 0.50  # 500ms pour les pointillés / coupures
 
 # --- ÉTATS DU SYSTÈME ---
 actif = False
@@ -35,20 +35,23 @@ vitesse_actuelle = 0.0
 temps_perte_ligne = None
 dernière_erreur = 0   
 
-def piloter_robot(angle_cible, vitesse_cible):
-    """Gère l'évolution fluide (lissage) de la vitesse et applique l'angle."""
+def piloter_robot(angle_cible, vitesse_cible, direction_moteur=1):
+    """Gère l'évolution fluide de la vitesse, la direction du moteur et l'angle."""
     global angle_actuel, vitesse_actuelle
     
+    # 1. Mise à jour de l'angle
     if angle_actuel != angle_cible:
         servos.set_angle(0, angle_cible)
         angle_actuel = angle_cible
         
+    # 2. Rampe de vitesse
     if vitesse_actuelle < vitesse_cible:
         vitesse_actuelle = min(vitesse_cible, vitesse_actuelle + ACCELERATION)
     elif vitesse_actuelle > vitesse_cible:
         vitesse_actuelle = max(vitesse_cible, vitesse_actuelle - DECELERATION)
         
-    robot.set_motor(1, int(vitesse_actuelle))
+    # 3. Commande moteur (1 = avant, -1 = arrière)
+    robot.set_motor(direction_moteur, int(vitesse_actuelle))
 
 def clavier():
     global actif
@@ -85,10 +88,10 @@ try:
         l, m, r = s["left"], s["middle"], s["right"]
         etat_cap = (l, m, r)
 
-        # ─── CALCUL DE L'ERREUR POUR LE CONTRÔLEUR ───
-        if etat_cap == (1, 1, 1):
+        # ─── CALCUL DE L'ERREUR ───
+        if etat_cap == (1, 1, 1) or etat_cap == (0, 1, 0):
             erreur = 0
-            temps_perte_ligne = None 
+            temps_perte_ligne = None # Reset complet dès qu'on revoit du noir au centre
             
         elif etat_cap == (1, 1, 0): 
             erreur = -1
@@ -113,48 +116,46 @@ try:
                 
             durée_perte = time.time() - temps_perte_ligne
             
-            # Choix du seuil de tolérance selon ce qu'on faisait avant de perdre la ligne
-            if dernière_erreur == 0:
-                seuil_tolerance = DURÉE_INERTIE_DROIT
-            else:
-                seuil_tolerance = DURÉE_INERTIE_VIRAGE
+            # Détermination du seuil selon l'état précédent
+            seuil_tolerance = DURÉE_INERTIE_DROIT if dernière_erreur == 0 else DURÉE_INERTIE_VIRAGE
             
             if durée_perte < seuil_tolerance:
-                # On maintient le cap précédent (si dernière_erreur était 0, il reste à 0 et va tout droit)
+                # Étape A : On continue sur notre lancée (Inertie)
                 erreur = dernière_erreur
+                angle_cible = ANGLE_CENTRE + (erreur * GAIN_P)
+                vitesse_cible = 35 if dernière_erreur == 0 else VITESSE_MIN
+                piloter_robot(angle_cible, vitesse_cible, direction_moteur=1)
+                time.sleep(0.015)
+                continue
             else:
-                # VRAIE PERTE : Le délai max est dépassé, on lance la recherche en arrière
-                print("[RECHERCHE] Ligne perdue (délai dépassé), marche arrière...")
+                # Étape B : La tolérance est dépassée, on RECHÈRCHE en marche arrière
+                # Pour sortir du piège, on contre-braque légèrement par rapport à l'erreur 
+                # qui nous a éjectés de la piste, afin de repositionner le nez du robot.
                 if dernière_erreur < 0:
-                    servos.set_angle(0, ANGLE_CENTRE - 15) 
+                    angle_cible = ANGLE_CENTRE + 15 # Si on fuyait à gauche, on oriente vers la droite
                 elif dernière_erreur > 0:
-                    servos.set_angle(0, ANGLE_CENTRE + 15)
+                    angle_cible = ANGLE_CENTRE - 15 # Si on fuyait à droite, on oriente vers la gauche
                 else:
-                    servos.set_angle(0, ANGLE_CENTRE)
-                robot.set_motor(-1, 20)
-                continue 
-        else:
-            # Cas (0, 1, 0) : ligne fine bien centrée
-            erreur = 0
-            temps_perte_ligne = None
+                    angle_cible = ANGLE_CENTRE
 
-        # Mémorisation du dernier état connu (uniquement s'il est stable)
+                # On applique directement la marche arrière via notre fonction lissée
+                piloter_robot(angle_cible, vitesse_cible=22, direction_moteur=-1)
+                time.sleep(0.015)
+                continue
+        else:
+            # Sécurité pour les états transitoires bizarres
+            erreur = dernière_erreur
+
+        # Mémorisation de la dernière erreur (uniquement hors du tout blanc)
         if etat_cap != (0, 0, 0):
             dernière_erreur = erreur
 
-        # ─── ACTIONNEURS ───
+        # ─── ACTIONNEURS EN SUIVI NORMAL ───
         angle_cible = ANGLE_CENTRE + (erreur * GAIN_P)
-        
-        # En ligne droite (erreur = 0), on bombarde. En virage ou en coupure, on adapte.
-        if etat_cap == (0, 0, 0) and dernière_erreur == 0:
-            # Si on est dans un blanc des pointillés, on maintient une vitesse stable (ex: 40) 
-            # pour ne pas surprendre les moteurs, au lieu d'accélérer à fond.
-            vitesse_cible = 40 
-        else:
-            vitesse_cible = VITESSE_MAX - (abs(erreur) * 12)
-            vitesse_cible = max(VITESSE_MIN, vitesse_cible)
+        vitesse_cible = VITESSE_MAX - (abs(erreur) * 12)
+        vitesse_cible = max(VITESSE_MIN, vitesse_cible)
 
-        piloter_robot(angle_cible, vitesse_cible)
+        piloter_robot(angle_cible, vitesse_cible, direction_moteur=1)
 
         time.sleep(0.015)
 
