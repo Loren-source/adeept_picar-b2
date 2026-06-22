@@ -10,29 +10,24 @@ ultra=Ultrasonic()
 tracker=LineTracker()
 servos=RobotServos()
 
-# ===== REGLAGES =====
-
 ANGLE_CENTRE=97
 
-# 110 : robot part à droite -> tourner gauche
+# 110 -> tourner gauche
 ANGLE_GAUCHE_LEGER=110
 ANGLE_GAUCHE_FORT=125
 
-# 011 : robot part à gauche -> tourner droite
+# 011 -> tourner droite
 ANGLE_DROITE_LEGER=84
 ANGLE_DROITE_FORT=70
 
 VITESSE_DROITE=35
 VITESSE_CORRECTION=28
-VITESSE_VIRAGE=22
+VITESSE_VIRAGE=20
 VITESSE_RECHERCHE=18
 
 DISTANCE_STOP=200
 
-# ===== VARIABLES =====
-
 actif=False
-
 angle_actuel=None
 
 dernier_angle=ANGLE_CENTRE
@@ -40,8 +35,9 @@ derniere_direction="centre"
 
 temps_000=None
 
+compteur_gauche=0
+compteur_droite=0
 
-# ===== MOUVEMENT =====
 
 def braquer(a):
     global angle_actuel
@@ -60,10 +56,7 @@ def avance(a,v):
     robot.set_motor(1,v)
 
 
-# ===== CLAVIER =====
-
 def clavier():
-
     global actif
 
     while True:
@@ -75,7 +68,6 @@ def clavier():
             actif=True
             robot.stop_feux()
             print("START")
-
 
         elif c=="A":
 
@@ -90,13 +82,12 @@ threading.Thread(
 ).start()
 
 
-# ===== PROGRAMME =====
-
 try:
 
     while True:
 
         if not actif:
+
             time.sleep(0.02)
             continue
 
@@ -116,17 +107,20 @@ try:
             s["right"]
         )
 
-
         print(cap)
 
 
-        # ======================
-        # CENTRE
-        # ======================
+        # ==================
+        # LIGNE DROITE
+        # ==================
 
         if cap==(1,1,1):
 
             temps_000=None
+
+            compteur_gauche=0
+            compteur_droite=0
+
             derniere_direction="centre"
 
             avance(
@@ -135,24 +129,43 @@ try:
             )
 
 
-        # ======================
-        # GAUCHE
-        # ======================
+        # ==================
+        # VIRAGE GAUCHE
+        # ==================
 
         elif cap==(1,1,0):
 
             temps_000=None
+
+            compteur_gauche+=1
+            compteur_droite=0
+
             derniere_direction="gauche"
 
-            avance(
-                ANGLE_GAUCHE_LEGER,
-                VITESSE_CORRECTION
-            )
+
+            # longtemps sur 110 = virage
+            if compteur_gauche>5:
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+            else:
+
+                avance(
+                    ANGLE_GAUCHE_LEGER,
+                    VITESSE_CORRECTION
+                )
 
 
         elif cap==(1,0,0):
 
             temps_000=None
+
+            compteur_gauche=10
+            compteur_droite=0
+
             derniere_direction="gauche"
 
             avance(
@@ -161,24 +174,42 @@ try:
             )
 
 
-        # ======================
-        # DROITE
-        # ======================
+        # ==================
+        # VIRAGE DROITE
+        # ==================
 
         elif cap==(0,1,1):
 
             temps_000=None
+
+            compteur_droite+=1
+            compteur_gauche=0
+
             derniere_direction="droite"
 
-            avance(
-                ANGLE_DROITE_LEGER,
-                VITESSE_CORRECTION
-            )
+
+            if compteur_droite>5:
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+            else:
+
+                avance(
+                    ANGLE_DROITE_LEGER,
+                    VITESSE_CORRECTION
+                )
 
 
         elif cap==(0,0,1):
 
             temps_000=None
+
+            compteur_droite=10
+            compteur_gauche=0
+
             derniere_direction="droite"
 
             avance(
@@ -187,9 +218,9 @@ try:
             )
 
 
-        # ======================
-        # PERTE / POINTILLES
-        # ======================
+        # ==================
+        # TROU / POINTILLES
+        # ==================
 
         elif cap==(0,0,0):
 
@@ -198,8 +229,8 @@ try:
                 temps_000=time.time()
 
 
-            # petite coupure de ligne
-            if time.time()-temps_000<0.12:
+            # petite interruption
+            if time.time()-temps_000<0.15:
 
                 avance(
                     dernier_angle,
@@ -209,6 +240,7 @@ try:
 
             # vraie perte
             else:
+
 
                 if derniere_direction=="gauche":
 
