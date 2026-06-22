@@ -1,0 +1,473 @@
+import threading
+import cv2
+import numpy as np
+import datetime
+import time
+import imutils
+
+# Note : Assurez-vous que les modules RPIservo, move, Kalman_filter 
+# et Picamera2 / libcamera sont bien accessibles sur votre Raspberry Pi.
+try:
+    import RPIservo
+    import move
+    import Kalman_filter
+    from picamera import Picamera2 # ou l'import spécifique à votre système
+    import libcamera
+except ImportError:
+    # Variables de substitution pour éviter les plantages hors environnement robot
+    print("Mode simulation ou dépendances matérielles manquantes.")
+
+# Variables globales de configuration (utilisées par le système)
+APPMode = 'none'
+colorUpper = np.array([10, 255, 255])
+colorLower = np.array([0, 0, 0])
+CVRun = 1
+linePos_1 = 340      # Ligne d'analyse supérieure (ajustable)
+linePos_2 = 420      # Ligne d'analyse inférieure (ajustable)
+lineColorSet = 255   # Le rouge extrait devient blanc (255) sur le masque binarisé
+frameRender = 1
+Threshold = 80
+findLineMove = 1
+tracking_servo_status = 0
+FLCV_Status = 0
+turn_speed = 40
+ImgIsNone = 0
+hflip = False
+vflip = False
+
+class CVThread(threading.Thread):
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    # Initialisation des filtres de Kalman pour stabiliser la nacelle de la caméra
+    kalman_filter_X = Kalman_filter.Kalman_filter(0.01, 0.1)
+    kalman_filter_Y = Kalman_filter.Kalman_filter(0.01, 0.1)
+    P_direction = -1
+    T_direction = -1
+    P_servo = 1 # Servo Horizontal (Pan)
+    T_servo = 2 # Servo Vertical (Tilt)
+    P_anglePos = 0
+    T_anglePos = 0
+    cameraDiagonalW = 64
+    cameraDiagonalH = 48
+    videoW = 640
+    videoH = 480
+    Y_lock = 0
+    X_lock = 0
+    tor = 17
+
+    scGear = RPIservo.ServoCtrl()
+    scGear.moveInit()
+    move.setup()
+
+    def __init__(self, *args, **kwargs):
+        self.CVThreading = 0
+        self.CVMode = 'none'
+        self.imgCV = None
+
+        self.mov_x = None
+        self.mov_y = None
+        self.mov_w = None
+        self.mov_h = None
+
+        self.radius = 0
+        self.box_x = None
+        self.box_y = None
+        self.drawing = 0
+
+        self.findColorDetection = 0
+
+        self.left_Pos1 = None
+        self.right_Pos1 = None
+        self.center_Pos1 = None
+
+        self.left_Pos2 = None
+        self.right_Pos2 = None
+        self.center_Pos2 = None
+
+        self.center = None
+        
+        self.tracking_servo_left = None
+        self.tracking_servo_left_mark = 0
+        self.tracking_servo_right_mark = 0
+        self.servo_left_stop = 0
+        self.servo_right_stop = 0
+
+        super(CVThread, self).__init__(*args, **kwargs)
+        self.__flag = threading.Event()
+        self.__flag.clear()
+
+        self.avg = None
+        self.motionCounter = 0
+        self.lastMovtionCaptured = datetime.datetime.now()
+        self.frameDelta = None
+        self.thresh = None
+        self.cnts = None
+
+    def mode(self, invar, imgInput):
+        self.CVMode = invar
+        self.imgCV = imgInput
+        self.resume()
+
+    def elementDraw(self, imgInput):
+        """ Dessine les éléments de l'interface (HUD) sur le flux vidéo """
+        if self.CVMode == 'none':
+            pass
+
+        elif self.CVMode == 'findColor':
+            if self.findColorDetection:
+                cv2.putText(imgInput, 'Target Detected', (40, 60), CVThread.font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+                self.drawing = 1
+            else:
+                cv2.putText(imgInput, 'Target Detecting', (40, 60), CVThread.font, 0.5, (255, 255, 255), 1, cv2.LINE_AA)
+                self.drawing = 0
+
+            if self.radius > 10 and self.drawing:
+                cv2.rectangle(imgInput, (int(self.box_x - self.radius), int(self.box_y + self.radius)),
+                              (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
+
+        elif self.CVMode == 'findlineCV':
+            # Oriente la caméra vers le sol pour chercher la ligne rouge
+            CVThread.scGear.moveAngle(2, -15) 
+
+            try:
+                # Texte indiquant que le robot suit la ligne rouge
+                cv2.putText(imgInput, 'Following Red Line', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                
+                # Tracé des lignes repères horizontales et des détections (gauche/droite)
+                if self.left_Pos1 is not None:
+                    cv2.line(imgInput, (self.left_Pos1, (linePos_1 + 30)), (self.left_Pos1, (linePos_1 - 30)), (255, 128, 64), 2)
+                    cv2.line(imgInput, (self.right_Pos1, (linePos_1 + 30)), (self.right_Pos1, (linePos_1 - 30)), (64, 128, 255), 2)
+                cv2.line(imgInput, (0, linePos_1), (640, linePos_1), (255, 128, 64), 1)
+
+                if self.left_Pos2 is not None:
+                    cv2.line(imgInput, (self.left_Pos2, (linePos_2 + 30)), (self.left_Pos2, (linePos_2 - 30)), (64, 128, 255), 2)
+                    cv2.line(imgInput, (self.right_Pos2, (linePos_2 + 30)), (self.right_Pos2, (linePos_2 - 30)), (64, 128, 255), 2)
+                cv2.line(imgInput, (0, linePos_2), (640, linePos_2), (64, 128, 255), 1)
+
+                # Dessin du réticule central de guidage (Croix noire)
+                if self.center is not None:
+                    center_y = int((linePos_1 + linePos_2) / 2)
+                    cv2.line(imgInput, ((self.center - 20), center_y), ((self.center + 20), center_y), (0, 0, 0), 1)
+                    cv2.line(imgInput, ((self.center), center_y + 20), ((self.center), center_y - 20), (0, 0, 0), 1)
+
+            except Exception as e:
+                print(f"Erreur d'affichage elementDraw : {e}")
+                pass
+
+        elif self.CVMode == 'watchDog':
+            if self.drawing:
+                cv2.rectangle(imgInput, (self.mov_x, self.mov_y), (self.mov_x + self.mov_w, self.mov_y + self.mov_h), (128, 255, 0), 1)
+
+        return imgInput
+
+    def watchDog(self, imgInput):
+        timestamp = datetime.datetime.now()
+        gray = cv2.cvtColor(imgInput, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (21, 21), 0)
+
+        if self.avg is None:
+            print("[INFO] starting background model...")
+            self.avg = gray.copy().astype("float")
+            return 'background model'
+
+        cv2.accumulateWeighted(gray, self.avg, 0.5)
+        self.frameDelta = cv2.absdiff(gray, cv2.convertScaleAbs(self.avg))
+
+        self.thresh = cv2.threshold(self.frameDelta, 5, 255, cv2.THRESH_BINARY)[1]
+        self.thresh = cv2.dilate(self.thresh, None, iterations=2)
+        self.cnts = cv2.findContours(self.thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        self.cnts = imutils.grab_contours(self.cnts)
+        
+        for c in self.cnts:
+            if cv2.contourArea(c) < 5000:
+                continue
+     
+            (self.mov_x, self.mov_y, self.mov_w, self.mov_h) = cv2.boundingRect(c)
+            self.drawing = 1
+            self.motionCounter += 1
+            self.lastMovtionCaptured = timestamp
+
+        if (timestamp - self.lastMovtionCaptured).seconds >= 0.5:
+            self.drawing = 0
+        self.pause()
+
+    def findLineCtrl(self, posInput):
+        global findLineMove, tracking_servo_status, FLCV_Status
+        
+        if FLCV_Status == 0:    
+            CVThread.scGear.moveAngle(0, 0) # Direction voiture centrée
+            CVThread.scGear.moveAngle(1, 0) # Caméra centrée horizontalement
+            CVThread.scGear.moveAngle(2, 0) # Caméra centrée verticalement
+            FLCV_Status = 1
+            
+        if posInput is not None and findLineMove == 1:
+            if FLCV_Status == -1:
+                CVThread.scGear.stopWiggle()
+                self.tracking_servo_left_mark = 0
+                self.tracking_servo_right_mark = 0
+                FLCV_Status = 1
+                
+            if posInput > 480: # La ligne rouge dévie trop à droite
+                tracking_servo_status = 1 
+                if CVRun:
+                    CVThread.scGear.moveAngle(0, -30) # Braquage des roues à droite
+                    move.video_Tracking_Move(turn_speed, 1) 
+                else:
+                    CVThread.scGear.moveAngle(0, 0)
+                    move.motorStop()
+
+            elif posInput < 180: # La ligne rouge dévie trop à gauche
+                tracking_servo_status = -1 
+                if CVRun:
+                    CVThread.scGear.moveAngle(0, 30) # Braquage des roues à gauche
+                    move.video_Tracking_Move(turn_speed, 1) 
+                else:
+                    CVThread.scGear.moveAngle(0, 0)
+                    move.motorStop()
+                        
+            else: # La ligne rouge est bien centrée
+                tracking_servo_status = 0 
+                if CVRun:
+                    CVThread.scGear.moveAngle(0, 0) # Roues droites
+                    move.video_Tracking_Move(turn_speed, 1) 
+                else: 
+                    move.motorStop()
+        else: 
+            # Perte de la ligne rouge : application de la mémoire de direction
+            move.motorStop() 
+            FLCV_Status = -1
+            if tracking_servo_status == -1: 
+                CVThread.scGear.moveAngle(0, 30) 
+                move.video_Tracking_Move(turn_speed, 1) 
+            elif tracking_servo_status == 1: 
+                CVThread.scGear.moveAngle(0, -30) 
+                move.video_Tracking_Move(turn_speed, 1) 
+            else:  
+                pass
+
+    def findlineCV(self, frame_image):
+        """ ALGORITHME DE SUIVI DE LIGNE ROUGE EN ESPACE HSV """
+        global findLineMove, lineColorSet
+        
+        # 1. Passage dans l'espace couleur HSV (plus robuste aux variations de lumière)
+        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
+        
+        # 2. Définition des plages de couleur pour capturer le rouge (aux deux extrémités de l'axe H)
+        lower_red1 = np.array([0, 70, 50])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([170, 70, 50])
+        upper_red2 = np.array([180, 255, 255])
+        
+        # 3. Création des masques isolant le rouge et combinaison des deux plages
+        mask1 = cv2.inRange(frame_hsv, lower_red1, upper_red1)
+        mask2 = cv2.inRange(frame_hsv, lower_red2, upper_red2)
+        frame_findline = cv2.bitwise_or(mask1, mask2)
+        
+        # 4. Filtrage morphologique pour éliminer le bruit et les impuretés
+        frame_findline = cv2.erode(frame_findline, None, iterations=2)
+        frame_findline = cv2.dilate(frame_findline, None, iterations=2)
+        
+        # Acquisition des segments horizontaux de pixels (lignes de balayage virtuel)
+        colorPos_1 = frame_findline[linePos_1]
+        colorPos_2 = frame_findline[linePos_2]
+        
+        try:
+            # Comptage du nombre de pixels rouges (devenus blancs = 255) sur les lignes d'analyse
+            lineColorCount_Pos1 = np.sum(colorPos_1 == lineColorSet)
+            lineColorCount_Pos2 = np.sum(colorPos_2 == lineColorSet)
+
+            # Recherche des indices (coordonnées X) des pixels rouges détectés
+            lineIndex_Pos1 = np.where(colorPos_1 == lineColorSet)
+            lineIndex_Pos2 = np.where(colorPos_2 == lineColorSet)
+
+            # Évaluation de la validité de la ligne détectée
+            if lineIndex_Pos1[0].size > 0:
+                if abs(lineIndex_Pos1[0][-1] - lineIndex_Pos1[0][0]) > 500:
+                    print("Tracking color not found (Noise or too wide)")
+                    findLineMove = 0    
+                else:
+                    findLineMove = 1
+            elif lineIndex_Pos2[0].size > 0:
+                if abs(lineIndex_Pos2[0][-1] - lineIndex_Pos2[0][0]) > 500:
+                    print("Tracking color not found (Noise or too wide)")
+                    findLineMove = 0
+                else:
+                    findLineMove = 1
+            else:
+                findLineMove = 0
+
+            if lineColorCount_Pos1 == 0: lineColorCount_Pos1 = 1
+            if lineColorCount_Pos2 == 0: lineColorCount_Pos2 = 1
+
+            # Détermination des extrémités gauche et droite de la ligne rouge
+            self.left_Pos1 = lineIndex_Pos1[0][1] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
+            self.right_Pos1 = lineIndex_Pos1[0][lineColorCount_Pos1-2] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
+            self.center_Pos1 = int((self.left_Pos1 + self.right_Pos1) / 2)
+
+            self.left_Pos2 = lineIndex_Pos2[0][1] if lineIndex_Pos2[0].size > 1 else lineIndex_Pos2[0][0]
+            self.right_Pos2 = lineIndex_Pos2[0][lineColorCount_Pos2-2] if lineIndex_Pos2[0].size > 1 else lineIndex_Pos2[0][0]
+            self.center_Pos2 = int((self.left_Pos2 + self.right_Pos2) / 2)
+
+            # Calcul du centre moyen combiné (cible à suivre)
+            self.center = int((self.center_Pos1 + self.center_Pos2) / 2)
+            
+        except Exception as e:
+            self.center = None
+            pass
+
+        # Soumission du résultat au contrôleur moteur
+        self.findLineCtrl(self.center)
+        self.pause()
+
+    def servoMove(ID, Dir, errorInput):
+        if ID == 1:
+            errorGenOut = CVThread.kalman_filter_X.kalman(errorInput)
+            CVThread.P_anglePos += 0.15 * (errorGenOut * Dir) * CVThread.cameraDiagonalW / CVThread.videoW
+
+            if abs(errorInput) > CVThread.tor:
+                CVThread.scGear.moveAngle(ID, CVThread.P_anglePos)
+                CVThread.X_lock = 0
+            else:
+                CVThread.X_lock = 1
+        elif ID == 2:
+            errorGenOut = CVThread.kalman_filter_Y.kalman(errorInput)
+            CVThread.T_anglePos += 0.1 * (errorGenOut * Dir) * CVThread.cameraDiagonalH / CVThread.videoH
+
+            if abs(errorInput) > CVThread.tor:
+                CVThread.scGear.moveAngle(ID, CVThread.T_anglePos)
+                CVThread.Y_lock = 0
+            else:
+                CVThread.Y_lock = 1
+        else:
+            print('No servoPort %d assigned.' % ID)
+        time.sleep(0.1)
+
+    def findColor(self, frame_image):
+        global APPMode
+        if APPMode == 'APP':
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
+        else:
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, colorLower, colorUpper)
+        mask = cv2.erode(mask, None, iterations=2)
+        mask = cv2.dilate(mask, None, iterations=2)
+        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        
+        if len(cnts) > 0:
+            self.findColorDetection = 1
+            c = max(cnts, key=cv2.contourArea)
+            ((self.box_x, self.box_y), self.radius) = cv2.minEnclosingCircle(c)
+            M = cv2.moments(c)
+            X = int(self.box_x)
+            Y = int(self.box_y)
+            error_Y = 240 - Y
+            error_X = 320 - X
+            CVThread.servoMove(CVThread.P_servo, CVThread.P_direction, -error_X)
+            CVThread.servoMove(CVThread.T_servo, CVThread.T_direction, -error_Y)
+        else:
+            self.findColorDetection = 0
+        self.pause()
+
+    def pause(self):
+        self.__flag.clear()
+
+    def resume(self):
+        self.__flag.set()
+
+    def run(self):
+        while 1:
+            self.__flag.wait()
+            if self.CVMode == 'none':
+                continue
+            elif self.CVMode == 'findColor':
+                self.CVThreading = 1
+                self.findColor(self.imgCV)
+                self.CVThreading = 0
+            elif self.CVMode == 'findlineCV':
+                self.CVThreading = 1
+                self.findlineCV(self.imgCV)
+                self.CVThreading = 0
+            elif self.CVMode == 'watchDog':
+                self.CVThreading = 1
+                self.watchDog(self.imgCV)
+                self.CVThreading = 0
+
+
+class Camera(object): # Hérite de BaseCamera dans l'infrastructure d'origine
+    video_source = 0
+    modeSelect = 'none'
+
+    def colorFindSet(self, invarH, invarS, invarV):
+        global colorUpper, colorLower
+        HUE_1, HUE_2 = min(invarH + 15, 180), max(invarH - 15, 0)
+        SAT_1, SAT_2 = min(invarS + 150, 255), max(invarS - 150, 0)
+        VAL_1, VAL_2 = min(invarV + 150, 255), max(invarV - 150, 0)
+        colorUpper = np.array([HUE_1, SAT_1, VAL_1])
+        colorLower = np.array([HUE_2, SAT_2, VAL_2])
+
+    def modeSet(self, invar):
+        Camera.modeSelect = invar
+
+    def CVRunSet(self, invar):
+        global CVRun
+        CVRun = invar
+
+    def linePosSet_1(self, invar):
+        global linePos_1
+        linePos_1 = invar
+
+    def linePosSet_2(self, invar):
+        global linePos_2
+        linePos_2 = invar
+
+    def Threshold(self, value):
+        global Threshold
+        Threshold = value
+
+    @staticmethod
+    def frames():
+        global ImgIsNone, hflip, vflip
+        picam2 = Picamera2() 
+        
+        preview_config = picam2.preview_configuration
+        preview_config.size = (640, 480)
+        preview_config.format = 'RGB888'
+        preview_config.transform = libcamera.Transform(hflip=hflip, vflip=vflip)
+        preview_config.colour_space = libcamera.ColorSpace.Sycc()
+        preview_config.buffer_count = 4
+        preview_config.queue = True
+
+        if not picam2.is_open:
+            raise RuntimeError('Could not start camera.')
+
+        try:
+            picam2.start()
+        except Exception as e:
+            print(f"Error starting Picamera2: {e}")
+
+        cvt = CVThread()
+        cvt.start()
+
+        while True:
+            img = picam2.capture_array()
+
+            if img is None:
+                continue
+            
+            if Camera.modeSelect == 'none':
+                cvt.pause()
+            else:
+                if not cvt.CVThreading:
+                    cvt.mode(Camera.modeSelect, img)
+                    cvt.resume()
+                try:
+                    img = cvt.elementDraw(img)
+                except:
+                    pass
+
+            # Encodage JPEG pour le streaming Web vers l'interface utilisateur
+            if cv2.imencode('.jpg', img)[0]:
+                yield cv2.imencode('.jpg', img)[1].tobytes()
+
+
+
