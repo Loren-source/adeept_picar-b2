@@ -12,22 +12,30 @@ servos=RobotServos()
 
 ANGLE_CENTRE=97
 
-ANGLE_GAUCHE_LEGER=88
-ANGLE_GAUCHE_FORT=78
+ANGLE_GAUCHE_LEGER=82
+ANGLE_GAUCHE_FORT=70
 
-ANGLE_DROITE_LEGER=106
-ANGLE_DROITE_FORT=116
+ANGLE_DROITE_LEGER=115
+ANGLE_DROITE_FORT=125
 
-V_LIGNE=38
-V_CORRECTION=32
-V_VIRAGE=25
-V_PERTE=20
+ANGLE_RECH_GAUCHE=70
+ANGLE_RECH_DROITE=125
+
+VITESSE_DROITE=30
+VITESSE_CORRECTION=28
+VITESSE_VIRAGE=25
+VITESSE_RECHERCHE=18
+
+DISTANCE_STOP=200
 
 actif=False
-angle_actuel=None
+etat="SUIVI"
 
-dernier_angle=97
+angle_actuel=None
+dernier_angle=ANGLE_CENTRE
+
 derniere_direction="centre"
+
 temps_000=None
 
 
@@ -48,152 +56,213 @@ def avance(a,v):
     robot.set_motor(1,v)
 
 
+def recule(a,v):
+
+    braquer(a)
+    robot.set_motor(-1,v)
+
+
+
 def clavier():
+
     global actif
 
     while True:
-        c=input().upper()
+
+        c=input().strip().upper()
 
         if c=="M":
+
             actif=True
             robot.stop_feux()
             print("START")
 
+
         elif c=="A":
+
             actif=False
             robot.stopper()
             print("STOP")
 
 
-threading.Thread(target=clavier,daemon=True).start()
+
+threading.Thread(
+    target=clavier,
+    daemon=True
+).start()
+
 
 
 try:
 
     while True:
 
+
         if not actif:
+
             time.sleep(0.02)
             continue
 
 
+
+        if ultra.get_distance()<DISTANCE_STOP:
+
+            robot.stop()
+            actif=False
+            continue
+
+
+
         s=tracker.get_status()
 
-        cap=(
+        etat_cap=(
             s["left"],
             s["middle"],
             s["right"]
         )
 
 
-        print(cap)
+        print(etat_cap)
 
 
-        # ligne parfaite
 
-        if cap==(1,1,1):
+        # ==================
+        # LIGNE CENTREE
+        # ==================
+
+        if etat_cap==(1,1,1):
 
             temps_000=None
             derniere_direction="centre"
 
             avance(
                 ANGLE_CENTRE,
-                V_LIGNE
+                VITESSE_DROITE
             )
 
 
-        # commence à partir à droite
-        # donc on ramène gauche
 
-        elif cap==(1,1,0):
+        # ==================
+        # PART VERS DROITE
+        # DONC CORRECTION GAUCHE
+        # ==================
+
+        elif etat_cap==(1,1,0):
 
             temps_000=None
             derniere_direction="gauche"
 
             avance(
                 ANGLE_GAUCHE_LEGER,
-                V_CORRECTION
+                VITESSE_CORRECTION
             )
 
 
-        elif cap==(1,0,0):
+
+        elif etat_cap==(1,0,0):
 
             temps_000=None
             derniere_direction="gauche"
 
             avance(
                 ANGLE_GAUCHE_FORT,
-                V_VIRAGE
+                VITESSE_VIRAGE
             )
 
 
-        # commence à partir gauche
-        # donc ramène droite
 
-        elif cap==(0,1,1):
+        # ==================
+        # PART VERS GAUCHE
+        # DONC CORRECTION DROITE
+        # ==================
+
+        elif etat_cap==(0,1,1):
 
             temps_000=None
             derniere_direction="droite"
 
             avance(
                 ANGLE_DROITE_LEGER,
-                V_CORRECTION
+                VITESSE_CORRECTION
             )
 
 
-        elif cap==(0,0,1):
+
+        elif etat_cap==(0,0,1):
 
             temps_000=None
             derniere_direction="droite"
 
             avance(
                 ANGLE_DROITE_FORT,
-                V_VIRAGE
+                VITESSE_VIRAGE
             )
 
 
-        # blanc
 
-        elif cap==(0,0,0):
+        # ==================
+        # BLANC COMPLET
+        # ==================
+
+        elif etat_cap==(0,0,0):
+
 
             if temps_000 is None:
+
                 temps_000=time.time()
 
 
-            if time.time()-temps_000<0.12:
+
+            # petit trou ou début de perte
+            if time.time()-temps_000<0.05:
 
                 avance(
                     dernier_angle,
-                    V_PERTE
+                    20
                 )
 
 
+            # vraie perte
             else:
 
-                # chercher sans reculer
 
                 if derniere_direction=="gauche":
 
-                    avance(
-                        ANGLE_GAUCHE_FORT,
-                        18
+                    recule(
+                        ANGLE_RECH_GAUCHE,
+                        VITESSE_RECHERCHE
                     )
+
 
                 elif derniere_direction=="droite":
 
-                    avance(
-                        ANGLE_DROITE_FORT,
-                        18
+                    recule(
+                        ANGLE_RECH_DROITE,
+                        VITESSE_RECHERCHE
                     )
+
+
+                else:
+
+                    recule(
+                        ANGLE_CENTRE,
+                        VITESSE_RECHERCHE
+                    )
+
 
 
         time.sleep(0.02)
 
 
+
 except KeyboardInterrupt:
+
     pass
 
 
+
 finally:
+
     robot.stopper()
-    servos.set_angle(0,97)
+    braquer(ANGLE_CENTRE)
+    print("FIN")
