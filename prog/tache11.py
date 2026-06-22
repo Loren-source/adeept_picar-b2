@@ -6,7 +6,7 @@ import sys
 sys.path.append('/home/loren/adeept_picar-b2/server')
 
 import motor
-import servos
+import servo
 import RPi.GPIO as GPIO
 
 
@@ -14,7 +14,7 @@ import RPi.GPIO as GPIO
 # REGLAGES
 # ======================
 
-ANGLE_CENTRE = 97
+CENTRE = 97
 
 GAUCHE_MAX = 125
 DROITE_MAX = 70
@@ -26,13 +26,12 @@ RETOUR_G = 108
 RETOUR_D = 86
 
 
-VITESSE_DROITE = 28
-VITESSE_CORRECTION = 20
-VITESSE_VIRAGE = 13
-VITESSE_RECHERCHE = 12
+V_DROITE = 28
+V_CORRECTION = 20
+V_VIRAGE = 13
+V_RECHERCHE = 12
 
 
-# tes capteurs
 CAP_G = 20
 CAP_M = 16
 CAP_D = 19
@@ -40,17 +39,15 @@ CAP_D = 19
 
 GPIO.setmode(GPIO.BCM)
 
-for pin in [CAP_G, CAP_M, CAP_D]:
-    GPIO.setup(pin, GPIO.IN)
+for p in [CAP_G,CAP_M,CAP_D]:
+    GPIO.setup(p, GPIO.IN)
+
 
 
 dernier_angle = None
 derniere_direction = "centre"
 
 
-# ======================
-# FONCTIONS
-# ======================
 
 def tourner(a):
 
@@ -58,11 +55,11 @@ def tourner(a):
 
     if dernier_angle != a:
 
-        servos.set_angle(0,a)
+        servo.setServoAngle(0,a)
 
         print("[CH00] →",a,"°")
 
-        dernier_angle = a
+        dernier_angle=a
 
 
 
@@ -70,8 +67,8 @@ def avance(angle,vitesse):
 
     tourner(angle)
 
-    motor.motor_left(1, vitesse)
-    motor.motor_right(1, vitesse)
+    motor.motor_left(1,vitesse)
+    motor.motor_right(1,vitesse)
 
 
 
@@ -85,9 +82,6 @@ def lire():
 
 
 
-# ======================
-# MAIN
-# ======================
 
 try:
 
@@ -97,101 +91,101 @@ try:
     while True:
 
 
-        cap = lire()
+        cap=lire()
 
         print(cap)
 
 
 
-        # ligne OK
+        # ligne droite
 
-        if cap == (1,1,1):
+        if cap==(1,1,1):
 
 
             if derniere_direction=="gauche":
 
-                avance(RETOUR_G,VITESSE_CORRECTION)
+                avance(RETOUR_G,V_CORRECTION)
                 time.sleep(0.15)
 
 
             elif derniere_direction=="droite":
 
-                avance(RETOUR_D,VITESSE_CORRECTION)
+                avance(RETOUR_D,V_CORRECTION)
                 time.sleep(0.15)
+
 
 
             derniere_direction="centre"
 
-            avance(ANGLE_CENTRE,VITESSE_DROITE)
+            avance(CENTRE,V_DROITE)
 
 
 
+        # gauche léger
 
-        # commence à partir à gauche
-
-        elif cap == (1,1,0):
-
-            derniere_direction="gauche"
-
-            avance(GAUCHE,VITESSE_CORRECTION)
-
-
-
-        # gros virage gauche
-
-        elif cap == (1,0,0):
+        elif cap==(1,1,0):
 
             derniere_direction="gauche"
 
-            avance(GAUCHE_MAX,VITESSE_VIRAGE)
-
-            time.sleep(0.25)
+            avance(GAUCHE,V_CORRECTION)
 
 
 
+        # gros gauche
 
-        # commence à partir droite
+        elif cap==(1,0,0):
 
-        elif cap == (0,1,1):
+            derniere_direction="gauche"
+
+            avance(GAUCHE_MAX,V_VIRAGE)
+
+            time.sleep(0.3)
+
+
+
+
+        # droite léger
+
+        elif cap==(0,1,1):
 
             derniere_direction="droite"
 
-            avance(DROITE,VITESSE_CORRECTION)
+            avance(DROITE,V_CORRECTION)
 
 
 
 
-        # gros virage droite
+        # gros droite
 
-        elif cap == (0,0,1):
+        elif cap==(0,0,1):
 
             derniere_direction="droite"
 
-            avance(DROITE_MAX,VITESSE_VIRAGE)
+            avance(DROITE_MAX,V_VIRAGE)
 
-            time.sleep(0.25)
-
-
+            time.sleep(0.3)
 
 
-        # perdu
 
-        elif cap == (0,0,0):
+
+        # ligne perdue
+
+        elif cap==(0,0,0):
 
 
             if derniere_direction=="gauche":
 
-                avance(GAUCHE_MAX,VITESSE_RECHERCHE)
+                avance(GAUCHE_MAX,V_RECHERCHE)
 
 
             elif derniere_direction=="droite":
 
-                avance(DROITE_MAX,VITESSE_RECHERCHE)
+                avance(DROITE_MAX,V_RECHERCHE)
 
 
             else:
 
-                avance(ANGLE_CENTRE,VITESSE_RECHERCHE)
+                avance(CENTRE,V_RECHERCHE)
 
 
 
@@ -203,7 +197,7 @@ try:
 except KeyboardInterrupt:
 
 
-    servos.set_angle(0,97)
+    tourner(97)
 
     motor.motorStop()
 
