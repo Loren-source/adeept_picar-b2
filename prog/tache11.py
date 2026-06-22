@@ -25,24 +25,21 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
-# (1,1,0) -> ligne part à droite
-ANGLE_GAUCHE_LEGER = 115
-ANGLE_GAUCHE_FORT = 135
+# SUR TON ROBOT :
+# petit angle = gauche
+# grand angle = droite
 
-# (0,1,1) -> ligne part à gauche
-ANGLE_DROITE_LEGER = 78
-ANGLE_DROITE_FORT = 55
+ANGLE_GAUCHE_LEGER = 75
+ANGLE_GAUCHE_FORT = 55
+
+ANGLE_DROITE_LEGER = 125
+ANGLE_DROITE_FORT = 145
 
 
-VITESSE_DROITE = 32
-VITESSE_CORRECTION = 26
-
-# vitesse pendant les vrais virages
-VITESSE_VIRAGE = 24
-
-# quand la ligne disparaît
-VITESSE_RECHERCHE = 22
-
+VITESSE_DROITE = 30
+VITESSE_CORRECTION = 24
+VITESSE_VIRAGE = 25
+VITESSE_RECHERCHE = 25
 
 DISTANCE_STOP = 200
 
@@ -56,9 +53,8 @@ actif = False
 angle_actuel = None
 
 dernier_angle = ANGLE_CENTRE
-
-# mémorise le dernier vrai virage
 derniere_direction = "centre"
+
 
 
 # ======================
@@ -107,7 +103,6 @@ def clavier():
 
         c = input().strip().upper()
 
-
         if c == "M":
 
             actif = True
@@ -124,6 +119,7 @@ def clavier():
             print("STOP")
 
 
+
 threading.Thread(
     target=clavier,
     daemon=True
@@ -132,7 +128,7 @@ threading.Thread(
 
 
 # ======================
-# PROGRAMME PRINCIPAL
+# BOUCLE PRINCIPALE
 # ======================
 
 try:
@@ -147,19 +143,17 @@ try:
 
 
 
-        # sécurité obstacle
+        # obstacle
 
         if ultra.get_distance() < DISTANCE_STOP:
 
             robot.stopper()
-
             actif = False
-
             continue
 
 
 
-        # lecture capteurs
+        # capteurs ligne
 
         s = tracker.get_status()
 
@@ -175,9 +169,9 @@ try:
 
 
 
-        # ======================
+        # =====================
         # TOUT DROIT
-        # ======================
+        # =====================
 
         if cap == (1,1,1):
 
@@ -190,39 +184,13 @@ try:
 
 
 
-        # ======================
-        # VIRAGE GAUCHE
-        # ======================
+        # =====================
+        # VIRAGE DROITE
+        # =====================
+        # ton 2e virage
 
 
         elif cap == (1,1,0):
-
-            derniere_direction = "gauche"
-
-            avance(
-                ANGLE_GAUCHE_LEGER,
-                VITESSE_CORRECTION
-            )
-
-
-
-        elif cap == (1,0,0):
-
-            derniere_direction = "gauche"
-
-            avance(
-                ANGLE_GAUCHE_FORT,
-                VITESSE_VIRAGE
-            )
-
-
-
-        # ======================
-        # VIRAGE DROITE
-        # ======================
-
-
-        elif cap == (0,1,1):
 
             derniere_direction = "droite"
 
@@ -233,7 +201,7 @@ try:
 
 
 
-        elif cap == (0,0,1):
+        elif cap == (1,0,0):
 
             derniere_direction = "droite"
 
@@ -244,32 +212,56 @@ try:
 
 
 
-        # ======================
-        # PERTE DE LIGNE
-        # ======================
-        # IMPORTANT :
-        # Dans un virage serré,
-        # le robot voit souvent 000.
-        # On continue donc le dernier virage.
-        # ======================
+        # =====================
+        # VIRAGE GAUCHE
+        # =====================
+        # ton 1er et 3e virage
+
+
+        elif cap == (0,1,1):
+
+            derniere_direction = "gauche"
+
+            avance(
+                ANGLE_GAUCHE_LEGER,
+                VITESSE_CORRECTION
+            )
+
+
+
+        elif cap == (0,0,1):
+
+            derniere_direction = "gauche"
+
+            avance(
+                ANGLE_GAUCHE_FORT,
+                VITESSE_VIRAGE
+            )
+
+
+
+        # =====================
+        # PERTE LIGNE
+        # =====================
+        # continue le dernier virage
 
 
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "gauche":
+            if derniere_direction == "droite":
 
                 avance(
-                    ANGLE_GAUCHE_FORT,
+                    ANGLE_DROITE_FORT,
                     VITESSE_RECHERCHE
                 )
 
 
 
-            elif derniere_direction == "droite":
+            elif derniere_direction == "gauche":
 
                 avance(
-                    ANGLE_DROITE_FORT,
+                    ANGLE_GAUCHE_FORT,
                     VITESSE_RECHERCHE
                 )
 
