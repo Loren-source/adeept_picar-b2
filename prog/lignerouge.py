@@ -1,4 +1,3 @@
-
 import threading
 import cv2
 import numpy as np
@@ -43,7 +42,7 @@ Threshold = 80
 findLineMove = 1
 tracking_servo_status = 0
 FLCV_Status = 0
-turn_speed = 30      # MODIFICATION : Vitesse réduite de 40 à 30 pour mieux négocier les virages
+turn_speed = 40
 ImgIsNone = 0
 hflip = False
 vflip = False
@@ -224,19 +223,19 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 480: # Déviation à droite -> On braque plus fort à droite
+            if posInput > 480: # Déviation à droite
                 tracking_servo_status = 1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, -45) # MODIFICATION : Augmenté de -30 à -45
+                    CVThread.scGear.moveAngle(0, -30) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
                     move.motorStop()
 
-            elif posInput < 180: # Déviation à gauche -> On braque plus fort à gauche
+            elif posInput < 180: # Déviation à gauche
                 tracking_servo_status = -1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 45)  # MODIFICATION : Augmenté de 30 à 45
+                    CVThread.scGear.moveAngle(0, 30) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
@@ -253,17 +252,17 @@ class CVThread(threading.Thread):
             move.motorStop() 
             FLCV_Status = -1
             if tracking_servo_status == -1: 
-                CVThread.scGear.moveAngle(0, 45)  # MODIFICATION : Re-recherche à gauche à 45
+                CVThread.scGear.moveAngle(0, 30) 
                 move.video_Tracking_Move(turn_speed, 1) 
             elif tracking_servo_status == 1: 
-                CVThread.scGear.moveAngle(0, -45) # MODIFICATION : Re-recherche à droite à -45
+                CVThread.scGear.moveAngle(0, -30) 
                 move.video_Tracking_Move(turn_speed, 1) 
 
     def findlineCV(self, frame_image):
         global findLineMove
         lineColorSet = 255 
         
-        # Traitement OpenCV pour isoler la ligne rouge
+        # Traitement OpenCV pour isoler le rouge
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
