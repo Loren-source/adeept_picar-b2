@@ -12,11 +12,11 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-# Gestion des imports matériels réels (RPIservo, move, picamera)
+# Gestion des imports matériels réels (RPIservo, move, picamera2)
 try:
     import RPIservo
     import move
-    from picamera import Picamera2
+    from picamera2 import Picamera2  # Version moderne pour Raspberry Pi OS (Bookworm/Bullseye)
     import libcamera
     print("Matériel détecté et initialisé avec succès.")
 except ImportError as e:
@@ -262,7 +262,7 @@ class CVThread(threading.Thread):
         global findLineMove
         lineColorSet = 255 
         
-        # Traitement OpenCV pour isoler le rouge
+        # Traitement OpenCV pour isoler la ligne rouge en HSV
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
