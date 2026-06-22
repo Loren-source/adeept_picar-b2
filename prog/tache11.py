@@ -5,151 +5,108 @@ from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
-robot = RobotMotor()
-ultra = Ultrasonic()
+# --- Initialisation ---
+robot   = RobotMotor()
+ultra   = Ultrasonic()
 tracker = LineTracker()
-servos = RobotServos()
+servos  = RobotServos()
 
-ANGLE_CENTRE=97
-ANGLE_GAUCHE_LEGER=92
-ANGLE_GAUCHE_FORT=85
-ANGLE_DROITE_LEGER=102
-ANGLE_DROITE_FORT=110
-ANGLE_RECH_GAUCHE=70
-ANGLE_RECH_DROITE=120
+# --- Constantes ---
+ANGLE_CENTRE   = 97
+ANGLE_LEGER_G  = 88
+ANGLE_LEGER_D  = 106
+ANGLE_FORT_G   = 75
+ANGLE_FORT_D   = 119
 
-VITESSE_DROITE=55
-VITESSE_CORRECTION=40
-VITESSE_VIRAGE=28
-VITESSE_RECHERCHE=20
-DISTANCE_STOP=200
+VITESSE_BASE    = 35
+VITESSE_LEGER   = 30
+VITESSE_VIRAGE  = 25
+VITESSE_RECH    = 22
 
-actif=False
-etat="SUIVI"
-angle_actuel=None
-derniere_direction="centre"
+DISTANCE_STOP = 200
 
-etat_prec=(1,1,1)
-virage_confirme=False
+# --- État ---
+actif = False
+angle_actuel = None
+derniere_direction = "centre"
 
-def braquer(a):
+# --- Fonctions de base ---
+def braquer(angle):
     global angle_actuel
-    if angle_actuel!=a:
-        servos.set_angle(0,a)
-        angle_actuel=a
+    if angle_actuel != angle:
+        servos.set_angle(0, angle)
+        angle_actuel = angle
 
-def avance(a,v):
-    braquer(a)
-    robot.set_motor(1,v)
+def avancer(angle, vitesse):
+    braquer(angle)
+    robot.set_motor(1, vitesse)
 
-def recule(a,v):
-    braquer(a)
-    robot.set_motor(-1,v)
-
-def clavier():
+# --- Thread clavier ---
+def ecouter_clavier():
     global actif
     while True:
-        c=input().strip().upper()
-        if c=="M":
-            actif=True
+        commande = input().strip().upper()
+        if commande == 'M':
+            actif = True
             robot.stop_feux()
-            print("Demarrage")
-        elif c=="A":
-            actif=False
+            print("Démarrage...")
+        elif commande == 'A':
+            actif = False
             robot.stopper()
-            print("Arret")
+            print("Arrêt.")
 
-threading.Thread(target=clavier,daemon=True).start()
+threading.Thread(target=ecouter_clavier, daemon=True).start()
 
+# --- Boucle principale ---
 try:
     while True:
-
         if not actif:
             time.sleep(0.02)
             continue
 
-        if ultra.get_distance()<DISTANCE_STOP:
+        if ultra.get_distance() < DISTANCE_STOP:
             robot.stop()
-            actif=False
+            actif = False
             continue
 
-        s=tracker.get_status()
-        etat_cap=(s["left"],s["middle"],s["right"])
-        l,m,r=etat_cap
+        capteurs = tracker.get_status()
+        l, m, r = capteurs['left'], capteurs['middle'], capteurs['right']
 
-        if etat=="RECHERCHE":
+        if l == 1 and m == 1 and r == 1:
+            derniere_direction = "centre"
+            avancer(ANGLE_CENTRE, VITESSE_BASE)
 
-            if derniere_direction=="gauche":
-                recule(ANGLE_RECH_GAUCHE,VITESSE_RECHERCHE)
-            elif derniere_direction=="droite":
-                recule(ANGLE_RECH_DROITE,VITESSE_RECHERCHE)
+        elif l == 1 and m == 1 and r == 0:
+            derniere_direction = "gauche"
+            avancer(ANGLE_LEGER_G, VITESSE_LEGER)
+
+        elif l == 0 and m == 1 and r == 1:
+            derniere_direction = "droite"
+            avancer(ANGLE_LEGER_D, VITESSE_LEGER)
+
+        elif l == 1 and m == 0 and r == 0:
+            derniere_direction = "gauche"
+            avancer(ANGLE_FORT_G, VITESSE_VIRAGE)
+
+        elif l == 0 and m == 0 and r == 1:
+            derniere_direction = "droite"
+            avancer(ANGLE_FORT_D, VITESSE_VIRAGE)
+
+        elif l == 0 and m == 0 and r == 0:
+            # Ligne perdue : continue à chercher en avançant dans la dernière direction
+            if derniere_direction == "gauche":
+                avancer(ANGLE_FORT_G, VITESSE_RECH)
+            elif derniere_direction == "droite":
+                avancer(ANGLE_FORT_D, VITESSE_RECH)
             else:
-                recule(ANGLE_CENTRE,VITESSE_RECHERCHE)
+                avancer(ANGLE_CENTRE, VITESSE_RECH)
 
-            if etat_cap==(1,1,1):
-                robot.stopper()
-                braquer(ANGLE_CENTRE)
-                etat="REALIGNEMENT"
-
-            time.sleep(0.02)
-            continue
-
-        if etat=="REALIGNEMENT":
-            avance(ANGLE_CENTRE,30)
-            time.sleep(0.15)
-            etat="SUIVI"
-            virage_confirme=False
-            etat_prec=(1,1,1)
-            continue
-
-        # confirmation des virages
-        if etat_prec==(1,1,1):
-            if etat_cap in [(1,1,0),(0,1,1)]:
-                virage_confirme=False
-
-        elif etat_prec==(1,1,0) and etat_cap==(1,0,0):
-            virage_confirme=True
-
-        elif etat_prec==(0,1,1) and etat_cap==(0,0,1):
-            virage_confirme=True
-
-        # suivi
-        if etat_cap==(1,1,1):
-            virage_confirme=False
-            derniere_direction="centre"
-            avance(ANGLE_CENTRE,VITESSE_DROITE)
-
-        elif etat_cap==(1,1,0):
-            derniere_direction="gauche"
-            if virage_confirme:
-                avance(ANGLE_GAUCHE_LEGER,32)
-            else:
-                avance(ANGLE_GAUCHE_LEGER,VITESSE_CORRECTION)
-
-        elif etat_cap==(1,0,0):
-            derniere_direction="gauche"
-            avance(ANGLE_GAUCHE_FORT,VITESSE_VIRAGE)
-
-        elif etat_cap==(0,1,1):
-            derniere_direction="droite"
-            if virage_confirme:
-                avance(ANGLE_DROITE_LEGER,32)
-            else:
-                avance(ANGLE_DROITE_LEGER,VITESSE_CORRECTION)
-
-        elif etat_cap==(0,0,1):
-            derniere_direction="droite"
-            avance(ANGLE_DROITE_FORT,VITESSE_VIRAGE)
-
-        elif etat_cap==(0,0,0):
-            etat="RECHERCHE"
-
-        etat_prec=etat_cap
         time.sleep(0.02)
 
 except KeyboardInterrupt:
-    pass
+    print('Fin de programme par Ctrl-C')
 
 finally:
     robot.stopper()
-    braquer(ANGLE_CENTRE)
+    servos.set_angle(0, 97)
+    print('Nettoyage final réalisé')
