@@ -10,34 +10,38 @@ ultra=Ultrasonic()
 tracker=LineTracker()
 servos=RobotServos()
 
+# ===== REGLAGES =====
+
 ANGLE_CENTRE=97
 
-ANGLE_GAUCHE_LEGER=82
-ANGLE_GAUCHE_FORT=70
+# 110 : robot part à droite -> tourner gauche
+ANGLE_GAUCHE_LEGER=110
+ANGLE_GAUCHE_FORT=125
 
-ANGLE_DROITE_LEGER=115
-ANGLE_DROITE_FORT=125
+# 011 : robot part à gauche -> tourner droite
+ANGLE_DROITE_LEGER=84
+ANGLE_DROITE_FORT=70
 
-ANGLE_RECH_GAUCHE=70
-ANGLE_RECH_DROITE=125
-
-VITESSE_DROITE=30
+VITESSE_DROITE=35
 VITESSE_CORRECTION=28
-VITESSE_VIRAGE=25
+VITESSE_VIRAGE=22
 VITESSE_RECHERCHE=18
 
 DISTANCE_STOP=200
 
+# ===== VARIABLES =====
+
 actif=False
-etat="SUIVI"
 
 angle_actuel=None
-dernier_angle=ANGLE_CENTRE
 
+dernier_angle=ANGLE_CENTRE
 derniere_direction="centre"
 
 temps_000=None
 
+
+# ===== MOUVEMENT =====
 
 def braquer(a):
     global angle_actuel
@@ -56,12 +60,7 @@ def avance(a,v):
     robot.set_motor(1,v)
 
 
-def recule(a,v):
-
-    braquer(a)
-    robot.set_motor(-1,v)
-
-
+# ===== CLAVIER =====
 
 def clavier():
 
@@ -85,24 +84,21 @@ def clavier():
             print("STOP")
 
 
-
 threading.Thread(
     target=clavier,
     daemon=True
 ).start()
 
 
+# ===== PROGRAMME =====
 
 try:
 
     while True:
 
-
         if not actif:
-
             time.sleep(0.02)
             continue
-
 
 
         if ultra.get_distance()<DISTANCE_STOP:
@@ -112,25 +108,23 @@ try:
             continue
 
 
-
         s=tracker.get_status()
 
-        etat_cap=(
+        cap=(
             s["left"],
             s["middle"],
             s["right"]
         )
 
 
-        print(etat_cap)
+        print(cap)
 
 
+        # ======================
+        # CENTRE
+        # ======================
 
-        # ==================
-        # LIGNE CENTREE
-        # ==================
-
-        if etat_cap==(1,1,1):
+        if cap==(1,1,1):
 
             temps_000=None
             derniere_direction="centre"
@@ -141,13 +135,11 @@ try:
             )
 
 
+        # ======================
+        # GAUCHE
+        # ======================
 
-        # ==================
-        # PART VERS DROITE
-        # DONC CORRECTION GAUCHE
-        # ==================
-
-        elif etat_cap==(1,1,0):
+        elif cap==(1,1,0):
 
             temps_000=None
             derniere_direction="gauche"
@@ -158,8 +150,7 @@ try:
             )
 
 
-
-        elif etat_cap==(1,0,0):
+        elif cap==(1,0,0):
 
             temps_000=None
             derniere_direction="gauche"
@@ -170,13 +161,11 @@ try:
             )
 
 
+        # ======================
+        # DROITE
+        # ======================
 
-        # ==================
-        # PART VERS GAUCHE
-        # DONC CORRECTION DROITE
-        # ==================
-
-        elif etat_cap==(0,1,1):
+        elif cap==(0,1,1):
 
             temps_000=None
             derniere_direction="droite"
@@ -187,8 +176,7 @@ try:
             )
 
 
-
-        elif etat_cap==(0,0,1):
+        elif cap==(0,0,1):
 
             temps_000=None
             derniere_direction="droite"
@@ -199,66 +187,59 @@ try:
             )
 
 
+        # ======================
+        # PERTE / POINTILLES
+        # ======================
 
-        # ==================
-        # BLANC COMPLET
-        # ==================
-
-        elif etat_cap==(0,0,0):
-
+        elif cap==(0,0,0):
 
             if temps_000 is None:
 
                 temps_000=time.time()
 
 
-
-            # petit trou ou début de perte
-            if time.time()-temps_000<0.05:
+            # petite coupure de ligne
+            if time.time()-temps_000<0.12:
 
                 avance(
                     dernier_angle,
-                    20
+                    18
                 )
 
 
             # vraie perte
             else:
 
-
                 if derniere_direction=="gauche":
 
-                    recule(
-                        ANGLE_RECH_GAUCHE,
+                    avance(
+                        ANGLE_GAUCHE_FORT,
                         VITESSE_RECHERCHE
                     )
 
 
                 elif derniere_direction=="droite":
 
-                    recule(
-                        ANGLE_RECH_DROITE,
+                    avance(
+                        ANGLE_DROITE_FORT,
                         VITESSE_RECHERCHE
                     )
 
 
                 else:
 
-                    recule(
+                    avance(
                         ANGLE_CENTRE,
                         VITESSE_RECHERCHE
                     )
 
 
-
         time.sleep(0.02)
-
 
 
 except KeyboardInterrupt:
 
     pass
-
 
 
 finally:
