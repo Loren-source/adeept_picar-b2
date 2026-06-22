@@ -22,7 +22,6 @@ V_LIGNE = 35
 V_VIRAGE = 45
 
 
-# capteurs ligne
 IR01 = 14
 IR02 = 15
 IR03 = 23
@@ -39,12 +38,17 @@ GPIO.setup(IR02, GPIO.IN)
 GPIO.setup(IR03, GPIO.IN)
 
 
+# création objet depuis la classe servo
+servos = servo.servo()
+
+
 dernier_angle = None
 dernier_virage = CENTRE
 
 
+
 # ======================
-# SERVO
+# DIRECTION
 # ======================
 
 def tourner(angle):
@@ -53,28 +57,31 @@ def tourner(angle):
 
     if dernier_angle != angle:
 
-        servo.set_angle(0, angle)
+        servos.set_angle(0, angle)
 
         print("[CH00] →", angle, "°")
 
         dernier_angle = angle
 
 
+
 # ======================
-# MOTEURS
+# MOTEUR
 # ======================
 
 def avance(angle, vitesse):
 
     tourner(angle)
 
-    motor.motor_left(1, 0, vitesse)
-    motor.motor_right(1, 0, vitesse)
+    motor.motor_left(1,0,vitesse)
+    motor.motor_right(1,0,vitesse)
+
 
 
 def stop():
 
     motor.motorStop()
+
 
 
 # ======================
@@ -97,58 +104,57 @@ try:
         D = GPIO.input(IR03)
 
 
-        etat = (G, M, D)
+        etat = (G,M,D)
 
         print(etat)
 
 
-        # ligne droite
+
+        # DROIT
         if etat == (1,1,1):
 
-            avance(CENTRE, V_LIGNE)
+            avance(CENTRE,V_LIGNE)
 
 
 
-        # droite légère
+        # DROITE
         elif etat == (1,1,0):
 
             dernier_virage = DROITE_LEGER
 
-            avance(DROITE_LEGER, V_LIGNE)
+            avance(DROITE_LEGER,V_LIGNE)
 
 
 
-        # gros virage droite
         elif etat == (1,0,0):
 
             dernier_virage = DROITE_MAX
 
-            avance(DROITE_MAX, V_VIRAGE)
+            avance(DROITE_MAX,V_VIRAGE)
 
 
 
-        # gauche légère
+        # GAUCHE
         elif etat == (0,1,1):
 
             dernier_virage = GAUCHE_LEGER
 
-            avance(GAUCHE_LEGER, V_LIGNE)
+            avance(GAUCHE_LEGER,V_LIGNE)
 
 
 
-        # gros virage gauche
         elif etat == (0,0,1):
 
             dernier_virage = GAUCHE_MAX
 
-            avance(GAUCHE_MAX, V_VIRAGE)
+            avance(GAUCHE_MAX,V_VIRAGE)
 
 
 
-        # perte de ligne
+        # PERDU
         elif etat == (0,0,0):
 
-            # garde le virage précédent
+            # garde la direction du virage
             tourner(dernier_virage)
 
             motor.motor_left(1,0,35)
@@ -167,5 +173,7 @@ except KeyboardInterrupt:
     stop()
 
     GPIO.cleanup()
+
+    servos.fermer()
 
     print("FIN")
