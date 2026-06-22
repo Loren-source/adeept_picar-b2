@@ -4,15 +4,23 @@ import numpy as np
 import datetime
 import time
 import imutils
+import sys
+import os
 
-# Gestion des imports spécifiques au matériel du robot
+# Forcer Python à regarder dans le dossier local du script pour trouver RPIservo et move
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+
+# Gestion des imports matériels réels (RPIservo, move, picamera)
 try:
     import RPIservo
     import move
     from picamera import Picamera2
     import libcamera
-except ImportError:
-    print("Mode simulation ou dépendances matérielles manquantes.")
+    print("Matériel détecté et initialisé avec succès.")
+except ImportError as e:
+    print(f"Mode simulation ou dépendance manquante : {e}")
 
 # CLASSE VIRTUELLE POUR S'AFFRANCHIR DU FICHIER KALMAN_FILTER.PY MANQUANT
 class DummyKalman:
@@ -59,9 +67,19 @@ class CVThread(threading.Thread):
     X_lock = 0
     tor = 17
 
-    scGear = RPIservo.ServoCtrl()
-    scGear.moveInit()
-    move.setup()
+    # Initialisation sécurisée du matériel si disponible
+    try:
+        scGear = RPIservo.ServoCtrl()
+        scGear.moveInit()
+        move.setup()
+        hardware_available = True
+    except NameError:
+        print("Avertissement : RPIservo ou move indisponible. Utilisation du mode virtuel.")
+        hardware_available = False
+        class DummyGear:
+            def moveAngle(self, id, angle): pass
+            def stopWiggle(self): pass
+        scGear = DummyGear()
 
     def __init__(self, *args, **kwargs):
         self.CVThreading = 0
@@ -113,7 +131,6 @@ class CVThread(threading.Thread):
         self.resume()
 
     def elementDraw(self, imgInput):
-        """ Superpose les repères graphiques sur l'image en couleur """
         if self.CVMode == 'none':
             pass
 
@@ -130,7 +147,8 @@ class CVThread(threading.Thread):
                               (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
 
         elif self.CVMode == 'findlineCV':
-            CVThread.scGear.moveAngle(2, -15) # Oriente la caméra vers le sol
+            if CVThread.hardware_available:
+                CVThread.scGear.moveAngle(2, -15) # Oriente la caméra vers le sol
 
             try:
                 cv2.putText(imgInput, 'Following Red Line', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
@@ -189,7 +207,9 @@ class CVThread(threading.Thread):
 
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
-        
+        if not CVThread.hardware_available:
+            return
+
         if FLCV_Status == 0:    
             CVThread.scGear.moveAngle(0, 0)
             CVThread.scGear.moveAngle(1, 0)
@@ -229,7 +249,6 @@ class CVThread(threading.Thread):
                 else: 
                     move.motorStop()
         else: 
-            # Perte de la ligne : comportement de secours basé sur la dernière direction connue
             move.motorStop() 
             FLCV_Status = -1
             if tracking_servo_status == -1: 
@@ -238,35 +257,25 @@ class CVThread(threading.Thread):
             elif tracking_servo_status == 1: 
                 CVThread.scGear.moveAngle(0, -30) 
                 move.video_Tracking_Move(turn_speed, 1) 
-            else:  
-                pass
 
     def findlineCV(self, frame_image):
-        """ ALGORITHME CORRIGÉ POUR LE SUIVI DE LIGNE ROUGE """
         global findLineMove
-        
-        # SÉCURISATION LOCALISÉE : recherche des pixels blancs (255) sur le masque HSV
         lineColorSet = 255 
         
-        # 1. Conversion vers l'espace HSV
+        # Traitement OpenCV pour isoler le rouge
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
-        
-        # 2. Seuils pour capturer le rouge (les deux extrémités du spectre Hue d'OpenCV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
         lower_red2 = np.array([170, 70, 50])
         upper_red2 = np.array([180, 255, 255])
         
-        # 3. Création et combinaison des masques
         mask1 = cv2.inRange(frame_hsv, lower_red1, upper_red1)
         mask2 = cv2.inRange(frame_hsv, lower_red2, upper_red2)
         frame_findline = cv2.bitwise_or(mask1, mask2)
         
-        # 4. Nettoyage morphologique
         frame_findline = cv2.erode(frame_findline, None, iterations=2)
         frame_findline = cv2.dilate(frame_findline, None, iterations=2)
         
-        # Extraction des deux lignes horizontales de pixels pour l'analyse géométrique
         colorPos_1 = frame_findline[linePos_1]
         colorPos_2 = frame_findline[linePos_2]
         
@@ -277,16 +286,13 @@ class CVThread(threading.Thread):
             lineIndex_Pos1 = np.where(colorPos_1 == lineColorSet)
             lineIndex_Pos2 = np.where(colorPos_2 == lineColorSet)
 
-            # Vérification de la validité de la détection
             if lineIndex_Pos1[0].size > 0:
                 if abs(lineIndex_Pos1[0][-1] - lineIndex_Pos1[0][0]) > 500:
-                    print("Tracking color not found")
                     findLineMove = 0    
                 else:
                     findLineMove = 1
             elif lineIndex_Pos2[0].size > 0:
                 if abs(lineIndex_Pos2[0][-1] - lineIndex_Pos2[0][0]) > 500:
-                    print("Tracking color not found")
                     findLineMove = 0
                 else:
                     findLineMove = 1
@@ -296,7 +302,6 @@ class CVThread(threading.Thread):
             if lineColorCount_Pos1 == 0: lineColorCount_Pos1 = 1
             if lineColorCount_Pos2 == 0: lineColorCount_Pos2 = 1
 
-            # Calcul des positions géométriques gauche, droite et centre
             self.left_Pos1 = lineIndex_Pos1[0][1] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
             self.right_Pos1 = lineIndex_Pos1[0][lineColorCount_Pos1-2] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
             self.center_Pos1 = int((self.left_Pos1 + self.right_Pos1) / 2)
@@ -309,17 +314,16 @@ class CVThread(threading.Thread):
             
         except Exception as e:
             self.center = None
-            pass
 
-        # Commande de trajectoire
         self.findLineCtrl(self.center)
         self.pause()
 
     def servoMove(ID, Dir, errorInput):
+        if not CVThread.hardware_available:
+            return
         if ID == 1:
             errorGenOut = CVThread.kalman_filter_X.kalman(errorInput)
             CVThread.P_anglePos += 0.15 * (errorGenOut * Dir) * CVThread.cameraDiagonalW / CVThread.videoW
-
             if abs(errorInput) > CVThread.tor:
                 CVThread.scGear.moveAngle(ID, CVThread.P_anglePos)
                 CVThread.X_lock = 0
@@ -328,14 +332,11 @@ class CVThread(threading.Thread):
         elif ID == 2:
             errorGenOut = CVThread.kalman_filter_Y.kalman(errorInput)
             CVThread.T_anglePos += 0.1 * (errorGenOut * Dir) * CVThread.cameraDiagonalH / CVThread.videoH
-
             if abs(errorInput) > CVThread.tor:
                 CVThread.scGear.moveAngle(ID, CVThread.T_anglePos)
                 CVThread.Y_lock = 0
             else:
                 CVThread.Y_lock = 1
-        else:
-            print('No servoPort %d assigned.' % ID)
         time.sleep(0.1)
 
     def findColor(self, frame_image):
