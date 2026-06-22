@@ -22,8 +22,8 @@ ANGLE_DROITE_FORT=70
 
 VITESSE_DROITE=35
 VITESSE_CORRECTION=28
-VITESSE_VIRAGE=20
-VITESSE_RECHERCHE=18
+VITESSE_VIRAGE=12
+VITESSE_RECHERCHE=10
 
 DISTANCE_STOP=200
 
@@ -32,8 +32,6 @@ angle_actuel=None
 
 dernier_angle=ANGLE_CENTRE
 derniere_direction="centre"
-
-temps_000=None
 
 compteur_gauche=0
 compteur_droite=0
@@ -57,6 +55,7 @@ def avance(a,v):
 
 
 def clavier():
+
     global actif
 
     while True:
@@ -76,15 +75,13 @@ def clavier():
             print("STOP")
 
 
-threading.Thread(
-    target=clavier,
-    daemon=True
-).start()
+threading.Thread(target=clavier,daemon=True).start()
 
 
 try:
 
     while True:
+
 
         if not actif:
 
@@ -107,16 +104,15 @@ try:
             s["right"]
         )
 
+
         print(cap)
 
 
-        # ==================
-        # LIGNE DROITE
-        # ==================
+        # =================
+        # CENTRE
+        # =================
 
         if cap==(1,1,1):
-
-            temps_000=None
 
             compteur_gauche=0
             compteur_droite=0
@@ -129,13 +125,11 @@ try:
             )
 
 
-        # ==================
-        # VIRAGE GAUCHE
-        # ==================
+        # =================
+        # GAUCHE
+        # =================
 
         elif cap==(1,1,0):
-
-            temps_000=None
 
             compteur_gauche+=1
             compteur_droite=0
@@ -143,13 +137,17 @@ try:
             derniere_direction="gauche"
 
 
-            # longtemps sur 110 = virage
-            if compteur_gauche>5:
+            # vrai virage gauche
+
+            if compteur_gauche>3:
 
                 avance(
                     ANGLE_GAUCHE_FORT,
                     VITESSE_VIRAGE
                 )
+
+
+            # simple correction
 
             else:
 
@@ -159,9 +157,8 @@ try:
                 )
 
 
-        elif cap==(1,0,0):
 
-            temps_000=None
+        elif cap==(1,0,0):
 
             compteur_gauche=10
             compteur_droite=0
@@ -174,13 +171,12 @@ try:
             )
 
 
-        # ==================
-        # VIRAGE DROITE
-        # ==================
+
+        # =================
+        # DROITE
+        # =================
 
         elif cap==(0,1,1):
-
-            temps_000=None
 
             compteur_droite+=1
             compteur_gauche=0
@@ -188,12 +184,13 @@ try:
             derniere_direction="droite"
 
 
-            if compteur_droite>5:
+            if compteur_droite>3:
 
                 avance(
                     ANGLE_DROITE_FORT,
                     VITESSE_VIRAGE
                 )
+
 
             else:
 
@@ -203,9 +200,8 @@ try:
                 )
 
 
-        elif cap==(0,0,1):
 
-            temps_000=None
+        elif cap==(0,0,1):
 
             compteur_droite=10
             compteur_gauche=0
@@ -218,52 +214,36 @@ try:
             )
 
 
-        # ==================
-        # TROU / POINTILLES
-        # ==================
+
+        # =================
+        # PERTE / POINTILLE
+        # =================
 
         elif cap==(0,0,0):
 
-            if temps_000 is None:
 
-                temps_000=time.time()
-
-
-            # petite interruption
-            if time.time()-temps_000<0.15:
+            if derniere_direction=="gauche":
 
                 avance(
-                    dernier_angle,
-                    18
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
                 )
 
 
-            # vraie perte
+            elif derniere_direction=="droite":
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
             else:
 
-
-                if derniere_direction=="gauche":
-
-                    avance(
-                        ANGLE_GAUCHE_FORT,
-                        VITESSE_RECHERCHE
-                    )
-
-
-                elif derniere_direction=="droite":
-
-                    avance(
-                        ANGLE_DROITE_FORT,
-                        VITESSE_RECHERCHE
-                    )
-
-
-                else:
-
-                    avance(
-                        ANGLE_CENTRE,
-                        VITESSE_RECHERCHE
-                    )
+                avance(
+                    ANGLE_CENTRE,
+                    VITESSE_RECHERCHE
+                )
 
 
         time.sleep(0.02)
