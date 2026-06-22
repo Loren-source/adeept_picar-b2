@@ -1,102 +1,118 @@
 #!/usr/bin/env python3
 
 import time
+import sys
+import RPi.GPIO as GPIO
 
+# Fichiers Adeept
+import motor
+import lineTracking
+
+# Ton fichier servo.py avec RobotServos
 from servo import RobotServos
-from motor import RobotMotor
-from lineTracking import LineTracker
 
 
-# ==========================
+# ======================
 # REGLAGES
-# ==========================
+# ======================
 
 CENTRE = 97
 
-# angles calibrés avec tes tests
-GAUCHE_MAX = 125
+# ATTENTION : corrigé avec tes logs
+DROITE = 76
 DROITE_MAX = 70
 
 GAUCHE = 118
-DROITE = 76
+GAUCHE_MAX = 125
 
 
-# vitesses
-V_LIGNE = 32
-V_VIRAGE = 18
-V_RECHERCHE = 10
+V_LIGNE = 35
+V_VIRAGE = 28
+V_RECHERCHE = 25
+
+DELAI = 0.02
 
 
-# ==========================
-# INITIALISATION
-# ==========================
+# ======================
+# INIT
+# ======================
 
 servos = RobotServos()
-moteur = RobotMotor()
-tracker = LineTracker()
+
+dernier_cote = "DROITE"
 
 
-dernier_angle = None
-dernier_virage = CENTRE
-
-
-# ==========================
+# ======================
 # FONCTIONS
-# ==========================
+# ======================
 
 def tourner(angle):
-    global dernier_angle
-
-    if angle != dernier_angle:
-        servos.set_angle(0, angle)
-        dernier_angle = angle
+    servos.set_angle(0, angle)
+    print("[CH00] →", str(angle)+"°")
 
 
 def avancer(angle, vitesse):
-    global dernier_virage
 
     tourner(angle)
 
-    # mémorise uniquement les vrais virages
-    if angle == GAUCHE_MAX or angle == DROITE_MAX:
-        dernier_virage = angle
+    motor.motor_left(
+        status=1,
+        direction=1,
+        speed=vitesse
+    )
 
-    moteur.set_motor(1, vitesse)
-
+    motor.motor_right(
+        status=1,
+        direction=1,
+        speed=vitesse
+    )
 
 
 def stop():
-    moteur.stopper()
-    tourner(CENTRE)
+
+    motor.motor_left(
+        status=0,
+        direction=1,
+        speed=0
+    )
+
+    motor.motor_right(
+        status=0,
+        direction=1,
+        speed=0
+    )
+
+
+def lire_ligne():
+
+    L = GPIO.input(lineTracking.line_pin_left)
+    M = GPIO.input(lineTracking.line_pin_middle)
+    R = GPIO.input(lineTracking.line_pin_right)
+
+    return (L, M, R)
 
 
 
-# ==========================
-# PROGRAMME PRINCIPAL
-# ==========================
-
-print("START")
+# ======================
+# START
+# ======================
 
 try:
 
-    tourner(CENTRE)
-    time.sleep(1)
+    print("START")
 
+    tourner(CENTRE)
 
     while True:
 
-        etat = tracker.get_status()
+        L, M, R = lire_ligne()
 
-        L = int(etat["left"])
-        M = int(etat["middle"])
-        R = int(etat["right"])
-
-        print((L, M, R))
+        print((L,M,R))
 
 
-        # ==================
+        # ====================
         # TOUT DROIT
-        # ==================
+        # ====================
 
         if (L,M,R) == (1,1,1):
 
@@ -104,61 +120,70 @@ try:
 
 
 
-        # ==================
+        # ====================
         # VIRAGE DROITE
-        # ==================
-
-        elif (L,M,R) == (0,1,1):
-
-            # commence à droite
-            avancer(DROITE, V_LIGNE)
-
-
-        elif (L,M,R) == (0,0,1):
-
-            # gros virage droite
-            avancer(DROITE_MAX, V_VIRAGE)
-
-
-
-        # ==================
-        # VIRAGE GAUCHE
-        # ==================
+        # ====================
 
         elif (L,M,R) == (1,1,0):
 
-            avancer(GAUCHE, V_LIGNE)
+            dernier_cote = "DROITE"
+            avancer(DROITE, V_LIGNE)
 
 
         elif (L,M,R) == (1,0,0):
 
+            dernier_cote = "DROITE"
+            avancer(DROITE_MAX, V_VIRAGE)
+
+
+
+        # ====================
+        # VIRAGE GAUCHE
+        # ====================
+
+        elif (L,M,R) == (0,1,1):
+
+            dernier_cote = "GAUCHE"
+            avancer(GAUCHE, V_LIGNE)
+
+
+        elif (L,M,R) == (0,0,1):
+
+            dernier_cote = "GAUCHE"
             avancer(GAUCHE_MAX, V_VIRAGE)
 
 
 
-        # ==================
+        # ====================
         # LIGNE PERDUE
-        # ==================
+        # ====================
 
         elif (L,M,R) == (0,0,0):
 
             print("Recherche ligne")
 
-            # continue le dernier virage connu
-            tourner(dernier_virage)
 
-            # avance doucement pour retrouver
-            moteur.set_motor(1, V_RECHERCHE)
+            # au lieu de continuer tout droit,
+            # il revient vers le dernier virage
+
+            if dernier_cote == "DROITE":
+
+                avancer(DROITE_MAX, V_RECHERCHE)
+
+
+            else:
+
+                avancer(GAUCHE_MAX, V_RECHERCHE)
 
 
 
+        # autres cas
         else:
 
-            avancer(CENTRE,20)
+            avancer(CENTRE,25)
 
 
-
-        time.sleep(0.04)
+        time.sleep(DELAI)
 
 
 
@@ -167,3 +192,7 @@ except KeyboardInterrupt:
     print("FIN")
 
     stop()
+
+    tourner(CENTRE)
+
+    GPIO.cleanup()
