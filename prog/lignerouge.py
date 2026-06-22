@@ -262,7 +262,7 @@ class CVThread(threading.Thread):
         global findLineMove
         lineColorSet = 255 
         
-        # Traitement OpenCV pour isoler la ligne rouge en HSV
+        # Traitement OpenCV pour isoler le rouge
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
@@ -467,3 +467,29 @@ class Camera(object):
 
             if cv2.imencode('.jpg', img)[0]:
                 yield cv2.imencode('.jpg', img)[1].tobytes()
+
+# ==========================================
+# BOUCLE PRINCIPALE D'ACTIVATION DU ROBOT
+# ==========================================
+if __name__ == '__main__':
+    # 1. On configure le mode sur le suivi de ligne rouge
+    Camera.modeSet('findlineCV')
+    
+    # 2. On autorise l'activation des moteurs physiques
+    Camera.CVRunSet(1)
+    
+    print("Démarrage du flux vidéo et du suivi de la ligne rouge...")
+    
+    try:
+        # 3. On lance la lecture continue des images de la caméra
+        for frame in Camera.frames():
+            # Petite pause pour soulager le processeur de la Raspberry Pi
+            time.sleep(0.01)
+            
+    except KeyboardInterrupt:
+        # Permet d'arrêter proprement le robot en appuyant sur Ctrl + C
+        print("\nArrêt du robot demandé par l'utilisateur.")
+        try:
+            move.motorStop()
+        except:
+            pass
