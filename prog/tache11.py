@@ -1,165 +1,147 @@
 #!/usr/bin/env python3
 
 import time
+import sys
+
+sys.path.append('/home/loren/adeept_picar-b2/prog')
+
 import motor
-import servo
-import RPi.GPIO as GPIO
+from servo import RobotServos
+import lineTracking
 
 
-# ======================
+# ==========================
+# INITIALISATION
+# ==========================
+
+servos = RobotServos()
+
+
+# ==========================
 # REGLAGES
-# ======================
+# ==========================
 
 CENTRE = 97
 
-GAUCHE_LEGER = 76
-GAUCHE_MAX = 70
+# tes valeurs mesurées
+GAUCHE_MAX = 125
+DROITE_MAX = 70
 
-DROITE_LEGER = 118
-DROITE_MAX = 125
+GAUCHE = 118
+DROITE = 76
+
 
 V_LIGNE = 35
 V_VIRAGE = 45
 
-
-IR01 = 14
-IR02 = 15
-IR03 = 23
+dernier_angle = CENTRE
 
 
-# ======================
-# INIT
-# ======================
-
-GPIO.setmode(GPIO.BCM)
-
-GPIO.setup(IR01, GPIO.IN)
-GPIO.setup(IR02, GPIO.IN)
-GPIO.setup(IR03, GPIO.IN)
-
-
-# création objet depuis la classe servo
-servos = servo.servo()
-
-
-dernier_angle = None
-dernier_virage = CENTRE
-
-
-
-# ======================
-# DIRECTION
-# ======================
+# ==========================
+# SERVO
+# ==========================
 
 def tourner(angle):
-
     global dernier_angle
 
-    if dernier_angle != angle:
-
+    if angle != dernier_angle:
         servos.set_angle(0, angle)
-
-        print("[CH00] →", angle, "°")
-
         dernier_angle = angle
 
 
+# ==========================
+# MOTEURS
+# ==========================
 
-# ======================
-# MOTEUR
-# ======================
+def avancer(vitesse):
+    motor.motor_left(
+        status=1,
+        direction=1,
+        speed=vitesse
+    )
 
-def avance(angle, vitesse):
-
-    tourner(angle)
-
-    motor.motor_left(1,0,vitesse)
-    motor.motor_right(1,0,vitesse)
-
+    motor.motor_right(
+        status=1,
+        direction=1,
+        speed=vitesse
+    )
 
 
 def stop():
-
     motor.motorStop()
 
 
-
-# ======================
-# MAIN
-# ======================
+# ==========================
+# PROGRAMME
+# ==========================
 
 print("START")
-
 
 try:
 
     tourner(CENTRE)
+    time.sleep(1)
 
 
     while True:
 
+        L, M, R = lineTracking.readLine()
 
-        G = GPIO.input(IR01)
-        M = GPIO.input(IR02)
-        D = GPIO.input(IR03)
-
-
-        etat = (G,M,D)
-
-        print(etat)
+        print((L, M, R))
 
 
+        # ====================
+        # MILIEU
+        # ====================
 
-        # DROIT
-        if etat == (1,1,1):
+        if (L, M, R) == (1,1,1):
 
-            avance(CENTRE,V_LIGNE)
-
-
-
-        # DROITE
-        elif etat == (1,1,0):
-
-            dernier_virage = DROITE_LEGER
-
-            avance(DROITE_LEGER,V_LIGNE)
+            tourner(CENTRE)
+            avancer(V_LIGNE)
 
 
+        # ====================
+        # PART A DROITE
+        # ligne vue à gauche
+        # ====================
 
-        elif etat == (1,0,0):
+        elif (L, M, R) == (0,1,1):
 
-            dernier_virage = DROITE_MAX
-
-            avance(DROITE_MAX,V_VIRAGE)
-
-
-
-        # GAUCHE
-        elif etat == (0,1,1):
-
-            dernier_virage = GAUCHE_LEGER
-
-            avance(GAUCHE_LEGER,V_LIGNE)
+            tourner(DROITE)
+            avancer(V_VIRAGE)
 
 
+        elif (L, M, R) == (0,0,1):
 
-        elif etat == (0,0,1):
-
-            dernier_virage = GAUCHE_MAX
-
-            avance(GAUCHE_MAX,V_VIRAGE)
+            tourner(DROITE_MAX)
+            avancer(V_VIRAGE)
 
 
+        # ====================
+        # PART A GAUCHE
+        # ligne vue à droite
+        # ====================
 
+        elif (L, M, R) == (1,1,0):
+
+            tourner(GAUCHE)
+            avancer(V_VIRAGE)
+
+
+        elif (L, M, R) == (1,0,0):
+
+            tourner(GAUCHE_MAX)
+            avancer(V_VIRAGE)
+
+
+        # ====================
         # PERDU
-        elif etat == (0,0,0):
+        # garde dernier angle
+        # ====================
 
-            # garde la direction du virage
-            tourner(dernier_virage)
+        elif (L, M, R) == (0,0,0):
 
-            motor.motor_left(1,0,35)
-            motor.motor_right(1,0,35)
-
+            avancer(30)
 
 
         time.sleep(0.03)
@@ -169,11 +151,5 @@ try:
 except KeyboardInterrupt:
 
     tourner(CENTRE)
-
     stop()
-
-    GPIO.cleanup()
-
-    servos.fermer()
-
     print("FIN")
