@@ -2,37 +2,34 @@
 
 import time
 import motor
-from servo import servo
+import servo
 import RPi.GPIO as GPIO
 
 
 # ======================
-# REGLAGES ROBOT
+# REGLAGES
 # ======================
 
 CENTRE = 97
 
-# angles mesurés sur ton robot
 GAUCHE_LEGER = 76
 GAUCHE_MAX = 70
 
 DROITE_LEGER = 118
 DROITE_MAX = 125
 
-
-# vitesses
 V_LIGNE = 35
 V_VIRAGE = 45
 
 
-# capteurs infrarouges
-IR01 = 14   # gauche
-IR02 = 15   # milieu
-IR03 = 23   # droite
+# capteurs ligne
+IR01 = 14
+IR02 = 15
+IR03 = 23
 
 
 # ======================
-# INITIALISATION
+# INIT
 # ======================
 
 GPIO.setmode(GPIO.BCM)
@@ -42,17 +39,12 @@ GPIO.setup(IR02, GPIO.IN)
 GPIO.setup(IR03, GPIO.IN)
 
 
-# création objet servo
-servos = servo()
-
-
 dernier_angle = None
 dernier_virage = CENTRE
 
 
-
 # ======================
-# DIRECTION
+# SERVO
 # ======================
 
 def tourner(angle):
@@ -61,12 +53,11 @@ def tourner(angle):
 
     if dernier_angle != angle:
 
-        servos.set_angle(0, angle)
+        servo.set_angle(0, angle)
 
         print("[CH00] →", angle, "°")
 
         dernier_angle = angle
-
 
 
 # ======================
@@ -81,11 +72,9 @@ def avance(angle, vitesse):
     motor.motor_right(1, 0, vitesse)
 
 
-
 def stop():
 
     motor.motorStop()
-
 
 
 # ======================
@@ -113,67 +102,53 @@ try:
         print(etat)
 
 
-
-        # =========================
-        # TOUT VA BIEN
-        # =========================
-
+        # ligne droite
         if etat == (1,1,1):
 
             avance(CENTRE, V_LIGNE)
 
 
 
-        # =========================
-        # CORRECTION DROITE
-        # =========================
-
+        # droite légère
         elif etat == (1,1,0):
-
-            avance(DROITE_LEGER, V_LIGNE)
 
             dernier_virage = DROITE_LEGER
 
+            avance(DROITE_LEGER, V_LIGNE)
 
 
+
+        # gros virage droite
         elif etat == (1,0,0):
-
-            avance(DROITE_MAX, V_VIRAGE)
 
             dernier_virage = DROITE_MAX
 
+            avance(DROITE_MAX, V_VIRAGE)
 
 
-        # =========================
-        # CORRECTION GAUCHE
-        # =========================
 
+        # gauche légère
         elif etat == (0,1,1):
-
-            avance(GAUCHE_LEGER, V_LIGNE)
 
             dernier_virage = GAUCHE_LEGER
 
+            avance(GAUCHE_LEGER, V_LIGNE)
 
 
+
+        # gros virage gauche
         elif etat == (0,0,1):
-
-            avance(GAUCHE_MAX, V_VIRAGE)
 
             dernier_virage = GAUCHE_MAX
 
+            avance(GAUCHE_MAX, V_VIRAGE)
 
 
-        # =========================
-        # PERTE DE LIGNE
-        # cas du 2e virage
-        # =========================
 
+        # perte de ligne
         elif etat == (0,0,0):
 
-            # NE PAS remettre droit
-            # continuer le dernier virage
-
+            # garde le virage précédent
             tourner(dernier_virage)
 
             motor.motor_left(1,0,35)
@@ -185,16 +160,12 @@ try:
 
 
 
-
 except KeyboardInterrupt:
-
 
     tourner(CENTRE)
 
     stop()
 
     GPIO.cleanup()
-
-    servos.fermer()
 
     print("FIN")
