@@ -1,123 +1,108 @@
+#!/usr/bin/env python3
+
+from gpiozero import Robot, DigitalInputDevice
+from adafruit_servokit import ServoKit
 import time
-import threading
-from motor import RobotMotor
-from ultra import Ultrasonic
-from lineTracking import LineTracker
-from servo import RobotServos
-
-robot=RobotMotor()
-ultra=Ultrasonic()
-tracker=LineTracker()
-servos=RobotServos()
-
-ANGLE_CENTRE=97
-
-# 110 -> tourner gauche
-ANGLE_GAUCHE_LEGER=110
-ANGLE_GAUCHE_FORT=125
-
-# 011 -> tourner droite
-ANGLE_DROITE_LEGER=84
-ANGLE_DROITE_FORT=70
-
-VITESSE_DROITE=35
-VITESSE_CORRECTION=28
-VITESSE_VIRAGE=12
-VITESSE_RECHERCHE=10
-
-DISTANCE_STOP=200
-
-actif=False
-angle_actuel=None
-
-dernier_angle=ANGLE_CENTRE
-derniere_direction="centre"
-
-compteur_gauche=0
-compteur_droite=0
 
 
-def braquer(a):
-    global angle_actuel
+# ======================
+# MOTEURS
+# ======================
 
-    if angle_actuel!=a:
-        servos.set_angle(0,a)
-        angle_actuel=a
-
-
-def avance(a,v):
-    global dernier_angle
-
-    dernier_angle=a
-
-    braquer(a)
-    robot.set_motor(1,v)
+robot = Robot(
+    left=(22, 27),
+    right=(24, 23)
+)
 
 
-def clavier():
+# ======================
+# SERVO PCA9685
+# ======================
 
-    global actif
+kit = ServoKit(channels=16)
 
-    while True:
+CH_SERVO = 0
 
-        c=input().strip().upper()
+ANGLE_CENTRE = 97
+ANGLE_GAUCHE = 84
+ANGLE_GAUCHE_FORT = 70
 
-        if c=="M":
-
-            actif=True
-            robot.stop_feux()
-            print("START")
-
-        elif c=="A":
-
-            actif=False
-            robot.stopper()
-            print("STOP")
+ANGLE_DROITE = 110
+ANGLE_DROITE_FORT = 125
 
 
-threading.Thread(target=clavier,daemon=True).start()
+def direction(angle):
+    kit.servo[CH_SERVO].angle = angle
+    print(f"[CH00] → {angle}°")
+
+
+# ======================
+# CAPTEURS LIGNE
+# ======================
+
+capteur_gauche = DigitalInputDevice(17)
+capteur_milieu = DigitalInputDevice(18)
+capteur_droite = DigitalInputDevice(19)
+
+
+def lire_capteurs():
+    return (
+        capteur_gauche.value,
+        capteur_milieu.value,
+        capteur_droite.value
+    )
+
+
+# ======================
+# VITESSES
+# ======================
+
+VITESSE_DROITE = 35
+VITESSE_CORRECTION = 32
+VITESSE_VIRAGE = 25
+VITESSE_RECHERCHE = 25
+
+
+def avance(angle, vitesse):
+
+    direction(angle)
+
+    v = vitesse / 100
+
+    robot.forward(v)
+
+
+# ======================
+# PROGRAMME
+# ======================
+
+print("START")
+
+direction(ANGLE_CENTRE)
+
+derniere_direction = None
+
+compteur_gauche = 0
+compteur_droite = 0
 
 
 try:
 
     while True:
 
-
-        if not actif:
-
-            time.sleep(0.02)
-            continue
-
-
-        if ultra.get_distance()<DISTANCE_STOP:
-
-            robot.stop()
-            actif=False
-            continue
-
-
-        s=tracker.get_status()
-
-        cap=(
-            s["left"],
-            s["middle"],
-            s["right"]
-        )
-
+        cap = lire_capteurs()
 
         print(cap)
 
 
-        # =================
-        # CENTRE
-        # =================
+        # ======================
+        # TOUT DROIT
+        # ======================
 
-        if cap==(1,1,1):
+        if cap == (1,1,1):
 
-            compteur_gauche=0
-            compteur_droite=0
-
-            derniere_direction="centre"
+            compteur_gauche = 0
+            compteur_droite = 0
 
             avance(
                 ANGLE_CENTRE,
@@ -125,45 +110,67 @@ try:
             )
 
 
-        # =================
-        # GAUCHE
-        # =================
+        # ======================
+        # PART À GAUCHE
+        # ======================
 
-        elif cap==(1,1,0):
+        elif cap == (0,1,1):
 
-            compteur_gauche+=1
-            compteur_droite=0
+            compteur_gauche += 1
+            compteur_droite = 0
 
-            derniere_direction="gauche"
+            derniere_direction = "gauche"
 
 
-            # vrai virage gauche
-
-            if compteur_gauche>3:
+            if compteur_gauche > 1:
 
                 avance(
                     ANGLE_GAUCHE_FORT,
                     VITESSE_VIRAGE
                 )
 
-
-            # simple correction
-
             else:
 
                 avance(
-                    ANGLE_GAUCHE_LEGER,
+                    ANGLE_GAUCHE,
                     VITESSE_CORRECTION
                 )
 
 
+        # ======================
+        # PART À DROITE
+        # ======================
 
-        elif cap==(1,0,0):
+        elif cap == (1,1,0):
 
-            compteur_gauche=10
-            compteur_droite=0
+            compteur_droite += 1
+            compteur_gauche = 0
 
-            derniere_direction="gauche"
+            derniere_direction = "droite"
+
+
+            if compteur_droite > 1:
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+            else:
+
+                avance(
+                    ANGLE_DROITE,
+                    VITESSE_CORRECTION
+                )
+
+
+        # ======================
+        # GROS VIRAGE GAUCHE
+        # ======================
+
+        elif cap == (0,0,1):
+
+            derniere_direction = "gauche"
 
             avance(
                 ANGLE_GAUCHE_FORT,
@@ -171,42 +178,13 @@ try:
             )
 
 
+        # ======================
+        # GROS VIRAGE DROITE
+        # ======================
 
-        # =================
-        # DROITE
-        # =================
+        elif cap == (1,0,0):
 
-        elif cap==(0,1,1):
-
-            compteur_droite+=1
-            compteur_gauche=0
-
-            derniere_direction="droite"
-
-
-            if compteur_droite>3:
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
-            else:
-
-                avance(
-                    ANGLE_DROITE_LEGER,
-                    VITESSE_CORRECTION
-                )
-
-
-
-        elif cap==(0,0,1):
-
-            compteur_droite=10
-            compteur_gauche=0
-
-            derniere_direction="droite"
+            derniere_direction = "droite"
 
             avance(
                 ANGLE_DROITE_FORT,
@@ -214,15 +192,13 @@ try:
             )
 
 
+        # ======================
+        # PERTE DE LIGNE
+        # ======================
 
-        # =================
-        # PERTE / POINTILLE
-        # =================
+        elif cap == (0,0,0):
 
-        elif cap==(0,0,0):
-
-
-            if derniere_direction=="gauche":
+            if derniere_direction == "gauche":
 
                 avance(
                     ANGLE_GAUCHE_FORT,
@@ -230,7 +206,7 @@ try:
                 )
 
 
-            elif derniere_direction=="droite":
+            elif derniere_direction == "droite":
 
                 avance(
                     ANGLE_DROITE_FORT,
@@ -240,22 +216,17 @@ try:
 
             else:
 
-                avance(
-                    ANGLE_CENTRE,
-                    VITESSE_RECHERCHE
-                )
+                robot.stop()
 
 
-        time.sleep(0.02)
+        time.sleep(0.03)
+
 
 
 except KeyboardInterrupt:
 
-    pass
-
-
-finally:
-
-    robot.stopper()
-    braquer(ANGLE_CENTRE)
     print("FIN")
+
+    robot.stop()
+
+    direction(ANGLE_CENTRE)
