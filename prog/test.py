@@ -1,22 +1,19 @@
-import time
-from motor import RobotMotor
 from servo import RobotServos
-from ultra import Ultrasonic
-from lineTracking import LineTracker
+import time
 
-robot = RobotMotor()
-servos = RobotServos()
-ultra = Ultrasonic()
-tracker = LineTracker()
+servos=RobotServos()
 
-servos.set_angle(0, 127)
+print("Centre 97")
+servos.set_angle(0,97)
+time.sleep(3)
 
-try:
-    while True:
-        distance = ultra.get_distance()
-        capteurs = tracker.get_status()
-        robot.set_motor(1, 30)
-        time.sleep(0.05)
-except KeyboardInterrupt:
-    robot.stopper()
-    servos.set_angle(0, 97)
+print("Test 125")
+servos.set_angle(0,125)
+time.sleep(5)
+
+print("Test 70")
+servos.set_angle(0,70)
+time.sleep(5)
+
+print("Retour centre")
+servos.set_angle(0,97)
