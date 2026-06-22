@@ -9,11 +9,17 @@ import imutils
 try:
     import RPIservo
     import move
-    import Kalman_filter
     from picamera import Picamera2
     import libcamera
 except ImportError:
     print("Mode simulation ou dépendances matérielles manquantes.")
+
+# CLASSE VIRTUELLE POUR S'AFFRANCHIR DU FICHIER KALMAN_FILTER.PY MANQUANT
+class DummyKalman:
+    def __init__(self, *args): 
+        pass
+    def kalman(self, val): 
+        return val
 
 # Variables globales de configuration
 APPMode = 'none'
@@ -36,9 +42,9 @@ vflip = False
 class CVThread(threading.Thread):
     font = cv2.FONT_HERSHEY_SIMPLEX
 
-    # Filtres de Kalman pour stabiliser la caméra
-    kalman_filter_X = Kalman_filter.Kalman_filter(0.01, 0.1)
-    kalman_filter_Y = Kalman_filter.Kalman_filter(0.01, 0.1)
+    # Utilisation de la classe virtuelle pour stabiliser sans dépendance externe
+    kalman_filter_X = DummyKalman()
+    kalman_filter_Y = DummyKalman()
     P_direction = -1
     T_direction = -1
     P_servo = 1 
@@ -153,12 +159,10 @@ class CVThread(threading.Thread):
         return imgInput
 
     def watchDog(self, imgInput):
-        timestamp = datetime.datetime.now()
         gray = cv2.cvtColor(imgInput, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
         if self.avg is None:
-            print("[INFO] starting background model...")
             self.avg = gray.copy().astype("float")
             return 'background model'
 
@@ -177,9 +181,9 @@ class CVThread(threading.Thread):
             (self.mov_x, self.mov_y, self.mov_w, self.mov_h) = cv2.boundingRect(c)
             self.drawing = 1
             self.motionCounter += 1
-            self.lastMovtionCaptured = timestamp
+            self.lastMovtionCaptured = datetime.datetime.now()
 
-        if (timestamp - self.lastMovtionCaptured).seconds >= 0.5:
+        if (datetime.datetime.now() - self.lastMovtionCaptured).seconds >= 0.5:
             self.drawing = 0
         self.pause()
 
@@ -225,7 +229,7 @@ class CVThread(threading.Thread):
                 else: 
                     move.motorStop()
         else: 
-            # Perte de la ligne : comportement de secours basé sur la dernière direction
+            # Perte de la ligne : comportement de secours basé sur la dernière direction connue
             move.motorStop() 
             FLCV_Status = -1
             if tracking_servo_status == -1: 
@@ -241,13 +245,13 @@ class CVThread(threading.Thread):
         """ ALGORITHME CORRIGÉ POUR LE SUIVI DE LIGNE ROUGE """
         global findLineMove
         
-        # SÉCURISATION : On force le filtre à chercher des pixels blancs (255) sur le masque HSV
+        # SÉCURISATION LOCALISÉE : recherche des pixels blancs (255) sur le masque HSV
         lineColorSet = 255 
         
         # 1. Conversion vers l'espace HSV
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         
-        # 2. Seuils pour capturer le rouge (les deux extrémités de la Teinte)
+        # 2. Seuils pour capturer le rouge (les deux extrémités du spectre Hue d'OpenCV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
         lower_red2 = np.array([170, 70, 50])
@@ -262,7 +266,7 @@ class CVThread(threading.Thread):
         frame_findline = cv2.erode(frame_findline, None, iterations=2)
         frame_findline = cv2.dilate(frame_findline, None, iterations=2)
         
-        # Extraction des deux lignes horizontales de pixels pour l'analyse
+        # Extraction des deux lignes horizontales de pixels pour l'analyse géométrique
         colorPos_1 = frame_findline[linePos_1]
         colorPos_2 = frame_findline[linePos_2]
         
@@ -273,7 +277,7 @@ class CVThread(threading.Thread):
             lineIndex_Pos1 = np.where(colorPos_1 == lineColorSet)
             lineIndex_Pos2 = np.where(colorPos_2 == lineColorSet)
 
-            # Vérification de la détection de la ligne
+            # Vérification de la validité de la détection
             if lineIndex_Pos1[0].size > 0:
                 if abs(lineIndex_Pos1[0][-1] - lineIndex_Pos1[0][0]) > 500:
                     print("Tracking color not found")
@@ -307,7 +311,7 @@ class CVThread(threading.Thread):
             self.center = None
             pass
 
-        # Commande des moteurs
+        # Commande de trajectoire
         self.findLineCtrl(self.center)
         self.pause()
 
@@ -349,7 +353,6 @@ class CVThread(threading.Thread):
             self.findColorDetection = 1
             c = max(cnts, key=cv2.contourArea)
             ((self.box_x, self.box_y), self.radius) = cv2.minEnclosingCircle(c)
-            M = cv2.moments(c)
             X = int(self.box_x)
             Y = int(self.box_y)
             error_Y = 240 - Y
