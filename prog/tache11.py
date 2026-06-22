@@ -1,267 +1,155 @@
-#!/usr/bin/env python3
 import time
 import threading
-
 from motor import RobotMotor
 from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
 
-robot=RobotMotor()
-ultra=Ultrasonic()
-tracker=LineTracker()
-servos=RobotServos()
-
-# ===== REGLAGES =====
+robot = RobotMotor()
+ultra = Ultrasonic()
+tracker = LineTracker()
+servos = RobotServos()
 
 ANGLE_CENTRE=97
+ANGLE_GAUCHE_LEGER=92
+ANGLE_GAUCHE_FORT=85
+ANGLE_DROITE_LEGER=102
+ANGLE_DROITE_FORT=110
+ANGLE_RECH_GAUCHE=70
+ANGLE_RECH_DROITE=120
 
-# corrections progressives
-ANGLE_GAUCHE=86
-ANGLE_GAUCHE_FORT=78
-
-ANGLE_DROITE=108
-ANGLE_DROITE_FORT=116
-
-VITESSE_LIGNE=32
-VITESSE_CORRECTION=27
-VITESSE_VIRAGE=24
-VITESSE_TROU=20
-VITESSE_RECHERCHE=18
-
-TEMPS_TROU=0.08
-
+VITESSE_DROITE=55
+VITESSE_CORRECTION=40
+VITESSE_VIRAGE=28
+VITESSE_RECHERCHE=20
 DISTANCE_STOP=200
 
-
-# ===== VARIABLES =====
-
 actif=False
-
+etat="SUIVI"
 angle_actuel=None
-
-dernier_angle=ANGLE_CENTRE
 derniere_direction="centre"
 
-temps_000=None
+etat_prec=(1,1,1)
+virage_confirme=False
 
-
-# ===== COMMANDES =====
-
-def braquer(angle):
+def braquer(a):
     global angle_actuel
+    if angle_actuel!=a:
+        servos.set_angle(0,a)
+        angle_actuel=a
 
-    if angle!=angle_actuel:
-        servos.set_angle(0,angle)
-        angle_actuel=angle
+def avance(a,v):
+    braquer(a)
+    robot.set_motor(1,v)
 
-
-def avancer(angle,vitesse):
-    global dernier_angle
-
-    dernier_angle=angle
-
-    braquer(angle)
-    robot.set_motor(1,vitesse)
-
-
-# ===== CLAVIER =====
+def recule(a,v):
+    braquer(a)
+    robot.set_motor(-1,v)
 
 def clavier():
-
     global actif
-
     while True:
-
         c=input().strip().upper()
-
         if c=="M":
-
             actif=True
             robot.stop_feux()
-            print("START")
-
-
+            print("Demarrage")
         elif c=="A":
-
             actif=False
             robot.stopper()
-            print("STOP")
-
+            print("Arret")
 
 threading.Thread(target=clavier,daemon=True).start()
 
-
-# ===== MAIN =====
-
 try:
-
     while True:
 
         if not actif:
             time.sleep(0.02)
             continue
 
-
         if ultra.get_distance()<DISTANCE_STOP:
-
             robot.stop()
             actif=False
             continue
 
+        s=tracker.get_status()
+        etat_cap=(s["left"],s["middle"],s["right"])
+        l,m,r=etat_cap
 
-        cap=tracker.get_status()
+        if etat=="RECHERCHE":
 
-        lecture=(
-            cap["left"],
-            cap["middle"],
-            cap["right"]
-        )
-
-
-        print(lecture)
-
-
-        # ==================
-        # CENTRE
-        # ==================
-
-        if lecture==(1,1,1):
-
-            temps_000=None
-
-            # amortissement
-            # on revient doucement au centre
-
-            if dernier_angle<ANGLE_CENTRE:
-
-                avancer(
-                    92,
-                    VITESSE_LIGNE
-                )
-
-
-            elif dernier_angle>ANGLE_CENTRE:
-
-                avancer(
-                    102,
-                    VITESSE_LIGNE
-                )
-
-
+            if derniere_direction=="gauche":
+                recule(ANGLE_RECH_GAUCHE,VITESSE_RECHERCHE)
+            elif derniere_direction=="droite":
+                recule(ANGLE_RECH_DROITE,VITESSE_RECHERCHE)
             else:
+                recule(ANGLE_CENTRE,VITESSE_RECHERCHE)
 
-                avancer(
-                    ANGLE_CENTRE,
-                    VITESSE_LIGNE
-                )
+            if etat_cap==(1,1,1):
+                robot.stopper()
+                braquer(ANGLE_CENTRE)
+                etat="REALIGNEMENT"
 
+            time.sleep(0.02)
+            continue
 
+        if etat=="REALIGNEMENT":
+            avance(ANGLE_CENTRE,30)
+            time.sleep(0.15)
+            etat="SUIVI"
+            virage_confirme=False
+            etat_prec=(1,1,1)
+            continue
+
+        # confirmation des virages
+        if etat_prec==(1,1,1):
+            if etat_cap in [(1,1,0),(0,1,1)]:
+                virage_confirme=False
+
+        elif etat_prec==(1,1,0) and etat_cap==(1,0,0):
+            virage_confirme=True
+
+        elif etat_prec==(0,1,1) and etat_cap==(0,0,1):
+            virage_confirme=True
+
+        # suivi
+        if etat_cap==(1,1,1):
+            virage_confirme=False
             derniere_direction="centre"
+            avance(ANGLE_CENTRE,VITESSE_DROITE)
 
-
-
-        # ==================
-        # PART A DROITE
-        # donc corrige gauche
-        # ==================
-
-        elif lecture==(1,1,0):
-
-            temps_000=None
+        elif etat_cap==(1,1,0):
             derniere_direction="gauche"
-
-            avancer(
-                ANGLE_GAUCHE,
-                VITESSE_CORRECTION
-            )
-
-
-        elif lecture==(1,0,0):
-
-            temps_000=None
-            derniere_direction="gauche"
-
-            avancer(
-                ANGLE_GAUCHE_FORT,
-                VITESSE_VIRAGE
-            )
-
-
-        # ==================
-        # PART A GAUCHE
-        # donc corrige droite
-        # ==================
-
-        elif lecture==(0,1,1):
-
-            temps_000=None
-            derniere_direction="droite"
-
-            avancer(
-                ANGLE_DROITE,
-                VITESSE_CORRECTION
-            )
-
-
-        elif lecture==(0,0,1):
-
-            temps_000=None
-            derniere_direction="droite"
-
-            avancer(
-                ANGLE_DROITE_FORT,
-                VITESSE_VIRAGE
-            )
-
-
-        # ==================
-        # TROU / PERTE
-        # ==================
-
-        elif lecture==(0,0,0):
-
-            if temps_000 is None:
-
-                temps_000=time.time()
-
-
-            if time.time()-temps_000<TEMPS_TROU:
-
-                avancer(
-                    dernier_angle,
-                    VITESSE_TROU
-                )
-
-
+            if virage_confirme:
+                avance(ANGLE_GAUCHE_LEGER,32)
             else:
+                avance(ANGLE_GAUCHE_LEGER,VITESSE_CORRECTION)
 
-                if derniere_direction=="gauche":
+        elif etat_cap==(1,0,0):
+            derniere_direction="gauche"
+            avance(ANGLE_GAUCHE_FORT,VITESSE_VIRAGE)
 
-                    avancer(
-                        ANGLE_GAUCHE_FORT,
-                        VITESSE_TROU
-                    )
+        elif etat_cap==(0,1,1):
+            derniere_direction="droite"
+            if virage_confirme:
+                avance(ANGLE_DROITE_LEGER,32)
+            else:
+                avance(ANGLE_DROITE_LEGER,VITESSE_CORRECTION)
 
-                elif derniere_direction=="droite":
+        elif etat_cap==(0,0,1):
+            derniere_direction="droite"
+            avance(ANGLE_DROITE_FORT,VITESSE_VIRAGE)
 
-                    avancer(
-                        ANGLE_DROITE_FORT,
-                        VITESSE_TROU
-                    )
+        elif etat_cap==(0,0,0):
+            etat="RECHERCHE"
 
-
+        etat_prec=etat_cap
         time.sleep(0.02)
 
-
-
 except KeyboardInterrupt:
-
     pass
 
-
 finally:
-
     robot.stopper()
     braquer(ANGLE_CENTRE)
-    print("FIN")
