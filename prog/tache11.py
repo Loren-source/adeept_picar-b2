@@ -25,21 +25,24 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
-# SUR TON ROBOT :
-# petit angle = gauche
-# grand angle = droite
 
+# Ton robot :
+# angle PETIT = tourne GAUCHE
 ANGLE_GAUCHE_LEGER = 75
 ANGLE_GAUCHE_FORT = 55
 
+
+# angle GRAND = tourne DROITE
 ANGLE_DROITE_LEGER = 125
 ANGLE_DROITE_FORT = 145
 
 
-VITESSE_DROITE = 30
+VITESSE_LIGNE = 32
+
 VITESSE_CORRECTION = 24
-VITESSE_VIRAGE = 25
-VITESSE_RECHERCHE = 25
+VITESSE_VIRAGE = 20
+
+VITESSE_RECHERCHE = 18
 
 DISTANCE_STOP = 200
 
@@ -51,10 +54,11 @@ DISTANCE_STOP = 200
 actif = False
 
 angle_actuel = None
-
 dernier_angle = ANGLE_CENTRE
+
 derniere_direction = "centre"
 
+temps_perte = None
 
 
 # ======================
@@ -65,7 +69,7 @@ def braquer(angle):
 
     global angle_actuel
 
-    if angle_actuel != angle:
+    if angle != angle_actuel:
 
         servos.set_angle(0, angle)
 
@@ -103,6 +107,7 @@ def clavier():
 
         c = input().strip().upper()
 
+
         if c == "M":
 
             actif = True
@@ -128,8 +133,9 @@ threading.Thread(
 
 
 # ======================
-# BOUCLE PRINCIPALE
+# PROGRAMME PRINCIPAL
 # ======================
+
 
 try:
 
@@ -139,6 +145,7 @@ try:
         if not actif:
 
             time.sleep(0.02)
+
             continue
 
 
@@ -148,12 +155,12 @@ try:
         if ultra.get_distance() < DISTANCE_STOP:
 
             robot.stopper()
+
             actif = False
+
             continue
 
 
-
-        # capteurs ligne
 
         s = tracker.get_status()
 
@@ -169,58 +176,34 @@ try:
 
 
 
-        # =====================
-        # TOUT DROIT
-        # =====================
+        # ======================
+        # LIGNE AU CENTRE
+        # ======================
+
 
         if cap == (1,1,1):
 
-            derniere_direction = "centre"
+            temps_perte = None
 
             avance(
                 ANGLE_CENTRE,
-                VITESSE_DROITE
+                VITESSE_LIGNE
             )
 
 
 
-        # =====================
-        # VIRAGE DROITE
-        # =====================
-        # ton 2e virage
-
-
-        elif cap == (1,1,0):
-
-            derniere_direction = "droite"
-
-            avance(
-                ANGLE_DROITE_LEGER,
-                VITESSE_CORRECTION
-            )
-
-
-
-        elif cap == (1,0,0):
-
-            derniere_direction = "droite"
-
-            avance(
-                ANGLE_DROITE_FORT,
-                VITESSE_VIRAGE
-            )
-
-
-
-        # =====================
-        # VIRAGE GAUCHE
-        # =====================
-        # ton 1er et 3e virage
+        # ======================
+        # LA LIGNE PART A GAUCHE
+        # donc robot tourne GAUCHE
+        # ======================
 
 
         elif cap == (0,1,1):
 
+            temps_perte = None
+
             derniere_direction = "gauche"
+
 
             avance(
                 ANGLE_GAUCHE_LEGER,
@@ -231,7 +214,10 @@ try:
 
         elif cap == (0,0,1):
 
+            temps_perte = None
+
             derniere_direction = "gauche"
+
 
             avance(
                 ANGLE_GAUCHE_FORT,
@@ -240,28 +226,61 @@ try:
 
 
 
-        # =====================
-        # PERTE LIGNE
-        # =====================
-        # continue le dernier virage
+
+        # ======================
+        # LA LIGNE PART A DROITE
+        # donc robot tourne DROITE
+        # ======================
+
+
+        elif cap == (1,1,0):
+
+            temps_perte = None
+
+            derniere_direction = "droite"
+
+
+            avance(
+                ANGLE_DROITE_LEGER,
+                VITESSE_CORRECTION
+            )
+
+
+
+        elif cap == (1,0,0):
+
+            temps_perte = None
+
+            derniere_direction = "droite"
+
+
+            avance(
+                ANGLE_DROITE_FORT,
+                VITESSE_VIRAGE
+            )
+
+
+
+        # ======================
+        # PERTE DE LIGNE
+        # ======================
 
 
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "droite":
+            if temps_perte is None:
+
+                temps_perte = time.time()
+
+
+
+            # petite coupure
+            if time.time() - temps_perte < 0.15:
+
 
                 avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_RECHERCHE
-                )
-
-
-
-            elif derniere_direction == "gauche":
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
+                    dernier_angle,
                     VITESSE_RECHERCHE
                 )
 
@@ -269,10 +288,36 @@ try:
 
             else:
 
-                avance(
-                    ANGLE_CENTRE,
-                    18
-                )
+
+                # cherche dans la dernière direction connue
+
+                if derniere_direction == "gauche":
+
+
+                    avance(
+                        ANGLE_GAUCHE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+
+                elif derniere_direction == "droite":
+
+
+                    avance(
+                        ANGLE_DROITE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+
+                else:
+
+
+                    avance(
+                        ANGLE_CENTRE,
+                        VITESSE_RECHERCHE
+                    )
 
 
 
