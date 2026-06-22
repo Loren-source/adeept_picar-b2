@@ -4,36 +4,45 @@ import time
 
 from servo import RobotServos
 from motor import RobotMotor
-from lineTracking import LineTracker
+from line import LineTracker
 
 
-# =====================
+# ==========================
 # REGLAGES
-# =====================
+# ==========================
 
 CENTRE = 97
 
-# tes vraies limites testées
+# angles calibrés avec tes tests
 GAUCHE_MAX = 125
 DROITE_MAX = 70
 
 GAUCHE = 118
 DROITE = 76
 
-V_LIGNE = 35
-V_VIRAGE = 28
+
+# vitesses
+V_LIGNE = 32
+V_VIRAGE = 18
+V_RECHERCHE = 10
 
 
-# =====================
+# ==========================
 # INITIALISATION
-# =====================
+# ==========================
 
 servos = RobotServos()
 moteur = RobotMotor()
 tracker = LineTracker()
 
-dernier_angle = CENTRE
 
+dernier_angle = None
+dernier_virage = CENTRE
+
+
+# ==========================
+# FONCTIONS
+# ==========================
 
 def tourner(angle):
     global dernier_angle
@@ -44,8 +53,16 @@ def tourner(angle):
 
 
 def avancer(angle, vitesse):
+    global dernier_virage
+
     tourner(angle)
+
+    # mémorise uniquement les vrais virages
+    if angle == GAUCHE_MAX or angle == DROITE_MAX:
+        dernier_virage = angle
+
     moteur.set_motor(1, vitesse)
+
 
 
 def stop():
@@ -53,78 +70,92 @@ def stop():
     tourner(CENTRE)
 
 
-print("START")
 
+# ==========================
+# PROGRAMME PRINCIPAL
+# ==========================
+
+print("START")
 
 try:
 
     tourner(CENTRE)
     time.sleep(1)
 
+
     while True:
 
-        s = tracker.get_status()
+        etat = tracker.get_status()
 
-        L = int(s["left"])
-        M = int(s["middle"])
-        R = int(s["right"])
+        L = int(etat["left"])
+        M = int(etat["middle"])
+        R = int(etat["right"])
 
         print((L, M, R))
 
 
-        # ==========================
-        # LIGNE AU MILIEU
-        # ==========================
+        # ==================
+        # TOUT DROIT
+        # ==================
 
-        if (L, M, R) == (1,1,1):
+        if (L,M,R) == (1,1,1):
 
             avancer(CENTRE, V_LIGNE)
 
 
-        # ==========================
-        # PETITE CORRECTION GAUCHE
-        # ==========================
 
-        elif (L, M, R) == (0,1,1):
+        # ==================
+        # VIRAGE DROITE
+        # ==================
 
+        elif (L,M,R) == (0,1,1):
+
+            # commence à droite
             avancer(DROITE, V_LIGNE)
 
 
-        elif (L, M, R) == (0,0,1):
+        elif (L,M,R) == (0,0,1):
 
             # gros virage droite
             avancer(DROITE_MAX, V_VIRAGE)
 
 
-        # ==========================
-        # PETITE CORRECTION DROITE
-        # ==========================
 
-        elif (L, M, R) == (1,1,0):
+        # ==================
+        # VIRAGE GAUCHE
+        # ==================
+
+        elif (L,M,R) == (1,1,0):
 
             avancer(GAUCHE, V_LIGNE)
 
 
-        elif (L, M, R) == (1,0,0):
+        elif (L,M,R) == (1,0,0):
 
-            # gros virage gauche
             avancer(GAUCHE_MAX, V_VIRAGE)
 
 
-        # ==========================
-        # PERTE DE LIGNE
-        # ==========================
+
+        # ==================
+        # LIGNE PERDUE
+        # ==================
 
         elif (L,M,R) == (0,0,0):
 
-            # NE PLUS FONCER TOUT DROIT
-            # il garde le dernier angle
-            moteur.set_motor(1,20)
+            print("Recherche ligne")
+
+            # continue le dernier virage connu
+            tourner(dernier_virage)
+
+            # avance doucement pour retrouver
+            moteur.set_motor(1, V_RECHERCHE)
+
 
 
         else:
 
-            avancer(CENTRE,25)
+            avancer(CENTRE,20)
+
 
 
         time.sleep(0.04)
@@ -134,4 +165,5 @@ try:
 except KeyboardInterrupt:
 
     print("FIN")
+
     stop()
