@@ -2,17 +2,17 @@
 
 import time
 import motor
-from servo import Servo
+from servo import servo
 import RPi.GPIO as GPIO
 
 
 # ======================
-# REGLAGES
+# REGLAGES ROBOT
 # ======================
 
 CENTRE = 97
 
-# valeurs testées sur ton robot
+# angles mesurés sur ton robot
 GAUCHE_LEGER = 76
 GAUCHE_MAX = 70
 
@@ -20,11 +20,12 @@ DROITE_LEGER = 118
 DROITE_MAX = 125
 
 
+# vitesses
 V_LIGNE = 35
 V_VIRAGE = 45
 
 
-# capteurs ligne
+# capteurs infrarouges
 IR01 = 14   # gauche
 IR02 = 15   # milieu
 IR03 = 23   # droite
@@ -41,14 +42,17 @@ GPIO.setup(IR02, GPIO.IN)
 GPIO.setup(IR03, GPIO.IN)
 
 
-servos = Servo()
+# création objet servo
+servos = servo()
+
 
 dernier_angle = None
 dernier_virage = CENTRE
 
 
+
 # ======================
-# SERVO
+# DIRECTION
 # ======================
 
 def tourner(angle):
@@ -64,6 +68,7 @@ def tourner(angle):
         dernier_angle = angle
 
 
+
 # ======================
 # MOTEURS
 # ======================
@@ -76,6 +81,7 @@ def avance(angle, vitesse):
     motor.motor_right(1, 0, vitesse)
 
 
+
 def stop():
 
     motor.motorStop()
@@ -83,7 +89,7 @@ def stop():
 
 
 # ======================
-# PROGRAMME PRINCIPAL
+# MAIN
 # ======================
 
 print("START")
@@ -93,35 +99,34 @@ try:
 
     tourner(CENTRE)
 
+
     while True:
 
 
-        gauche = GPIO.input(IR01)
-        milieu = GPIO.input(IR02)
-        droite = GPIO.input(IR03)
+        G = GPIO.input(IR01)
+        M = GPIO.input(IR02)
+        D = GPIO.input(IR03)
 
 
-        etat = (gauche, milieu, droite)
+        etat = (G, M, D)
 
         print(etat)
 
 
 
-        # ==================
-        # LIGNE DROITE
-        # ==================
+        # =========================
+        # TOUT VA BIEN
+        # =========================
 
         if etat == (1,1,1):
 
             avance(CENTRE, V_LIGNE)
 
-            dernier_virage = CENTRE
 
 
-
-        # ==================
-        # TOURNE DROITE
-        # ==================
+        # =========================
+        # CORRECTION DROITE
+        # =========================
 
         elif etat == (1,1,0):
 
@@ -139,9 +144,9 @@ try:
 
 
 
-        # ==================
-        # TOURNE GAUCHE
-        # ==================
+        # =========================
+        # CORRECTION GAUCHE
+        # =========================
 
         elif etat == (0,1,1):
 
@@ -159,14 +164,16 @@ try:
 
 
 
-        # ==================
+        # =========================
         # PERTE DE LIGNE
-        # IMPORTANT POUR 2e VIRAGE
-        # ==================
+        # cas du 2e virage
+        # =========================
 
         elif etat == (0,0,0):
 
-            # garde la dernière direction
+            # NE PAS remettre droit
+            # continuer le dernier virage
+
             tourner(dernier_virage)
 
             motor.motor_left(1,0,35)
@@ -178,7 +185,9 @@ try:
 
 
 
+
 except KeyboardInterrupt:
+
 
     tourner(CENTRE)
 
