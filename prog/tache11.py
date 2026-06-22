@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 
 import time
-import sys
-
-sys.path.append('/home/loren/adeept_picar-b2/server')
-
 import motor
 import servo
 import RPi.GPIO as GPIO
@@ -16,189 +12,162 @@ import RPi.GPIO as GPIO
 
 CENTRE = 97
 
-GAUCHE_MAX = 125
-DROITE_MAX = 70
+GAUCHE_LEGER = 76
+GAUCHE_MAX = 70
 
-GAUCHE = 118
-DROITE = 76
-
-RETOUR_G = 108
-RETOUR_D = 86
+DROITE_LEGER = 118
+DROITE_MAX = 125
 
 
-V_DROITE = 28
-V_CORRECTION = 20
-V_VIRAGE = 13
-V_RECHERCHE = 12
+V_LIGNE = 35
+V_VIRAGE = 45
 
 
-CAP_G = 20
-CAP_M = 16
-CAP_D = 19
+# capteurs ligne
+IR01 = 14
+IR02 = 15
+IR03 = 23
 
 
 GPIO.setmode(GPIO.BCM)
 
-for p in [CAP_G,CAP_M,CAP_D]:
-    GPIO.setup(p, GPIO.IN)
-
+GPIO.setup(IR01, GPIO.IN)
+GPIO.setup(IR02, GPIO.IN)
+GPIO.setup(IR03, GPIO.IN)
 
 
 dernier_angle = None
-derniere_direction = "centre"
 
 
+# ======================
+# SERVO
+# ======================
 
-def tourner(a):
+def tourner(angle):
 
     global dernier_angle
 
-    if dernier_angle != a:
+    if dernier_angle != angle:
 
-        servo.setServoAngle(0,a)
+        servo.set_angle(0, angle)
 
-        print("[CH00] →",a,"°")
+        print("[CH00] →", angle, "°")
 
-        dernier_angle=a
+        dernier_angle = angle
 
 
 
-def avance(angle,vitesse):
+# ======================
+# MOTEUR
+# ======================
+
+def avance(angle, vitesse):
 
     tourner(angle)
 
-    motor.motor_left(1,vitesse)
-    motor.motor_right(1,vitesse)
+    motor.motor_left(1, 0, vitesse)
+    motor.motor_right(1, 0, vitesse)
 
 
 
-def lire():
+def stop():
 
-    return (
-        GPIO.input(CAP_G),
-        GPIO.input(CAP_M),
-        GPIO.input(CAP_D)
-    )
+    motor.motorStop()
 
 
 
+# ======================
+# PROGRAMME
+# ======================
+
+print("START")
 
 try:
 
-    print("START")
-
+    tourner(CENTRE)
 
     while True:
 
+        gauche = GPIO.input(IR01)
+        milieu = GPIO.input(IR02)
+        droite = GPIO.input(IR03)
 
-        cap=lire()
+        etat = (gauche, milieu, droite)
 
-        print(cap)
-
-
-
-        # ligne droite
-
-        if cap==(1,1,1):
+        print(etat)
 
 
-            if derniere_direction=="gauche":
+        # =====================
+        # LIGNE DROITE
+        # =====================
 
-                avance(RETOUR_G,V_CORRECTION)
-                time.sleep(0.15)
+        if etat == (1,1,1):
 
-
-            elif derniere_direction=="droite":
-
-                avance(RETOUR_D,V_CORRECTION)
-                time.sleep(0.15)
+            avance(CENTRE, V_LIGNE)
 
 
 
-            derniere_direction="centre"
+        # =====================
+        # PART TROP A GAUCHE
+        # correction droite
+        # =====================
 
-            avance(CENTRE,V_DROITE)
+        elif etat == (1,1,0):
 
-
-
-        # gauche léger
-
-        elif cap==(1,1,0):
-
-            derniere_direction="gauche"
-
-            avance(GAUCHE,V_CORRECTION)
+            avance(DROITE_LEGER, V_LIGNE)
 
 
+        elif etat == (1,0,0):
 
-        # gros gauche
-
-        elif cap==(1,0,0):
-
-            derniere_direction="gauche"
-
-            avance(GAUCHE_MAX,V_VIRAGE)
-
-            time.sleep(0.3)
+            # gros virage droite
+            avance(DROITE_MAX, V_VIRAGE)
 
 
 
+        # =====================
+        # PART TROP A DROITE
+        # correction gauche
+        # =====================
 
-        # droite léger
+        elif etat == (0,1,1):
 
-        elif cap==(0,1,1):
-
-            derniere_direction="droite"
-
-            avance(DROITE,V_CORRECTION)
-
-
+            avance(GAUCHE_LEGER, V_LIGNE)
 
 
-        # gros droite
+        elif etat == (0,0,1):
 
-        elif cap==(0,0,1):
-
-            derniere_direction="droite"
-
-            avance(DROITE_MAX,V_VIRAGE)
-
-            time.sleep(0.3)
+            # gros virage gauche
+            avance(GAUCHE_MAX, V_VIRAGE)
 
 
 
+        # =====================
+        # PERTE LIGNE
+        # garde le dernier angle
+        # =====================
 
-        # ligne perdue
+        elif etat == (0,0,0):
 
-        elif cap==(0,0,0):
-
-
-            if derniere_direction=="gauche":
-
-                avance(GAUCHE_MAX,V_RECHERCHE)
-
-
-            elif derniere_direction=="droite":
-
-                avance(DROITE_MAX,V_RECHERCHE)
+            # avance doucement au lieu de partir tout droit
+            motor.motor_left(1,0,25)
+            motor.motor_right(1,0,25)
 
 
-            else:
+        else:
 
-                avance(CENTRE,V_RECHERCHE)
-
+            avance(CENTRE,30)
 
 
         time.sleep(0.03)
 
 
 
-
 except KeyboardInterrupt:
 
+    tourner(CENTRE)
 
-    tourner(97)
+    stop()
 
-    motor.motorStop()
+    GPIO.cleanup()
 
     print("FIN")
