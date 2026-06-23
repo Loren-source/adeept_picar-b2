@@ -19,26 +19,26 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
-# GAUCHE physique
+# GAUCHE physique (ne pas toucher)
 ANGLE_GAUCHE_LEGER = 125
 ANGLE_GAUCHE_FORT = 145
 
-# DROITE physique
-ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 55
+# DROITE physique (corrigé 2e virage)
+ANGLE_DROITE_LEGER = 70
+ANGLE_DROITE_FORT = 35
 
 
 VITESSE_DROITE = 30
 VITESSE_CORRECTION = 22
 VITESSE_VIRAGE = 15
-VITESSE_RECHERCHE = 12
+VITESSE_RECHERCHE = 15
 
 
 DISTANCE_STOP = 200
 
 
-# après combien de lectures en léger on force le virage
-LIMITE_LEGER = 6
+# nombre de lectures avant virage fort
+LIMITE_LEGER = 5
 
 
 # ==========================
@@ -122,7 +122,6 @@ threading.Thread(
 # PROGRAMME PRINCIPAL
 # ==========================
 
-
 try:
 
     while True:
@@ -162,7 +161,7 @@ try:
 
 
         # =====================
-        # TOUT DROIT
+        # LIGNE DROITE
         # =====================
 
         if cap == (1,1,1):
@@ -181,7 +180,6 @@ try:
 
         # =====================
         # VIRAGE DROITE
-        # capteurs inversés
         # =====================
 
         elif cap == (0,1,1):
@@ -192,7 +190,6 @@ try:
             compteur_gauche = 0
 
 
-            # début virage
             if compteur_droite < LIMITE_LEGER:
 
                 avance(
@@ -201,7 +198,6 @@ try:
                 )
 
 
-            # si le virage continue => tourner plus
             else:
 
                 avance(
@@ -225,7 +221,6 @@ try:
 
         # =====================
         # VIRAGE GAUCHE
-        # capteurs inversés
         # =====================
 
         elif cap == (1,1,0):
@@ -266,19 +261,15 @@ try:
 
 
         # =====================
-        # PERTE LIGNE
+        # PERTE DE LIGNE
         # =====================
 
         elif cap == (0,0,0):
 
 
-            # IMPORTANT :
-            # on continue le virage
-            # on ne remet PAS à 97°
-
             if derniere_direction == "droite":
 
-
+                # continue le 2e virage
                 avance(
                     ANGLE_DROITE_FORT,
                     VITESSE_RECHERCHE
@@ -295,6 +286,8 @@ try:
 
 
             else:
+
+                # uniquement les pointillés droits
 
                 avance(
                     ANGLE_CENTRE,
