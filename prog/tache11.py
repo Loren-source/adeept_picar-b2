@@ -30,8 +30,10 @@ ANGLE_DROITE_FORT = 35
 
 VITESSE_DROITE = 30
 VITESSE_CORRECTION = 22
-VITESSE_VIRAGE = 15
-VITESSE_RECHERCHE = 15
+
+# réduit pour laisser le temps de tourner
+VITESSE_VIRAGE = 8
+VITESSE_RECHERCHE = 10
 
 
 DISTANCE_STOP = 200
@@ -45,8 +47,6 @@ actif = False
 angle_actuel = None
 
 derniere_direction = "centre"
-
-compteur_gauche = 0
 
 
 # ==========================
@@ -162,8 +162,6 @@ try:
 
             derniere_direction = "centre"
 
-            compteur_gauche = 0
-
             avance(
                 ANGLE_CENTRE,
                 VITESSE_DROITE
@@ -180,7 +178,7 @@ try:
             derniere_direction = "droite"
 
 
-            # attaque directe du 2e virage
+            # direct fort pour le 2e virage
 
             avance(
                 ANGLE_DROITE_FORT,
@@ -209,23 +207,11 @@ try:
 
             derniere_direction = "gauche"
 
-            compteur_gauche += 1
 
-
-            if compteur_gauche < 5:
-
-                avance(
-                    ANGLE_GAUCHE_LEGER,
-                    VITESSE_CORRECTION
-                )
-
-
-            else:
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_VIRAGE
-                )
+            avance(
+                ANGLE_GAUCHE_LEGER,
+                VITESSE_CORRECTION
+            )
 
 
 
@@ -242,7 +228,7 @@ try:
 
 
         # =====================
-        # PERTE DE LIGNE
+        # PERTE LIGNE
         # =====================
 
         elif cap == (0,0,0):
