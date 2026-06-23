@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import time
 import threading
 
@@ -21,79 +19,52 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
-# GAUCHE physique
 ANGLE_GAUCHE_LEGER = 125
-ANGLE_GAUCHE_FORT = 145
+ANGLE_GAUCHE_FORT = 150
 
-# DROITE physique
 ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 55
+ANGLE_DROITE_FORT = 50
 
 
-VITESSE_DROITE = 30
-
+VITESSE_DROITE = 28
 VITESSE_CORRECTION = 22
-
-VITESSE_VIRAGE = 15
-
-VITESSE_RECHERCHE = 12
-
+VITESSE_VIRAGE = 16
+VITESSE_RECHERCHE = 14
 
 DISTANCE_STOP = 200
 
 
-
-# ==========================
-# VARIABLES
-# ==========================
-
-actif = False
-
-angle_actuel = None
-
+# mémoire virage
 dernier_angle = ANGLE_CENTRE
-
 derniere_direction = "centre"
 
-temps_perte = None
+temps_dernier_virage = 0
+MEMOIRE_VIRAGE = 0.45
 
+
+actif = False
+angle_actuel = None
 
 
 # ==========================
-# SERVO
+# DIRECTION
 # ==========================
 
 def braquer(angle):
-
     global angle_actuel
 
-
-    if angle_actuel != angle:
-
+    if angle != angle_actuel:
         servos.set_angle(0, angle)
-
-        print("[CH00] →", angle, "°")
-
         angle_actuel = angle
 
 
-
-
-# ==========================
-# MOTEUR
-# ==========================
-
 def avance(angle, vitesse):
-
     global dernier_angle
-
 
     dernier_angle = angle
 
     braquer(angle)
-
     robot.set_motor(1, vitesse)
-
 
 
 
@@ -102,31 +73,20 @@ def avance(angle, vitesse):
 # ==========================
 
 def clavier():
-
     global actif
-
 
     while True:
 
-        c = input().strip().upper()
-
+        c = input().upper()
 
         if c == "M":
-
             actif = True
-
             print("START")
 
-
         elif c == "A":
-
             actif = False
-
             robot.stopper()
-
             print("STOP")
-
-
 
 
 threading.Thread(
@@ -136,37 +96,26 @@ threading.Thread(
 
 
 
-
 # ==========================
-# PROGRAMME
+# MAIN
 # ==========================
 
 try:
 
     while True:
 
-
         if not actif:
-
             time.sleep(0.02)
-
             continue
-
 
 
         if ultra.get_distance() < DISTANCE_STOP:
-
             robot.stopper()
-
             actif = False
-
             continue
 
 
-
-
         s = tracker.get_status()
-
 
         cap = (
             s["left"],
@@ -174,43 +123,43 @@ try:
             s["right"]
         )
 
-
         print(cap)
 
 
+        maintenant = time.time()
 
 
-
-        # =====================
-        # TOUT DROIT
-        # =====================
-
+        # ======================
+        # LIGNE COMPLETE
+        # ======================
 
         if cap == (1,1,1):
 
-            temps_perte = None
+            # si on sort d'un virage
+            # on continue encore un peu
+            if maintenant - temps_dernier_virage < MEMOIRE_VIRAGE:
+
+                avance(
+                    dernier_angle,
+                    VITESSE_CORRECTION
+                )
+
+            else:
+
+                avance(
+                    ANGLE_CENTRE,
+                    VITESSE_DROITE
+                )
 
 
-            avance(
-                ANGLE_CENTRE,
-                VITESSE_DROITE
-            )
-
-
-
-
-
-        # =====================
+        # ======================
         # GAUCHE
-        # =====================
-
+        # ======================
 
         elif cap == (0,1,1):
 
-            temps_perte = None
-
             derniere_direction = "gauche"
-
+            temps_dernier_virage = maintenant
 
             avance(
                 ANGLE_GAUCHE_LEGER,
@@ -218,14 +167,10 @@ try:
             )
 
 
-
-
         elif cap == (0,0,1):
 
-            temps_perte = None
-
             derniere_direction = "gauche"
-
+            temps_dernier_virage = maintenant
 
             avance(
                 ANGLE_GAUCHE_FORT,
@@ -234,20 +179,14 @@ try:
 
 
 
-
-
-
-        # =====================
+        # ======================
         # DROITE
-        # =====================
-
+        # ======================
 
         elif cap == (1,1,0):
 
-            temps_perte = None
-
             derniere_direction = "droite"
-
+            temps_dernier_virage = maintenant
 
             avance(
                 ANGLE_DROITE_LEGER,
@@ -255,15 +194,10 @@ try:
             )
 
 
-
-
-
         elif cap == (1,0,0):
 
-            temps_perte = None
-
             derniere_direction = "droite"
-
+            temps_dernier_virage = maintenant
 
             avance(
                 ANGLE_DROITE_FORT,
@@ -272,33 +206,29 @@ try:
 
 
 
-
-
-
-
-        # =====================
-        # PERTE DE LIGNE
-        # =====================
-
+        # ======================
+        # PERDU
+        # ======================
 
         elif cap == (0,0,0):
 
+            if derniere_direction == "gauche":
 
-            if temps_perte is None:
-
-                temps_perte = time.time()
-
-
-
-            duree = time.time() - temps_perte
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
+                )
 
 
+            elif derniere_direction == "droite":
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
 
 
-            # 1) on continue le dernier virage
-
-            if duree < 0.45:
-
+            else:
 
                 avance(
                     dernier_angle,
@@ -307,62 +237,17 @@ try:
 
 
 
-
-            # 2) si perdu trop longtemps :
-            # on cherche de l'autre côté
-
-            else:
-
-
-                if derniere_direction == "gauche":
-
-
-                    avance(
-                        ANGLE_DROITE_FORT,
-                        VITESSE_RECHERCHE
-                    )
-
-
-
-                elif derniere_direction == "droite":
-
-
-                    avance(
-                        ANGLE_GAUCHE_FORT,
-                        VITESSE_RECHERCHE
-                    )
-
-
-
-                else:
-
-
-                    avance(
-                        ANGLE_CENTRE,
-                        VITESSE_RECHERCHE
-                    )
-
-
-
-
-
-        time.sleep(0.02)
-
-
+        time.sleep(0.015)
 
 
 
 except KeyboardInterrupt:
-
     pass
-
-
 
 
 finally:
 
     robot.stopper()
-
     braquer(ANGLE_CENTRE)
 
     print("FIN")
