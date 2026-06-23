@@ -19,13 +19,11 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
-
-# GAUCHE physique
+# GAUCHE
 ANGLE_GAUCHE_LEGER = 125
 ANGLE_GAUCHE_FORT = 145
 
-
-# DROITE physique
+# DROITE
 ANGLE_DROITE_LEGER = 75
 ANGLE_DROITE_FORT = 55
 
@@ -39,9 +37,10 @@ VITESSE_RECHERCHE = 10
 DISTANCE_STOP = 200
 
 
-# nombre de lectures en virage fort
-# avant de ralentir
+# réglages intelligence virage
+LIMITE_LEGER = 12
 LIMITE_FORT = 8
+LIMITE_PERTE = 10
 
 
 
@@ -53,16 +52,16 @@ actif = False
 
 angle_actuel = None
 
-dernier_angle = ANGLE_CENTRE
-
 derniere_direction = "centre"
 
+compteur_leger = 0
 compteur_fort = 0
+compteur_perte = 0
 
 
 
 # ==========================
-# MOTEUR + SERVO
+# MOTEURS
 # ==========================
 
 def braquer(angle):
@@ -83,20 +82,9 @@ def braquer(angle):
 
 def avance(angle, vitesse):
 
-    global dernier_angle
-
-
-    dernier_angle = angle
-
-
     braquer(angle)
 
-
-    robot.set_motor(
-        1,
-        vitesse
-    )
-
+    robot.set_motor(1, vitesse)
 
 
 
@@ -112,7 +100,6 @@ def clavier():
 
     while True:
 
-
         c = input().strip().upper()
 
 
@@ -123,7 +110,6 @@ def clavier():
             print("START")
 
 
-
         elif c == "A":
 
             actif = False
@@ -131,7 +117,6 @@ def clavier():
             robot.stopper()
 
             print("STOP")
-
 
 
 
@@ -145,12 +130,10 @@ threading.Thread(
 
 
 # ==========================
-# PROGRAMME PRINCIPAL
+# PROGRAMME
 # ==========================
 
-
 try:
-
 
     while True:
 
@@ -158,13 +141,9 @@ try:
         if not actif:
 
             time.sleep(0.02)
-
             continue
 
 
-
-
-        # obstacle
 
         if ultra.get_distance() < DISTANCE_STOP:
 
@@ -173,7 +152,6 @@ try:
             actif = False
 
             continue
-
 
 
 
@@ -193,13 +171,16 @@ try:
 
 
 
+
         # =====================
         # TOUT DROIT
         # =====================
 
         if cap == (1,1,1):
 
+            compteur_leger = 0
             compteur_fort = 0
+            compteur_perte = 0
 
 
             avance(
@@ -211,27 +192,37 @@ try:
 
 
 
-
-
         # =====================
-        # VIRAGE DROITE LEGER
-        # 011
+        # DROITE LEGER 011
         # =====================
 
         elif cap == (0,1,1):
 
+            compteur_leger += 1
             compteur_fort = 0
+            compteur_perte = 0
 
 
             derniere_direction = "droite"
 
 
-            avance(
-                ANGLE_DROITE_LEGER,
-                VITESSE_CORRECTION
-            )
 
+            if compteur_leger < LIMITE_LEGER:
 
+                avance(
+                    ANGLE_DROITE_LEGER,
+                    VITESSE_CORRECTION
+                )
+
+            else:
+
+                # virage droite qui dure :
+                # on anticipe
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_VIRAGE
+                )
 
 
 
@@ -239,14 +230,13 @@ try:
 
 
         # =====================
-        # VIRAGE DROITE FORT
-        # 001
+        # DROITE FORT 001
         # =====================
 
         elif cap == (0,0,1):
 
-
             compteur_fort += 1
+            compteur_perte = 0
 
 
             derniere_direction = "droite"
@@ -255,7 +245,6 @@ try:
 
             if compteur_fort < LIMITE_FORT:
 
-
                 avance(
                     ANGLE_DROITE_FORT,
                     VITESSE_VIRAGE
@@ -263,9 +252,6 @@ try:
 
 
             else:
-
-                # on garde l'angle
-                # mais on ralentit
 
                 avance(
                     ANGLE_DROITE_FORT,
@@ -280,23 +266,34 @@ try:
 
 
         # =====================
-        # VIRAGE GAUCHE LEGER
-        # 110
+        # GAUCHE LEGER 110
         # =====================
 
         elif cap == (1,1,0):
 
-
+            compteur_leger += 1
             compteur_fort = 0
+            compteur_perte = 0
 
 
             derniere_direction = "gauche"
 
 
-            avance(
-                ANGLE_GAUCHE_LEGER,
-                VITESSE_CORRECTION
-            )
+
+            if compteur_leger < LIMITE_LEGER:
+
+                avance(
+                    ANGLE_GAUCHE_LEGER,
+                    VITESSE_CORRECTION
+                )
+
+
+            else:
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_VIRAGE
+                )
 
 
 
@@ -306,14 +303,13 @@ try:
 
 
         # =====================
-        # VIRAGE GAUCHE FORT
-        # 100
+        # GAUCHE FORT 100
         # =====================
 
         elif cap == (1,0,0):
 
-
             compteur_fort += 1
+            compteur_perte = 0
 
 
             derniere_direction = "gauche"
@@ -344,47 +340,57 @@ try:
 
 
 
-
         # =====================
-        # PERTE DE LIGNE
+        # PERTE / POINTILLES
         # =====================
 
         elif cap == (0,0,0):
 
-
-            # continuer le dernier virage
-            # pour récupérer la ligne
-
-
-            if derniere_direction == "droite":
-
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_RECHERCHE
-                )
+            compteur_perte += 1
 
 
 
+            # petit trou blanc du parcours
 
-            elif derniere_direction == "gauche":
-
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_RECHERCHE
-                )
-
-
-
-
-            else:
+            if compteur_perte < LIMITE_PERTE:
 
 
                 avance(
                     ANGLE_CENTRE,
                     VITESSE_RECHERCHE
                 )
+
+
+
+            # vraie perte de ligne
+
+            else:
+
+
+                if derniere_direction == "droite":
+
+                    avance(
+                        ANGLE_DROITE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+
+                elif derniere_direction == "gauche":
+
+
+                    avance(
+                        ANGLE_GAUCHE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+                else:
+
+                    avance(
+                        ANGLE_CENTRE,
+                        VITESSE_RECHERCHE
+                    )
 
 
 
@@ -400,7 +406,6 @@ try:
 except KeyboardInterrupt:
 
     pass
-
 
 
 
