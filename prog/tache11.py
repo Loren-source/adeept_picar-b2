@@ -24,8 +24,8 @@ ANGLE_GAUCHE_LEGER = 125
 ANGLE_GAUCHE_FORT = 145
 
 # DROITE physique
-ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 55
+ANGLE_DROITE_LEGER = 70
+ANGLE_DROITE_FORT = 35
 
 
 VITESSE_DROITE = 30
@@ -192,9 +192,10 @@ try:
 
             derniere_direction = "droite"
 
+            # gros virage droite du parcours
             avance(
                 ANGLE_DROITE_FORT,
-                VITESSE_VIRAGE
+                8
             )
 
 
@@ -245,7 +246,7 @@ try:
 
                 avance(
                     ANGLE_DROITE_FORT,
-                    VITESSE_RECHERCHE
+                    8
                 )
 
 
