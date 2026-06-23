@@ -24,14 +24,14 @@ ANGLE_GAUCHE_LEGER = 125
 ANGLE_GAUCHE_FORT = 145
 
 # DROITE physique
-ANGLE_DROITE_LEGER = 70
+ANGLE_DROITE_LEGER = 60
 ANGLE_DROITE_FORT = 35
 
 
 VITESSE_DROITE = 30
-VITESSE_CORRECTION = 22
-VITESSE_VIRAGE = 15
-VITESSE_RECHERCHE = 12
+VITESSE_CORRECTION = 15
+VITESSE_VIRAGE = 6
+VITESSE_RECHERCHE = 8
 
 DISTANCE_STOP = 200
 
@@ -79,7 +79,6 @@ def avance(angle, vitesse):
     )
 
 
-
 # ==========================
 # CLAVIER
 # ==========================
@@ -91,7 +90,6 @@ def clavier():
     while True:
 
         c = input().strip().upper()
-
 
         if c == "M":
 
@@ -109,7 +107,6 @@ def clavier():
             print("STOP")
 
 
-
 threading.Thread(
     target=clavier,
     daemon=True
@@ -125,16 +122,12 @@ try:
 
     while True:
 
-
         if not actif:
 
             time.sleep(0.02)
 
             continue
 
-
-
-        # obstacle
 
         if ultra.get_distance() < DISTANCE_STOP:
 
@@ -158,7 +151,6 @@ try:
         print(cap)
 
 
-
         # =====================
         # TOUT DROIT
         # =====================
@@ -173,8 +165,8 @@ try:
 
 
         # =====================
-        # ROBOT TROP A GAUCHE
-        # → tourner DROITE
+        # PART TROP A GAUCHE
+        # → corriger DROITE
         # =====================
 
         elif cap == (0,1,1):
@@ -192,17 +184,16 @@ try:
 
             derniere_direction = "droite"
 
-            # gros virage droite du parcours
             avance(
                 ANGLE_DROITE_FORT,
-                8
+                VITESSE_VIRAGE
             )
 
 
 
         # =====================
-        # ROBOT TROP A DROITE
-        # → tourner GAUCHE
+        # PART TROP A DROITE
+        # → corriger GAUCHE
         # =====================
 
         elif cap == (1,1,0):
@@ -234,19 +225,21 @@ try:
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "gauche":
+            if derniere_direction == "droite":
 
+                # garde le braquage fort
+                # mais avance doucement
                 avance(
-                    ANGLE_GAUCHE_FORT,
+                    ANGLE_DROITE_FORT,
                     VITESSE_RECHERCHE
                 )
 
 
-            elif derniere_direction == "droite":
+            elif derniere_direction == "gauche":
 
                 avance(
-                    ANGLE_DROITE_FORT,
-                    8
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
                 )
 
 
@@ -266,7 +259,6 @@ try:
 except KeyboardInterrupt:
 
     pass
-
 
 
 finally:
