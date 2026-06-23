@@ -31,11 +31,16 @@ ANGLE_DROITE_FORT = 55
 
 
 VITESSE_DROITE = 30
+
 VITESSE_CORRECTION = 22
+
 VITESSE_VIRAGE = 15
+
 VITESSE_RECHERCHE = 12
 
+
 DISTANCE_STOP = 200
+
 
 
 # ==========================
@@ -47,25 +52,21 @@ actif = False
 angle_actuel = None
 
 dernier_angle = ANGLE_CENTRE
+
 derniere_direction = "centre"
 
-# compteur parcours :
-# 1 = gauche
-# 2 = droite
-# 3 = gauche
-
-nombre_virages = 0
-dernier_gros_virage = 0
+temps_perte = None
 
 
 
 # ==========================
-# MOTEURS
+# SERVO
 # ==========================
 
 def braquer(angle):
 
     global angle_actuel
+
 
     if angle_actuel != angle:
 
@@ -77,15 +78,22 @@ def braquer(angle):
 
 
 
+
+# ==========================
+# MOTEUR
+# ==========================
+
 def avance(angle, vitesse):
 
     global dernier_angle
+
 
     dernier_angle = angle
 
     braquer(angle)
 
     robot.set_motor(1, vitesse)
+
 
 
 
@@ -96,6 +104,7 @@ def avance(angle, vitesse):
 def clavier():
 
     global actif
+
 
     while True:
 
@@ -119,6 +128,7 @@ def clavier():
 
 
 
+
 threading.Thread(
     target=clavier,
     daemon=True
@@ -126,8 +136,9 @@ threading.Thread(
 
 
 
+
 # ==========================
-# PROGRAMME PRINCIPAL
+# PROGRAMME
 # ==========================
 
 try:
@@ -143,8 +154,6 @@ try:
 
 
 
-        # obstacle
-
         if ultra.get_distance() < DISTANCE_STOP:
 
             robot.stopper()
@@ -152,6 +161,7 @@ try:
             actif = False
 
             continue
+
 
 
 
@@ -169,11 +179,17 @@ try:
 
 
 
+
+
         # =====================
         # TOUT DROIT
         # =====================
 
+
         if cap == (1,1,1):
+
+            temps_perte = None
+
 
             avance(
                 ANGLE_CENTRE,
@@ -183,14 +199,18 @@ try:
 
 
 
+
         # =====================
-        # PETITE CORRECTION GAUCHE
+        # GAUCHE
         # =====================
 
 
         elif cap == (0,1,1):
 
+            temps_perte = None
+
             derniere_direction = "gauche"
+
 
             avance(
                 ANGLE_GAUCHE_LEGER,
@@ -200,14 +220,34 @@ try:
 
 
 
+        elif cap == (0,0,1):
+
+            temps_perte = None
+
+            derniere_direction = "gauche"
+
+
+            avance(
+                ANGLE_GAUCHE_FORT,
+                VITESSE_VIRAGE
+            )
+
+
+
+
+
+
         # =====================
-        # PETITE CORRECTION DROITE
+        # DROITE
         # =====================
 
 
         elif cap == (1,1,0):
 
+            temps_perte = None
+
             derniere_direction = "droite"
+
 
             avance(
                 ANGLE_DROITE_LEGER,
@@ -218,88 +258,19 @@ try:
 
 
 
-        # =====================
-        # GROS VIRAGES DU PARCOURS
-        # =====================
+        elif cap == (1,0,0):
 
-        elif cap == (0,0,1) or cap == (1,0,0):
+            temps_perte = None
 
-
-            # éviter de compter 50 fois le même virage
-
-            if time.time() - dernier_gros_virage > 1.5:
+            derniere_direction = "droite"
 
 
-                nombre_virages += 1
-
-                dernier_gros_virage = time.time()
-
-
-                print(
-                    "===== VIRAGE",
-                    nombre_virages,
-                    "====="
-                )
+            avance(
+                ANGLE_DROITE_FORT,
+                VITESSE_VIRAGE
+            )
 
 
-
-            # =====================
-            # VIRAGE 1 : GAUCHE
-            # =====================
-
-            if nombre_virages == 1:
-
-
-                derniere_direction = "gauche"
-
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
-
-            # =====================
-            # VIRAGE 2 : DROITE
-            # =====================
-
-            elif nombre_virages == 2:
-
-
-                derniere_direction = "droite"
-
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
-
-            # =====================
-            # VIRAGE 3 : GAUCHE
-            # =====================
-
-            elif nombre_virages == 3:
-
-
-                derniere_direction = "gauche"
-
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
-            else:
-
-
-                avance(
-                    dernier_angle,
-                    VITESSE_VIRAGE
-                )
 
 
 
@@ -313,33 +284,65 @@ try:
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "gauche":
+            if temps_perte is None:
+
+                temps_perte = time.time()
+
+
+
+            duree = time.time() - temps_perte
+
+
+
+
+            # 1) on continue le dernier virage
+
+            if duree < 0.45:
 
 
                 avance(
-                    ANGLE_GAUCHE_FORT,
+                    dernier_angle,
                     VITESSE_RECHERCHE
                 )
 
 
 
-            elif derniere_direction == "droite":
 
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_RECHERCHE
-                )
-
-
+            # 2) si perdu trop longtemps :
+            # on cherche de l'autre côté
 
             else:
 
 
-                avance(
-                    ANGLE_CENTRE,
-                    VITESSE_RECHERCHE
-                )
+                if derniere_direction == "gauche":
+
+
+                    avance(
+                        ANGLE_DROITE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+
+                elif derniere_direction == "droite":
+
+
+                    avance(
+                        ANGLE_GAUCHE_FORT,
+                        VITESSE_RECHERCHE
+                    )
+
+
+
+                else:
+
+
+                    avance(
+                        ANGLE_CENTRE,
+                        VITESSE_RECHERCHE
+                    )
+
+
 
 
 
@@ -348,9 +351,11 @@ try:
 
 
 
+
 except KeyboardInterrupt:
 
     pass
+
 
 
 
