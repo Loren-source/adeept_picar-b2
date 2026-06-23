@@ -31,12 +31,17 @@ ANGLE_DROITE_FORT = 55
 
 
 VITESSE_DROITE = 30
-VITESSE_CORRECTION = 18
-VITESSE_VIRAGE = 10
-VITESSE_RECHERCHE = 8
+VITESSE_CORRECTION = 22
+VITESSE_VIRAGE = 15
+VITESSE_RECHERCHE = 10
 
 
 DISTANCE_STOP = 200
+
+
+# nombre de lectures en virage fort
+# avant de ralentir
+LIMITE_FORT = 8
 
 
 
@@ -51,6 +56,8 @@ angle_actuel = None
 dernier_angle = ANGLE_CENTRE
 
 derniere_direction = "centre"
+
+compteur_fort = 0
 
 
 
@@ -84,10 +91,12 @@ def avance(angle, vitesse):
 
     braquer(angle)
 
+
     robot.set_motor(
         1,
         vitesse
     )
+
 
 
 
@@ -102,6 +111,7 @@ def clavier():
 
 
     while True:
+
 
         c = input().strip().upper()
 
@@ -133,9 +143,11 @@ threading.Thread(
 
 
 
+
 # ==========================
 # PROGRAMME PRINCIPAL
 # ==========================
+
 
 try:
 
@@ -151,6 +163,7 @@ try:
 
 
 
+
         # obstacle
 
         if ultra.get_distance() < DISTANCE_STOP:
@@ -160,6 +173,7 @@ try:
             actif = False
 
             continue
+
 
 
 
@@ -179,14 +193,13 @@ try:
 
 
 
-
         # =====================
         # TOUT DROIT
         # =====================
 
         if cap == (1,1,1):
 
-            derniere_direction = "centre"
+            compteur_fort = 0
 
 
             avance(
@@ -198,43 +211,17 @@ try:
 
 
 
+
+
         # =====================
-        # VIRAGE GAUCHE
+        # VIRAGE DROITE LEGER
+        # 011
         # =====================
 
         elif cap == (0,1,1):
 
-            derniere_direction = "gauche"
+            compteur_fort = 0
 
-
-            avance(
-                ANGLE_GAUCHE_LEGER,
-                VITESSE_CORRECTION
-            )
-
-
-
-
-        elif cap == (0,0,1):
-
-            derniere_direction = "gauche"
-
-
-            avance(
-                ANGLE_GAUCHE_FORT,
-                VITESSE_VIRAGE
-            )
-
-
-
-
-
-
-        # =====================
-        # VIRAGE DROITE
-        # =====================
-
-        elif cap == (1,1,0):
 
             derniere_direction = "droite"
 
@@ -248,15 +235,110 @@ try:
 
 
 
-        elif cap == (1,0,0):
+
+
+
+        # =====================
+        # VIRAGE DROITE FORT
+        # 001
+        # =====================
+
+        elif cap == (0,0,1):
+
+
+            compteur_fort += 1
+
 
             derniere_direction = "droite"
 
 
+
+            if compteur_fort < LIMITE_FORT:
+
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+
+            else:
+
+                # on garde l'angle
+                # mais on ralentit
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
+
+
+
+
+
+
+        # =====================
+        # VIRAGE GAUCHE LEGER
+        # 110
+        # =====================
+
+        elif cap == (1,1,0):
+
+
+            compteur_fort = 0
+
+
+            derniere_direction = "gauche"
+
+
             avance(
-                ANGLE_DROITE_FORT,
-                VITESSE_VIRAGE
+                ANGLE_GAUCHE_LEGER,
+                VITESSE_CORRECTION
             )
+
+
+
+
+
+
+
+
+        # =====================
+        # VIRAGE GAUCHE FORT
+        # 100
+        # =====================
+
+        elif cap == (1,0,0):
+
+
+            compteur_fort += 1
+
+
+            derniere_direction = "gauche"
+
+
+
+            if compteur_fort < LIMITE_FORT:
+
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+
+            else:
+
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
+
 
 
 
@@ -270,7 +352,22 @@ try:
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "gauche":
+            # continuer le dernier virage
+            # pour récupérer la ligne
+
+
+            if derniere_direction == "droite":
+
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
+
+
+            elif derniere_direction == "gauche":
 
 
                 avance(
@@ -278,15 +375,6 @@ try:
                     VITESSE_RECHERCHE
                 )
 
-
-
-            elif derniere_direction == "droite":
-
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_RECHERCHE
-                )
 
 
 
@@ -301,7 +389,9 @@ try:
 
 
 
+
         time.sleep(0.02)
+
 
 
 
