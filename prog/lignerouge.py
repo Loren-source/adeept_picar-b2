@@ -58,8 +58,8 @@ CENTER_MIN    = 280     # Borne gauche de la zone centrale — rapprocher du cen
 CENTER_MAX    = 360     # Borne droite de la zone centrale — rapprocher du centre = détecte les virages plus tôt
 findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
 reverse_speed    = 30   # Vitesse de marche arrière (0-100)
-reverse_steer    = 50   # Angle de braquage en marche arrière (degrés)
-reverse_duration = 0.3  # Durée de la marche arrière (secondes) avant de reprendre
+reverse_steer    = 50   # Angle de braquage après le recul (degrés)
+reverse_duration = 0.3  # Durée du recul (secondes)
 
 # ==========================================
 # INITIALISATION DU MATÉRIEL
@@ -91,8 +91,8 @@ class CVThread(threading.Thread):
         self.left_2  = None
         self.right_2 = None
         self.center  = None  # Centre global de la ligne rouge
-        self.last_turn    = 0    # Dernière direction connue : -1=gauche, 0=droit, 1=droite
-        self.reverse_until = 0   # Timestamp jusqu'auquel on reste en marche arrière
+        self.last_turn   = 0     # Dernière direction connue : -1=gauche, 0=droit, 1=droite
+        self.in_recovery = False # True pendant la séquence de récupération
 
     # --- Interface publique ---
     def send_frame(self, frame):
@@ -202,46 +202,78 @@ class CVThread(threading.Thread):
 
         self.center = sum(centers) // len(centers)
 
+    # --- Séquence de récupération quand la ligne est perdue ---
+    def _recovery_sequence(self):
+        """
+        Séquence en 4 étapes quand la ligne est perdue :
+          ETAPE 1 : Reculer roues droites (reverse_duration secondes)
+          ETAPE 2 : S'arrêter et scanner l'image pour trouver la ligne
+          ETAPE 3 : Braquer les roues dans la bonne direction (steer_duration secondes)
+          ETAPE 4 : Avancer → retour au suivi normal
+        """
+        # ETAPE 1 : reculer roues droites
+        move.motorStop()
+        scGear.moveAngle(0, 0)
+        time.sleep(0.1)
+        move.video_Tracking_Move(reverse_speed, -1)
+        time.sleep(reverse_duration)
+        move.motorStop()
+        time.sleep(0.2)  # Pause pour stabiliser la caméra
+
+        # ETAPE 2 : scanner l'image — attendre une frame fraîche
+        self._flag.clear()
+        self._flag.wait(timeout=0.5)
+        scan_center = self.center  # Centre détecté après recul
+
+        # ETAPE 3 : braquer dans la bonne direction
+        if scan_center is not None:
+            # La ligne est visible → braquer vers elle
+            if scan_center > 320:
+                steer_angle = -reverse_steer   # Ligne à droite
+            else:
+                steer_angle = reverse_steer    # Ligne à gauche
+        else:
+            # Ligne toujours invisible → utiliser la dernière direction connue
+            if self.last_turn == 1:
+                steer_angle = -reverse_steer
+            elif self.last_turn == -1:
+                steer_angle = reverse_steer
+            else:
+                steer_angle = 0
+
+        scGear.moveAngle(0, steer_angle)
+        time.sleep(0.15)  # Laisse le servo se positionner
+
+        # ETAPE 4 : avancer avec ce braquage
+        move.video_Tracking_Move(forward_speed, 1)
+        time.sleep(0.4)   # Avance braqué pour revenir sur la ligne
+        move.motorStop()
+
+        # Réinitialisation : retour au suivi normal
+        self.in_recovery = False
+
     # --- Contrôle des moteurs selon la position ---
     def _control_motors(self):
         """
-        Oriente et avance le robot selon 3 cas :
-          CAS 1 : Timer de marche arrière actif  → on continue de reculer
-          CAS 2 : Ligne perdue, timer non armé   → on arme le timer et on recule
-          CAS 3 : Ligne retrouvée                → suivi normal avant
+        Suivi normal de la ligne.
+        Si la ligne est perdue, déclenche _recovery_sequence() dans un thread séparé.
         """
         if not CVRun:
             move.motorStop()
             return
 
-        now = time.time()
-
-        # CAS 1 : marche arrière en cours (timer actif)
-        if now < self.reverse_until:
-            if self.last_turn == 1:
-                scGear.moveAngle(0, -reverse_steer)
-            elif self.last_turn == -1:
-                scGear.moveAngle(0, reverse_steer)
-            else:
-                scGear.moveAngle(0, 0)
-            move.video_Tracking_Move(reverse_speed, -1)
+        # Ligne perdue et pas déjà en récupération → lancer la séquence
+        if (self.center is None or findLineMove == 0) and not self.in_recovery:
+            self.in_recovery = True
+            t = threading.Thread(target=self._recovery_sequence, daemon=True)
+            t.start()
             return
 
-        # CAS 2 : ligne perdue, armer le timer et démarrer la marche arrière
-        if self.center is None or findLineMove == 0:
-            self.reverse_until = now + reverse_duration
-            if self.last_turn == 1:
-                scGear.moveAngle(0, -reverse_steer)
-            elif self.last_turn == -1:
-                scGear.moveAngle(0, reverse_steer)
-            else:
-                scGear.moveAngle(0, 0)
-            move.video_Tracking_Move(reverse_speed, -1)
+        # Déjà en récupération → ne rien faire, laisser le thread finir
+        if self.in_recovery:
             return
 
-        # CAS 3 : ligne retrouvée → suivi normal
-        self.reverse_until = 0
-
+        # Suivi normal
         if self.center > CENTER_MAX:
             self.last_turn = 1
             scGear.moveAngle(0, -30)
