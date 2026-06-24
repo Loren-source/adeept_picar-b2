@@ -7,128 +7,95 @@ from servo import RobotServos
 from lineTracking import LineTracker
 
 
-# ==========================
-# INITIALISATION
-# ==========================
-
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
 
 
-# ==========================
-# REGLAGES PICAR-B
-# ==========================
-
 CENTRE = 97
 
-# Sur ton robot :
-# >97 = gauche
-# <97 = droite
 
+# petites corrections
 GAUCHE_LEGER = 104
-GAUCHE_FORT = 112
-
 DROITE_LEGER = 90
-DROITE_FORT = 82
 
 
-VITESSE_LIGNE = 35
-VITESSE_VIRAGE = 25
+# vrais virages
+GAUCHE_FORT = 128
+DROITE_FORT = 65
+
+
+VITESSE_LIGNE = 36
+VITESSE_VIRAGE = 24
 VITESSE_PERDU = 18
 
 
 angle_actuel = CENTRE
-dernier_angle = CENTRE
+dernier_sens = 0
+compteur_virage = 0
 
-
-# ==========================
-# DIRECTION FLUIDE
-# ==========================
 
 def tourner(cible):
 
     global angle_actuel
 
-    # filtre anti zig-zag
-    angle_actuel = angle_actuel * 0.65 + cible * 0.35
+    angle_actuel = angle_actuel*0.6 + cible*0.4
 
     servos.set_angle(
         0,
-        round(angle_actuel, 1)
+        round(angle_actuel,1)
     )
 
 
-# ==========================
-# DEMARRAGE
-# ==========================
 
 print("START")
 
 tourner(CENTRE)
-
-robot.set_motor(1, 30)
+robot.set_motor(1,30)
 
 time.sleep(1)
 
 
 
-# ==========================
-# SUIVI DE LIGNE
-# ==========================
-
 try:
 
     while True:
 
-        data = tracker.get_status()
 
-        L = data["left"]
-        M = data["middle"]
-        R = data["right"]
+        s = tracker.get_status()
 
+        etat = (
+            s["left"],
+            s["middle"],
+            s["right"]
+        )
 
-        etat = (L, M, R)
 
         print(etat)
 
 
-        # ======================
-        # BIEN SUR LA LIGNE
-        # ======================
+        # =====================
+        # CENTRE
+        # =====================
 
         if etat == (1,1,1):
+
+            compteur_virage = 0
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
 
 
-        # ======================
-        # ROBOT TROP A GAUCHE
-        # corriger vers DROITE
-        # ======================
-
-        elif etat == (0,1,1):
-
-            cible = DROITE_LEGER
-            vitesse = VITESSE_LIGNE
-
-
-
-        elif etat == (0,0,1):
-
-            cible = DROITE_FORT
-            vitesse = VITESSE_VIRAGE
-
-
-
-        # ======================
-        # ROBOT TROP A DROITE
-        # corriger vers GAUCHE
-        # ======================
+        # =====================
+        # partir à gauche
+        # =====================
 
         elif etat == (1,1,0):
+
+            compteur_virage += 1
+
+            dernier_sens = 1
 
             cible = GAUCHE_LEGER
             vitesse = VITESSE_LIGNE
@@ -137,20 +104,82 @@ try:
 
         elif etat == (1,0,0):
 
-            cible = GAUCHE_FORT
+            compteur_virage += 1
+
+            dernier_sens = 1
+
+
+            # si ça dure :
+            # c'est un vrai virage
+
+            if compteur_virage > 5:
+                cible = GAUCHE_FORT
+
+            else:
+                cible = 115
+
+
             vitesse = VITESSE_VIRAGE
 
 
 
-        # ======================
+        # =====================
+        # partir à droite
+        # =====================
+
+        elif etat == (0,1,1):
+
+            compteur_virage += 1
+
+            dernier_sens = -1
+
+            cible = DROITE_LEGER
+            vitesse = VITESSE_LIGNE
+
+
+
+        elif etat == (0,0,1):
+
+            compteur_virage += 1
+
+            dernier_sens = -1
+
+
+            if compteur_virage > 5:
+                cible = DROITE_FORT
+
+            else:
+                cible = 80
+
+
+            vitesse = VITESSE_VIRAGE
+
+
+
+        # =====================
         # PERDU
-        # ======================
+        # =====================
 
         elif etat == (0,0,0):
 
-            # seulement ici on utilise la mémoire
+            # cherche plus fort dans
+            # le dernier sens connu
 
-            cible = dernier_angle
+            if dernier_sens == 1:
+
+                cible = GAUCHE_FORT
+
+
+            elif dernier_sens == -1:
+
+                cible = DROITE_FORT
+
+
+            else:
+
+                cible = CENTRE
+
+
             vitesse = VITESSE_PERDU
 
 
@@ -164,14 +193,6 @@ try:
         )
 
 
-        # sauvegarde uniquement une vraie direction
-
-        if etat != (0,0,0):
-
-            dernier_angle = cible
-
-
-
         time.sleep(0.025)
 
 
@@ -183,4 +204,4 @@ except KeyboardInterrupt:
 
     robot.stopper()
 
-    servos.set_angle(0, CENTRE)
+    servos.set_angle(0,CENTRE)
