@@ -24,7 +24,7 @@ GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
 
-# vrais virages
+# grands virages
 GAUCHE_FORT = 128
 DROITE_FORT = 65
 
@@ -37,13 +37,15 @@ VITESSE_PERDU = 18
 angle_actuel = CENTRE
 
 
+# mémoire
 dernier_sens = 0
-# 1 = gauche
+#  1 = gauche
 # -1 = droite
-
 
 compteur_virage = 0
 
+
+# pointillés
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
@@ -57,7 +59,8 @@ def tourner(cible):
 
     global angle_actuel
 
-    # réglage validé sur ton parcours
+
+    # réglage validé
     angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
@@ -68,11 +71,13 @@ def tourner(cible):
 
 
 
+
 # ==========================
 # START
 # ==========================
 
 print("START")
+
 
 tourner(CENTRE)
 
@@ -83,7 +88,7 @@ time.sleep(1)
 
 
 # ==========================
-# BOUCLE PRINCIPALE
+# LOOP
 # ==========================
 
 try:
@@ -105,9 +110,9 @@ try:
 
 
 
-        # =====================
+        # ======================
         # CENTRE
-        # =====================
+        # ======================
 
         if etat == (1,1,1):
 
@@ -116,17 +121,27 @@ try:
 
 
             cible = CENTRE
+
             vitesse = VITESSE_LIGNE
 
 
 
-        # =====================
-        # VIRAGE GAUCHE
-        # =====================
+
+        # ======================
+        # ALLER GAUCHE
+        # ======================
 
         elif etat == (1,1,0):
 
+
             compteur_perdu = 0
+
+
+            # changement de direction
+            if dernier_sens == -1:
+                compteur_virage = 0
+
+
 
             compteur_virage += 1
 
@@ -139,18 +154,37 @@ try:
 
 
 
+
+
         elif etat == (1,0,0):
+
 
             compteur_perdu = 0
 
+
+
+            # ======================
+            # IMPORTANT S INVERSE
+            # ======================
+
+            if dernier_sens == -1:
+
+                compteur_virage = 0
+
+
+
+
             compteur_virage += 1
 
+
             dernier_sens = 1
+
 
 
             if compteur_virage > 3:
 
                 cible = GAUCHE_FORT
+
 
             else:
 
@@ -163,32 +197,65 @@ try:
 
 
 
-        # =====================
-        # VIRAGE DROITE
-        # =====================
+
+        # ======================
+        # ALLER DROITE
+        # ======================
 
         elif etat == (0,1,1):
 
+
             compteur_perdu = 0
 
+
+
+            if dernier_sens == 1:
+
+                compteur_virage = 0
+
+
+
+
             compteur_virage += 1
+
 
             dernier_sens = -1
 
 
+
             cible = DROITE_LEGER
+
 
             vitesse = 28
 
 
 
+
+
+
         elif etat == (0,0,1):
+
 
             compteur_perdu = 0
 
+
+
+            # ======================
+            # IMPORTANT S INVERSE
+            # ======================
+
+            if dernier_sens == 1:
+
+                compteur_virage = 0
+
+
+
+
             compteur_virage += 1
 
+
             dernier_sens = -1
+
 
 
 
@@ -203,14 +270,18 @@ try:
 
 
 
+
             vitesse = VITESSE_VIRAGE
 
 
 
 
-        # =====================
-        # 000 : POINTILLÉS OU PERDU
-        # =====================
+
+
+
+        # ======================
+        # 000 : POINTILLÉS/PERDU
+        # ======================
 
         elif etat == (0,0,0):
 
@@ -219,14 +290,13 @@ try:
 
 
 
-            # ======================
-            # CAS POINTILLÉS
-            # ======================
+            # ------------------
+            # POINTILLÉS
+            # ------------------
 
             if dernier_etat == (1,1,1) and compteur_perdu < 25:
 
 
-                # garder trajectoire
 
                 cible = CENTRE
 
@@ -234,11 +304,13 @@ try:
 
 
 
-            # ======================
+
+            # ------------------
             # VRAIE PERTE
-            # ======================
+            # ------------------
 
             else:
+
 
 
                 if dernier_sens == 1:
@@ -248,10 +320,13 @@ try:
 
 
 
+
                 elif dernier_sens == -1:
 
 
+
                     cible = DROITE_FORT
+
 
 
 
@@ -262,13 +337,16 @@ try:
 
 
 
+
                 vitesse = VITESSE_PERDU
 
 
 
 
-        tourner(cible)
 
+        # appliquer
+
+        tourner(cible)
 
 
         robot.set_motor(
@@ -278,13 +356,13 @@ try:
 
 
 
-        # =====================
-        # MEMOIRE
-        # =====================
+
+        # mémoire état précédent
 
         if etat != (0,0,0):
 
             dernier_etat = etat
+
 
 
 
