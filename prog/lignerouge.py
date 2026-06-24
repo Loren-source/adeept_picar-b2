@@ -145,7 +145,6 @@ class CVThread(threading.Thread):
 
         elif self.CVMode == 'findlineCV':
             if CVThread.hardware_available:
-                # On maintient l'inclinaison vers le bas (servo 2)
                 CVThread.scGear.moveAngle(2, -18) 
 
             try:
@@ -209,9 +208,9 @@ class CVThread(threading.Thread):
             return
 
         if FLCV_Status == 0:    
-            CVThread.scGear.moveAngle(0, 0) # Roues droites
-            CVThread.scGear.moveAngle(1, 0) # Caméra centrée (Gauche/Droite)
-            CVThread.scGear.moveAngle(2, -18) # Caméra sol (Haut/Bas)
+            CVThread.scGear.moveAngle(0, 0) 
+            CVThread.scGear.moveAngle(1, 0) 
+            CVThread.scGear.moveAngle(2, -18) 
             FLCV_Status = 1
             
         if posInput is not None and findLineMove == 1:
@@ -221,48 +220,44 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            # DÉVIATION À DROITE
             if posInput > 400: 
                 tracking_servo_status = 1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, -45) # Les roues braquent à droite
-                    CVThread.scGear.moveAngle(1, -25) # NOUVEAU : La tête tourne à droite de 25° pour garder la ligne
+                    CVThread.scGear.moveAngle(0, -45) 
+                    CVThread.scGear.moveAngle(1, -25) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
 
-            # DÉVIATION À GAUCHE
             elif posInput < 240: 
                 tracking_servo_status = -1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 45)  # Les roues braquent à gauche
-                    CVThread.scGear.moveAngle(1, 25)  # NOUVEAU : La tête tourne à gauche de 25° pour anticiper
+                    CVThread.scGear.moveAngle(0, 45)  
+                    CVThread.scGear.moveAngle(1, 25)  
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
                         
-            # PARFAITEMENT CENTRÉ
             else: 
                 tracking_servo_status = 0 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 0) # Roues centrées
-                    CVThread.scGear.moveAngle(1, 0) # NOUVEAU : Tête replacée bien en face
+                    CVThread.scGear.moveAngle(0, 0) 
+                    CVThread.scGear.moveAngle(1, 0) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else: 
                     move.motorStop()
         else: 
-            # RECOUVREMENT / PERTE DE VUE (BALAYAGE DE SÉCURITÉ)
             if tracking_servo_status == -1: 
                 CVThread.scGear.moveAngle(0, 45)  
-                CVThread.scGear.moveAngle(1, 35) # Recherche agressive avec la tête vers la gauche
+                CVThread.scGear.moveAngle(1, 35) 
                 move.video_Tracking_Move(turn_speed, 1) 
             elif tracking_servo_status == 1: 
                 CVThread.scGear.moveAngle(0, -45) 
-                CVThread.scGear.moveAngle(1, -35) # Recherche agressive avec la tête vers la droite
+                CVThread.scGear.moveAngle(1, -35) 
                 move.video_Tracking_Move(turn_speed, 1)
             else:
                 CVThread.scGear.moveAngle(1, 0)
@@ -466,7 +461,14 @@ class Camera(object):
         cvt.start()
 
         while True:
-            img = picam2.capture_array()
+            try:
+                # Correction anti-blocage : utilisation de la requête explicite de frame
+                request = picam2.capture_request()
+                img = request.make_array('main')
+                request.release()
+            except Exception:
+                time.sleep(0.01)
+                continue
 
             if img is None:
                 continue
