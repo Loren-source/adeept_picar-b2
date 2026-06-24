@@ -52,14 +52,14 @@ class DummyMove:
 CVRun         = 1       # 1 = moteurs actifs, 0 = analyse sans bouger
 linePos_1     = 340     # Hauteur de la ligne d'analyse supérieure (pixels)
 linePos_2     = 420     # Hauteur de la ligne d'analyse inférieure (pixels)
-turn_speed    = 36      # Vitesse de rotation (0-100)
-forward_speed = 50      # Vitesse d'avance (0-100)
-CENTER_MIN    = 220     # Borne gauche de la zone centrale
-CENTER_MAX    = 420     # Borne droite de la zone centrale
+turn_speed    = 50      # Vitesse en virage (0-100) — augmenter si le robot ne tourne pas assez vite
+forward_speed = 30      # Vitesse en ligne droite (0-100) — réduire si le robot rate les virages
+CENTER_MIN    = 280     # Borne gauche de la zone centrale — rapprocher du centre = détecte les virages plus tôt
+CENTER_MAX    = 360     # Borne droite de la zone centrale — rapprocher du centre = détecte les virages plus tôt
 findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
-reverse_speed    = 35   # Vitesse de marche arrière (0-100)
-reverse_steer    = 40   # Angle de braquage en marche arrière (degrés)
-reverse_duration = 0.8 # Durée de la marche arrière (secondes) avant de reprendre
+reverse_speed    = 30   # Vitesse de marche arrière (0-100)
+reverse_steer    = 35   # Angle de braquage en marche arrière (degrés)
+reverse_duration = 0.6  # Durée de la marche arrière (secondes) avant de reprendre
 
 # ==========================================
 # INITIALISATION DU MATÉRIEL
