@@ -7,131 +7,184 @@ from servo import RobotServos
 from lineTracking import LineTracker
 
 
+# ==========================
+# INITIALISATION
+# ==========================
+
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
 
 
+# ==========================
+# REGLAGES ADEEPT PICAR-B
+# ==========================
+
 CENTRE = 97
 
-# TON ROBOT :
-# grand angle = gauche
-# petit angle = droite
+# ton montage :
+# angle > 97 = gauche
+# angle < 97 = droite
 
-MAX_CORRECTION = 35
+MAX_CORRECTION = 25
 
 
-VITESSE_DROITE = 40
-VITESSE_VIRAGE = 30
+VITESSE_DROITE = 42
+VITESSE_VIRAGE = 28
+VITESSE_PERDU = 20
 
 
 angle_actuel = CENTRE
 correction = 0
 
 
-def limite(x,a,b):
-    return max(a,min(b,x))
+# ==========================
+# OUTILS
+# ==========================
+
+def limite(x, mini, maxi):
+    return max(mini, min(maxi, x))
 
 
 def tourner(cible):
+
     global angle_actuel
 
-    # plus doux
-    angle_actuel = angle_actuel*0.8 + cible*0.2
+    # plus réactif que l'ancien
+    angle_actuel = angle_actuel * 0.65 + cible * 0.35
 
-    servos.set_angle(0, round(angle_actuel,1))
+    servos.set_angle(
+        0,
+        round(angle_actuel, 1)
+    )
 
 
+
+# ==========================
+# START
+# ==========================
 
 print("START")
 
 tourner(CENTRE)
-robot.set_motor(1,30)
+
+robot.set_motor(1, 30)
 
 time.sleep(1)
 
 
 
+# ==========================
+# BOUCLE PRINCIPALE
+# ==========================
+
 try:
 
     while True:
 
-        s = tracker.get_status()
 
-        L = s["left"]
-        M = s["middle"]
-        R = s["right"]
+        data = tracker.get_status()
 
 
-        etat = (L,M,R)
+        L = data["left"]
+        M = data["middle"]
+        R = data["right"]
+
+
+        etat = (L, M, R)
 
         print(etat)
 
 
-        # =========================
-        # parfaitement sur la ligne
-        # =========================
+        # ==================================
+        # PARFAITEMENT SUR LA LIGNE NOIRE
+        # ==================================
 
         if etat == (1,1,1):
 
-            correction *= 0.7
+            # sortie de virage :
+            # revenir rapidement au centre
+
+            if abs(correction) > 15:
+
+                correction *= 0.45
+
+            else:
+
+                correction *= 0.8
+
+
             vitesse = VITESSE_DROITE
 
 
 
-        # =========================
-        # trop à gauche
-        # revenir à droite
-        # angle plus petit
-        # =========================
+        # ==================================
+        # ROBOT TROP A GAUCHE
+        # il faut tourner DROITE
+        # donc angle diminue
+        # ==================================
 
         elif etat == (0,1,1):
 
-            correction -= 5
+            correction -= 3
+
             vitesse = VITESSE_DROITE
+
 
 
         elif etat == (0,0,1):
 
-            correction -= 12
+            correction -= 7
+
             vitesse = VITESSE_VIRAGE
 
 
 
-        # =========================
-        # trop à droite
-        # revenir à gauche
-        # angle plus grand
-        # =========================
+        # ==================================
+        # ROBOT TROP A DROITE
+        # il faut tourner GAUCHE
+        # donc angle augmente
+        # ==================================
 
         elif etat == (1,1,0):
 
-            correction += 5
+            correction += 3
+
             vitesse = VITESSE_DROITE
+
 
 
         elif etat == (1,0,0):
 
-            correction += 12
+            correction += 7
+
             vitesse = VITESSE_VIRAGE
 
 
 
-        # =========================
-        # perdu
-        # =========================
+        # ==================================
+        # PERTE COMPLETE DE LA LIGNE
+        # ==================================
 
         elif etat == (0,0,0):
 
-            # continue dans le dernier sens
+            # continuer la dernière recherche
+            # mais doucement
+
             if correction > 0:
-                correction += 5
+
+                correction += 3
+
             else:
-                correction -= 5
 
-            vitesse = 20
+                correction -= 3
 
 
+            vitesse = VITESSE_PERDU
+
+
+
+        # sécurité servo
 
         correction = limite(
             correction,
@@ -140,13 +193,16 @@ try:
         )
 
 
-        angle = CENTRE + correction
+        angle_final = CENTRE + correction
 
 
-        tourner(angle)
+        tourner(angle_final)
 
 
-        robot.set_motor(1,vitesse)
+        robot.set_motor(
+            1,
+            vitesse
+        )
 
 
         time.sleep(0.03)
@@ -158,4 +214,5 @@ except KeyboardInterrupt:
     print("STOP")
 
     robot.stopper()
-    servos.set_angle(0,CENTRE)
+
+    servos.set_angle(0, CENTRE)
