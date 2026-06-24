@@ -57,6 +57,8 @@ forward_speed = 50      # Vitesse d'avance (0-100)
 CENTER_MIN    = 220     # Borne gauche de la zone centrale
 CENTER_MAX    = 420     # Borne droite de la zone centrale
 findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
+reverse_speed = 35      # Vitesse de marche arrière (0-100)
+reverse_steer = 35      # Angle de braquage en marche arrière (degrés)
 
 # ==========================================
 # INITIALISATION DU MATÉRIEL
@@ -88,6 +90,7 @@ class CVThread(threading.Thread):
         self.left_2  = None
         self.right_2 = None
         self.center  = None  # Centre global de la ligne rouge
+        self.last_turn = 0   # Dernière direction connue : -1=gauche, 0=droit, 1=droite
 
     # --- Interface publique ---
     def send_frame(self, frame):
@@ -125,7 +128,7 @@ class CVThread(threading.Thread):
                 cv2.putText(frame, f'Centre: {self.center}px', (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
-            status = "Ligne detectee" if self.center is not None else "Ligne perdue"
+            status = "Ligne detectee" if self.center is not None else "Ligne perdue - MARCHE ARRIERE"
             cv2.putText(frame, status, (10, 60),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
         except Exception:
@@ -202,28 +205,45 @@ class CVThread(threading.Thread):
         """
         Oriente et avance le robot en fonction de l'écart
         entre le centre de la ligne et le centre de l'image (320px).
+
+        Si la ligne est perdue, le robot recule en braquant dans la
+        dernière direction connue pour retrouver la ligne.
         """
         if not CVRun:
             move.motorStop()
             return
 
         if self.center is None or findLineMove == 0:
-            # Ligne perdue : arrêt
-            move.motorStop()
+            # Ligne perdue → marche arrière avec braquage dans la dernière direction connue
+            if self.last_turn == 1:
+                # Ligne était à droite → reculer en braquant à droite
+                scGear.moveAngle(0, -reverse_steer)
+                move.video_Tracking_Move(reverse_speed, -1)
+            elif self.last_turn == -1:
+                # Ligne était à gauche → reculer en braquant à gauche
+                scGear.moveAngle(0, reverse_steer)
+                move.video_Tracking_Move(reverse_speed, -1)
+            else:
+                # Aucune direction connue → reculer tout droit
+                scGear.moveAngle(0, 0)
+                move.video_Tracking_Move(reverse_speed, -1)
             return
 
         if self.center > CENTER_MAX:
             # Ligne à droite → tourner à droite
+            self.last_turn = 1
             scGear.moveAngle(0, -30)
             move.video_Tracking_Move(turn_speed, 1)
 
         elif self.center < CENTER_MIN:
             # Ligne à gauche → tourner à gauche
+            self.last_turn = -1
             scGear.moveAngle(0, 30)
             move.video_Tracking_Move(turn_speed, 1)
 
         else:
             # Ligne centrée → avancer tout droit
+            self.last_turn = 0
             scGear.moveAngle(0, 0)
             move.video_Tracking_Move(forward_speed, 1)
 
