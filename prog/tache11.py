@@ -15,31 +15,36 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# petites corrections
+# direction normale
 GAUCHE_LEGER = 104
 DROITE_LEGER = 90
 
 
-# vrais virages
-GAUCHE_FORT = 128
-DROITE_FORT = 65
+# virages
+GAUCHE_FORT = 125
+DROITE_FORT = 68
 
 
 VITESSE_LIGNE = 36
 VITESSE_VIRAGE = 24
-VITESSE_PERDU = 18
+VITESSE_PERDU = 15
 
 
 angle_actuel = CENTRE
+
 dernier_sens = 0
+# 1 gauche
+# -1 droite
+
 compteur_virage = 0
+compteur_perdu = 0
 
 
-def tourner(cible):
+def tourner(angle):
 
     global angle_actuel
 
-    angle_actuel = angle_actuel*0.6 + cible*0.4
+    angle_actuel = angle_actuel*0.55 + angle*0.45
 
     servos.set_angle(
         0,
@@ -74,12 +79,14 @@ try:
         print(etat)
 
 
+
         # =====================
         # CENTRE
         # =====================
 
         if etat == (1,1,1):
 
+            compteur_perdu = 0
             compteur_virage = 0
 
             cible = CENTRE
@@ -88,11 +95,12 @@ try:
 
 
         # =====================
-        # partir à gauche
+        # GAUCHE
         # =====================
 
         elif etat == (1,1,0):
 
+            compteur_perdu = 0
             compteur_virage += 1
 
             dernier_sens = 1
@@ -104,17 +112,14 @@ try:
 
         elif etat == (1,0,0):
 
+            compteur_perdu = 0
             compteur_virage += 1
 
             dernier_sens = 1
 
 
-            # si ça dure :
-            # c'est un vrai virage
-
-            if compteur_virage > 5:
+            if compteur_virage > 4:
                 cible = GAUCHE_FORT
-
             else:
                 cible = 115
 
@@ -124,11 +129,12 @@ try:
 
 
         # =====================
-        # partir à droite
+        # DROITE
         # =====================
 
         elif etat == (0,1,1):
 
+            compteur_perdu = 0
             compteur_virage += 1
 
             dernier_sens = -1
@@ -140,14 +146,14 @@ try:
 
         elif etat == (0,0,1):
 
+            compteur_perdu = 0
             compteur_virage += 1
 
             dernier_sens = -1
 
 
-            if compteur_virage > 5:
+            if compteur_virage > 4:
                 cible = DROITE_FORT
-
             else:
                 cible = 80
 
@@ -156,28 +162,45 @@ try:
 
 
 
+
         # =====================
-        # PERDU
+        # LIGNE PERDUE
         # =====================
 
         elif etat == (0,0,0):
 
-            # cherche plus fort dans
-            # le dernier sens connu
-
-            if dernier_sens == 1:
-
-                cible = GAUCHE_FORT
+            compteur_perdu += 1
 
 
-            elif dernier_sens == -1:
+            # au début continuer
+            if compteur_perdu < 15:
 
-                cible = DROITE_FORT
+                if dernier_sens == 1:
+                    cible = GAUCHE_FORT
 
+                else:
+                    cible = DROITE_FORT
+
+
+            # ensuite chercher inverse
+            elif compteur_perdu < 35:
+
+
+                if dernier_sens == 1:
+                    cible = DROITE_FORT
+
+                else:
+                    cible = GAUCHE_FORT
+
+
+            # balayage
 
             else:
 
-                cible = CENTRE
+                if (compteur_perdu // 20) % 2 == 0:
+                    cible = GAUCHE_FORT
+                else:
+                    cible = DROITE_FORT
 
 
             vitesse = VITESSE_PERDU
@@ -186,7 +209,6 @@ try:
 
         tourner(cible)
 
-
         robot.set_motor(
             1,
             vitesse
@@ -194,7 +216,6 @@ try:
 
 
         time.sleep(0.025)
-
 
 
 
