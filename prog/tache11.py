@@ -1,4 +1,3 @@
-import time
 import threading
 from motor import RobotMotor
 from ultra import Ultrasonic
@@ -69,7 +68,10 @@ def clavier():
             robot.stopper()
             print("STOP")
 
-threading.Thread(target=clavier, daemon=True).start()
+threading.Thread(
+    target=clavier,
+    daemon=True
+).start()
 
 # ==========================
 # PROGRAMME PRINCIPAL
@@ -87,7 +89,11 @@ try:
             continue
 
         s = tracker.get_status()
-        cap = (s["left"], s["middle"], s["right"])
+        cap = (
+            s["left"],
+            s["middle"],
+            s["right"]
+        )
 
         print(cap)
 
@@ -95,7 +101,10 @@ try:
         # TOUT DROIT
         # =====================
         if cap == (1,1,1):
-            avance(ANGLE_CENTRE, VITESSE_DROITE)
+            avance(
+                ANGLE_CENTRE,
+                VITESSE_DROITE
+            )
 
         # =====================
         # VIRAGE GAUCHE
@@ -103,11 +112,17 @@ try:
         # =====================
         elif cap == (0,1,1):
             derniere_direction = "gauche"
-            avance(ANGLE_GAUCHE_LEGER, VITESSE_CORRECTION)
+            avance(
+                ANGLE_GAUCHE_LEGER,
+                VITESSE_CORRECTION
+            )
 
         elif cap == (0,0,1):
             derniere_direction = "gauche"
-            avance(ANGLE_GAUCHE_FORT, VITESSE_VIRAGE)
+            avance(
+                ANGLE_GAUCHE_FORT,
+                VITESSE_VIRAGE
+            )
 
         # =====================
         # VIRAGE DROITE
@@ -115,22 +130,37 @@ try:
         # =====================
         elif cap == (1,1,0):
             derniere_direction = "droite"
-            avance(ANGLE_DROITE_LEGER, VITESSE_CORRECTION)
+            avance(
+                ANGLE_DROITE_LEGER,
+                VITESSE_CORRECTION
+            )
 
         elif cap == (1,0,0):
             derniere_direction = "droite"
-            avance(ANGLE_DROITE_FORT, VITESSE_VIRAGE)
+            avance(
+                ANGLE_DROITE_FORT,
+                VITESSE_VIRAGE
+            )
 
         # =====================
         # PERTE DE LIGNE
         # =====================
         elif cap == (0,0,0):
             if derniere_direction == "gauche":
-                avance(ANGLE_GAUCHE_FORT, VITESSE_RECHERCHE)
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
+                )
             elif derniere_direction == "droite":
-                avance(ANGLE_DROITE_FORT, VITESSE_RECHERCHE)
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
             else:
-                avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
+                avance(
+                    ANGLE_CENTRE,
+                    VITESSE_RECHERCHE
+                )
 
         time.sleep(0.02)
 
