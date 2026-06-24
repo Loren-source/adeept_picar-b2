@@ -4,210 +4,152 @@ import time
 
 from motor import RobotMotor
 from servo import RobotServos
-from lineTracking import LineTracker
+from line import LineTracker
 
-
-# ==========================
-# INITIALISATION
-# ==========================
 
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
 
 
-# ==========================
-# REGLAGES
-# ==========================
-
 CENTRE = 97
 
+# TON ROBOT :
+# grand angle = gauche
+# petit angle = droite
 
-# à inverser si le robot tourne à l'envers
-GAUCHE_MAX = 55
-DROITE_MAX = 140
+MAX_CORRECTION = 35
 
 
-# vitesse
-VITESSE_LIGNE = 45
-VITESSE_COURBE = 35
-VITESSE_RECHERCHE = 25
+VITESSE_DROITE = 40
+VITESSE_VIRAGE = 30
 
 
 angle_actuel = CENTRE
-
-
-# mémoire direction
 correction = 0
 
-# - : gauche
-# + : droite
+
+def limite(x,a,b):
+    return max(a,min(b,x))
 
 
-# ==========================
-# SERVO FLUIDE
-# ==========================
-
-def direction(angle):
-
+def tourner(cible):
     global angle_actuel
 
-    # filtre anti-coup
-    angle_actuel = angle_actuel * 0.7 + angle * 0.3
+    # plus doux
+    angle_actuel = angle_actuel*0.8 + cible*0.2
 
-    servos.set_angle(0, angle_actuel)
-
-
-
-# ==========================
-# LIMITATION
-# ==========================
-
-def limite(valeur, mini, maxi):
-
-    return max(mini, min(maxi, valeur))
+    servos.set_angle(0, round(angle_actuel,1))
 
 
-
-# ==========================
-# DEMARRAGE
-# ==========================
 
 print("START")
 
-direction(CENTRE)
-
+tourner(CENTRE)
 robot.set_motor(1,30)
 
 time.sleep(1)
 
 
 
-# ==========================
-# BOUCLE
-# ==========================
-
 try:
 
     while True:
 
+        s = tracker.get_status()
 
-        capteur = tracker.get_status()
-
-
-        L = capteur["left"]
-        M = capteur["middle"]
-        R = capteur["right"]
+        L = s["left"]
+        M = s["middle"]
+        R = s["right"]
 
 
         etat = (L,M,R)
 
-
         print(etat)
 
 
-        # ======================
-        # ligne parfaite
-        # ======================
+        # =========================
+        # parfaitement sur la ligne
+        # =========================
 
         if etat == (1,1,1):
 
-            # on réduit doucement la correction
-            # mais pas immédiatement
-            correction *= 0.85
-
-            vitesse = VITESSE_LIGNE
+            correction *= 0.7
+            vitesse = VITESSE_DROITE
 
 
 
-        # ======================
-        # robot trop à DROITE
-        # capteur droit voit blanc
-        # tourner GAUCHE
-        # ======================
-
-
-        elif etat == (1,1,0):
-
-            correction -= 12
-
-            vitesse = VITESSE_COURBE
-
-
-
-        elif etat == (1,0,0):
-
-            correction -= 25
-
-            vitesse = VITESSE_RECHERCHE
-
-
-
-        # ======================
-        # robot trop à GAUCHE
-        # capteur gauche voit blanc
-        # tourner DROITE
-        # ======================
-
+        # =========================
+        # trop à gauche
+        # revenir à droite
+        # angle plus petit
+        # =========================
 
         elif etat == (0,1,1):
 
-            correction += 12
-
-            vitesse = VITESSE_COURBE
-
+            correction -= 5
+            vitesse = VITESSE_DROITE
 
 
         elif etat == (0,0,1):
 
-            correction += 25
-
-            vitesse = VITESSE_RECHERCHE
-
+            correction -= 12
+            vitesse = VITESSE_VIRAGE
 
 
-        # ======================
+
+        # =========================
+        # trop à droite
+        # revenir à gauche
+        # angle plus grand
+        # =========================
+
+        elif etat == (1,1,0):
+
+            correction += 5
+            vitesse = VITESSE_DROITE
+
+
+        elif etat == (1,0,0):
+
+            correction += 12
+            vitesse = VITESSE_VIRAGE
+
+
+
+        # =========================
         # perdu
-        # ======================
+        # =========================
 
         elif etat == (0,0,0):
 
-            # continuer dernière recherche
-
+            # continue dans le dernier sens
             if correction > 0:
-                correction += 8
-
+                correction += 5
             else:
-                correction -= 8
+                correction -= 5
+
+            vitesse = 20
 
 
-            vitesse = 22
-
-
-
-        # sécurité angle
 
         correction = limite(
             correction,
-            -42,
-            42
+            -MAX_CORRECTION,
+            MAX_CORRECTION
         )
 
 
-        nouvel_angle = CENTRE + correction
+        angle = CENTRE + correction
 
 
-        direction(nouvel_angle)
+        tourner(angle)
 
 
-        robot.set_motor(
-            1,
-            vitesse
-        )
+        robot.set_motor(1,vitesse)
 
 
-        time.sleep(0.02)
-
+        time.sleep(0.03)
 
 
 
@@ -216,5 +158,4 @@ except KeyboardInterrupt:
     print("STOP")
 
     robot.stopper()
-
     servos.set_angle(0,CENTRE)
