@@ -11,40 +11,51 @@ tracker = LineTracker()
 servos = RobotServos()
 
 # ==========================
-# REGLAGES PARAMÉTRÉS
+# REGLAGES
 # ==========================
-ANGLE_CENTRE = 97
+ANGLE_CENTRE = 97 
 
-# Vitesses adaptatives
-VITESSE_LIGNE_DROITE = 30  # Vitesse nominale quand il est bien centré
-VITESSE_VIRAGE_SERRE = 15  # Ralentissement automatique dans les courbes pour la stabilité
-VITESSE_RECHERCHE = 12     # Vitesse prudente si la ligne balance
+# GAUCHE physique (ajustements adoucis pour la fluidité)
+ANGLE_GAUCHE_DOUX = 112    # Pour corriger les petites déviations sans secousse
+ANGLE_GAUCHE_LEGER = 125   # Virage standard
+ANGLE_GAUCHE_FORT = 145    # Virage très serré
 
-DISTANCE_STOP = 200
+# DROITE physique (ajustements adoucis pour la fluidité)
+ANGLE_DROITE_DOUX = 82     # Pour corriger les petites déviations sans secousse
+ANGLE_DROITE_LEGER = 75    # Virage standard
+ANGLE_DROITE_FORT = 55     # Virage très serré
+
+# VITESSES
+VITESSE_DROITE = 30
+VITESSE_CORRECTION = 22
+VITESSE_VIRAGE = 14        # Un poil plus lent pour stabiliser le robot dans le virage serré
+VITESSE_RECHERCHE = 12
+
+DISTANCE_STOP = 200 
 
 # ==========================
 # VARIABLES D'ÉTAT
 # ==========================
 actif = False
-angle_actuel = ANGLE_CENTRE
-# Cette variable va stocker la dernière direction connue de la ligne (-1 pour gauche, +1 pour droite)
-direction_memoire = 0  
+angle_actuel = None
+dernier_angle = ANGLE_CENTRE
+# Mémorise le dernier côté vers lequel le robot a tourné ("gauche" ou "droite")
+derniere_direction = "centre" 
 
 # ==========================
-# FONCTIONS DE PILOTAGE FLUIDES
+# FONCTIONS MOTEURS
 # ==========================
-def piloter(angle_cible, vitesse):
-    """ Aligne le servo et gère la vitesse du moteur en douceur """
+def braquer(angle):
     global angle_actuel
-    
-    # Limitation de sécurité pour les servos du PiCar-B
-    angle_cible = max(55, min(145, angle_cible))
-    
-    # Application de l'angle uniquement s'il change pour économiser les servos
-    if angle_actuel != angle_cible:
-        servos.set_angle(0, angle_cible)
-        angle_actuel = angle_cible
+    if angle_actuel != angle:
+        servos.set_angle(0, angle)
+        print("[CH00] →", angle, "°")
+        angle_actuel = angle
 
+def avance(angle, vitesse):
+    global dernier_angle
+    dernier_angle = angle
+    braquer(angle)
     robot.set_motor(1, vitesse)
 
 # ==========================
@@ -67,15 +78,13 @@ threading.Thread(target=clavier, daemon=True).start()
 # ==========================
 # PROGRAMME PRINCIPAL
 # ==========================
-print("Robot Prêt. Appuyez sur 'M' pour démarrer.")
-
 try:
     while True:
         if not actif:
             time.sleep(0.02)
             continue
 
-        # Sécurité Obstacle
+        # Obstacle sécurité
         if ultra.get_distance() < DISTANCE_STOP:
             robot.stopper()
             actif = False
@@ -84,63 +93,54 @@ try:
         # Lecture des capteurs
         s = tracker.get_status()
         cap = (s["left"], s["middle"], s["right"])
+        print(cap, f" | Dir: {derniere_direction}")
 
         # =================================================================
-        # ANALYSE ET CORRECTION DYNAMIQUE
+        # LOGIQUE DYNAMIQUE POUR LIGNE LARGE (1 = NOIR, 0 = BLANC)
         # =================================================================
         
-        # Cas 1 : Parfaitement centré ou sur la ligne droite (Tout droit)
-        if cap == (1, 1, 1) or cap == (0, 1, 0):
-            direction_memoire = 0 # Centré
-            piloter(ANGLE_CENTRE, VITESSE_LIGNE_DROITE)
+        # 1. PARFAITEMENT CENTRÉ (Les 3 capteurs sont bien sur la grosse ligne noire)
+        if cap == (1, 1, 1):
+            avance(ANGLE_CENTRE, VITESSE_DROITE)
 
-        # Cas 2 : Déviation légère à GAUCHE (La ligne s'échappe à gauche)
+        # 2. DÉVIATION OU VIRAGE À GAUCHE 
+        # (Le robot part à droite, donc le capteur gauche sort de la ligne et passe sur le blanc)
         elif cap == (0, 1, 1):
-            direction_memoire = -1 # Mémoire : la ligne est à gauche
-            # On applique un angle de correction doux (ex: 115° au lieu de 125°)
-            piloter(115, VITESSE_LIGNE_DROITE - 5)
-
-        # Cas 3 : Déviation forte à GAUCHE (Virage serré à gauche)
+            derniere_direction = "gauche"
+            avance(ANGLE_GAUCHE_DOUX, VITESSE_CORRECTION) # Correction douce au lieu de brutale
+            
         elif cap == (0, 0, 1):
-            direction_memoire = -2 # Mémoire : virage fort à gauche
-            # Braquage fort mais vitesse réduite pour garder l'adhérence
-            piloter(145, VITESSE_VIRAGE_SERRE)
+            derniere_direction = "gauche"
+            avance(ANGLE_GAUCHE_LEGER, VITESSE_CORRECTION)
+            
+        elif cap == (0, 0, 0) and derniere_direction == "gauche":
+            # Le robot est sorti complètement par la droite du virage serré à gauche
+            avance(ANGLE_GAUCHE_FORT, VITESSE_VIRAGE)
 
-        # Cas 4 : Déviation légère à DROITE (La ligne s'échappe à droite)
+        # 3. DÉVIATION OU VIRAGE À DROITE 
+        # (Le robot part à gauche, donc le capteur droit sort de la ligne et passe sur le blanc)
         elif cap == (1, 1, 0):
-            direction_memoire = 1 # Mémoire : la ligne est à droite
-            # Correction douce à droite (ex: 79° au lieu de 75°)
-            piloter(79, VITESSE_LIGNE_DROITE - 5)
-
-        # Cas 5 : Déviation forte à DROITE (Virage serré à droite)
+            derniere_direction = "droite"
+            avance(ANGLE_DROITE_DOUX, VITESSE_CORRECTION) # Correction douce au lieu de brutale
+            
         elif cap == (1, 0, 0):
-            direction_memoire = 2 # Mémoire : virage fort à droite
-            piloter(55, VITESSE_VIRAGE_SERRE)
+            derniere_direction = "droite"
+            avance(ANGLE_DROITE_LEGER, VITESSE_CORRECTION)
+            
+        elif cap == (0, 0, 0) and derniere_direction == "droite":
+            # Le robot est sorti complètement par la gauche du virage serré à droite
+            avance(ANGLE_DROITE_FORT, VITESSE_VIRAGE)
 
-        # Cas 6 : PERTE DE LIGNE (0, 0, 0) - GESTION INTELLIGENTE
+        # 4. CAS DE PERTE INDÉTERMINÉE (Sécurité)
         elif cap == (0, 0, 0):
-            # Le robot adapte son comportement selon l'HISTORIQUE immédiat
-            if direction_memoire == -2:
-                # Il était dans un virage fort à gauche : on maintient le braquage max à gauche à basse vitesse
-                piloter(145, VITESSE_RECHERCHE)
-            elif direction_memoire == 2:
-                # Il était dans un virage fort à droite : on maintient le braquage max à droite à basse vitesse
-                piloter(55, VITESSE_RECHERCHE)
-            elif direction_memoire == -1:
-                # Petite perte à gauche : correction modérée
-                piloter(125, VITESSE_RECHERCHE)
-            elif direction_memoire == 1:
-                # Petite perte à droite : correction modérée
-                piloter(75, VITESSE_RECHERCHE)
-            else:
-                # Perte inconnue en ligne droite : on continue tout droit lentement pour retrouver la ligne
-                piloter(ANGLE_CENTRE, VITESSE_RECHERCHE)
+            # Si on perd la ligne sans historique clair, on avance prudemment en cherchant au centre
+            avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
 
-        time.sleep(0.015) # Échantillonnage un peu plus rapide pour capter les changements brusques
+        time.sleep(0.015) # Légèrement plus rapide pour capter les transitions à temps
 
 except KeyboardInterrupt:
     pass
 finally:
     robot.stopper()
-    servos.set_angle(0, ANGLE_CENTRE)
+    braquer(ANGLE_CENTRE)
     print("FIN")
