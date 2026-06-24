@@ -17,40 +17,40 @@ tracker = LineTracker()
 
 
 # ==========================
-# REGLAGES ADEEPT PICAR-B
+# REGLAGES PICAR-B
 # ==========================
 
 CENTRE = 97
 
-# ton montage :
-# angle > 97 = gauche
-# angle < 97 = droite
+# Sur ton robot :
+# >97 = gauche
+# <97 = droite
 
-MAX_CORRECTION = 25
+GAUCHE_LEGER = 104
+GAUCHE_FORT = 112
+
+DROITE_LEGER = 90
+DROITE_FORT = 82
 
 
-VITESSE_DROITE = 42
-VITESSE_VIRAGE = 28
-VITESSE_PERDU = 20
+VITESSE_LIGNE = 35
+VITESSE_VIRAGE = 25
+VITESSE_PERDU = 18
 
 
 angle_actuel = CENTRE
-correction = 0
+dernier_angle = CENTRE
 
 
 # ==========================
-# OUTILS
+# DIRECTION FLUIDE
 # ==========================
-
-def limite(x, mini, maxi):
-    return max(mini, min(maxi, x))
-
 
 def tourner(cible):
 
     global angle_actuel
 
-    # plus réactif que l'ancien
+    # filtre anti zig-zag
     angle_actuel = angle_actuel * 0.65 + cible * 0.35
 
     servos.set_angle(
@@ -59,9 +59,8 @@ def tourner(cible):
     )
 
 
-
 # ==========================
-# START
+# DEMARRAGE
 # ==========================
 
 print("START")
@@ -75,16 +74,14 @@ time.sleep(1)
 
 
 # ==========================
-# BOUCLE PRINCIPALE
+# SUIVI DE LIGNE
 # ==========================
 
 try:
 
     while True:
 
-
         data = tracker.get_status()
-
 
         L = data["left"]
         M = data["middle"]
@@ -96,107 +93,69 @@ try:
         print(etat)
 
 
-        # ==================================
-        # PARFAITEMENT SUR LA LIGNE NOIRE
-        # ==================================
+        # ======================
+        # BIEN SUR LA LIGNE
+        # ======================
 
         if etat == (1,1,1):
 
-            # sortie de virage :
-            # revenir rapidement au centre
-
-            if abs(correction) > 15:
-
-                correction *= 0.45
-
-            else:
-
-                correction *= 0.8
-
-
-            vitesse = VITESSE_DROITE
+            cible = CENTRE
+            vitesse = VITESSE_LIGNE
 
 
 
-        # ==================================
+        # ======================
         # ROBOT TROP A GAUCHE
-        # il faut tourner DROITE
-        # donc angle diminue
-        # ==================================
+        # corriger vers DROITE
+        # ======================
 
         elif etat == (0,1,1):
 
-            correction -= 3
-
-            vitesse = VITESSE_DROITE
+            cible = DROITE_LEGER
+            vitesse = VITESSE_LIGNE
 
 
 
         elif etat == (0,0,1):
 
-            correction -= 7
-
+            cible = DROITE_FORT
             vitesse = VITESSE_VIRAGE
 
 
 
-        # ==================================
+        # ======================
         # ROBOT TROP A DROITE
-        # il faut tourner GAUCHE
-        # donc angle augmente
-        # ==================================
+        # corriger vers GAUCHE
+        # ======================
 
         elif etat == (1,1,0):
 
-            correction += 3
-
-            vitesse = VITESSE_DROITE
+            cible = GAUCHE_LEGER
+            vitesse = VITESSE_LIGNE
 
 
 
         elif etat == (1,0,0):
 
-            correction += 7
-
+            cible = GAUCHE_FORT
             vitesse = VITESSE_VIRAGE
 
 
 
-        # ==================================
-        # PERTE COMPLETE DE LA LIGNE
-        # ==================================
+        # ======================
+        # PERDU
+        # ======================
 
         elif etat == (0,0,0):
 
-            # continuer la dernière recherche
-            # mais doucement
+            # seulement ici on utilise la mémoire
 
-            if correction > 0:
-
-                correction += 3
-
-            else:
-
-                correction -= 3
-
-
+            cible = dernier_angle
             vitesse = VITESSE_PERDU
 
 
 
-        # sécurité servo
-
-        correction = limite(
-            correction,
-            -MAX_CORRECTION,
-            MAX_CORRECTION
-        )
-
-
-        angle_final = CENTRE + correction
-
-
-        tourner(angle_final)
+        tourner(cible)
 
 
         robot.set_motor(
@@ -205,7 +164,16 @@ try:
         )
 
 
-        time.sleep(0.03)
+        # sauvegarde uniquement une vraie direction
+
+        if etat != (0,0,0):
+
+            dernier_angle = cible
+
+
+
+        time.sleep(0.025)
+
 
 
 
