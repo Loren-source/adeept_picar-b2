@@ -28,20 +28,22 @@ class DummyKalman:
     def kalman(self, val): 
         return val
 
-# Variables globales de configuration
+# ==============================================================================
+# VARIABLES GLOBALES DE CONFIGURATION (AJUSTÉES POUR VIRAGE SERRÉ DE 70°)
+# ==============================================================================
 APPMode = 'none'
 colorUpper = np.array([15, 255, 255])
 colorLower = np.array([0, 50, 40])
 CVRun = 1
-linePos_1 = 320      
-linePos_2 = 420      
+linePos_1 = 280      # Remonté (anciennement 320) pour anticiper le virage plus tôt
+linePos_2 = 420      # Bas de l'image (juste devant le robot)
 lineColorSet = 255   
 frameRender = 1
 Threshold = 80
 findLineMove = 1
 tracking_servo_status = 0
 FLCV_Status = 0
-turn_speed = 28      
+turn_speed = 22      # Réduit (anciennement 28) pour garder le contrôle dans les 70°
 ImgIsNone = 0
 hflip = False
 vflip = False
@@ -202,6 +204,9 @@ class CVThread(threading.Thread):
             self.drawing = 0
         self.pause()
 
+    # ==============================================================================
+    # CONTROLE DE DIRECTION AJUSTÉ POUR GRAND DEVIATION (VlRAGE 70°)
+    # ==============================================================================
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
         if not CVThread.hardware_available:
@@ -220,10 +225,10 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 400: 
+            if posInput > 400: # Grand virage à droite
                 tracking_servo_status = 1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, -45) 
+                    CVThread.scGear.moveAngle(0, -65)  # Augmenté à -65° pour tourner plus sec
                     CVThread.scGear.moveAngle(1, -25) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
@@ -231,10 +236,10 @@ class CVThread(threading.Thread):
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
 
-            elif posInput < 240: 
+            elif posInput < 240: # Grand virage à gauche
                 tracking_servo_status = -1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 45)  
+                    CVThread.scGear.moveAngle(0, 65)   # Augmenté à 65° pour tourner plus sec
                     CVThread.scGear.moveAngle(1, 25)  
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
@@ -242,7 +247,7 @@ class CVThread(threading.Thread):
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
                         
-            else: 
+            else: # Ligne droite ou ajustement mineur
                 tracking_servo_status = 0 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, 0) 
@@ -252,11 +257,11 @@ class CVThread(threading.Thread):
                     move.motorStop()
         else: 
             if tracking_servo_status == -1: 
-                CVThread.scGear.moveAngle(0, 45)  
+                CVThread.scGear.moveAngle(0, 65)  
                 CVThread.scGear.moveAngle(1, 35) 
                 move.video_Tracking_Move(turn_speed, 1) 
             elif tracking_servo_status == 1: 
-                CVThread.scGear.moveAngle(0, -45) 
+                CVThread.scGear.moveAngle(0, -65) 
                 CVThread.scGear.moveAngle(1, -35) 
                 move.video_Tracking_Move(turn_speed, 1)
             else:
@@ -462,7 +467,7 @@ class Camera(object):
 
         while True:
             try:
-                # Correction anti-blocage : utilisation de la requête explicite de frame
+                # Boucle de capture anti-blocage (Requête de buffer explicite)
                 request = picam2.capture_request()
                 img = request.make_array('main')
                 request.release()
