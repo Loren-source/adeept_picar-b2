@@ -1,8 +1,8 @@
 import threading
-import time # Assure-toi que l'import de time est bien présent
+import time
 from motor import RobotMotor
-from ultra import Ultrasonic  # Changé ultra en Ultra si ton fichier s'appelle Ultra.py
-from lineTracking import LineTracker   # Ajusté selon le nom de ton fichier line.py
+from ultra import Ultrasonic
+from lineTracking import LineTracker # Remis exactement ton import d'origine
 from servo import RobotServos
 
 robot = RobotMotor()
@@ -14,21 +14,18 @@ servos = RobotServos()
 # REGLAGES
 # ==========================
 ANGLE_CENTRE = 97 
-
 # GAUCHE physique
 ANGLE_GAUCHE_LEGER = 125
 ANGLE_GAUCHE_FORT = 145 
-
 # DROITE physique
 ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 55  
+ANGLE_DROITE_FORT = 55 
 
-# VITESSES OPTIMISÉES
-VITESSE_DROITE = 25       # Légèrement réduit pour éviter de se faire éjecter par l'inertie
-VITESSE_CORRECTION = 18
-VITESSE_VIRAGE = 12       # Très lent pour les virages serrés pour donner du temps aux servos
-VITESSE_PIVOT_ARRIERE = 15 # Vitesse de recul pour se repositionner
-
+VITESSE_DROITE = 30
+VITESSE_CORRECTION = 22
+VITESSE_VIRAGE = 15
+VITESSE_RECHERCHE = 12
+VITESSE_PIVOT_ARRIERE = 15 # Vitesse de secours pour reculer dans l'épingle
 DISTANCE_STOP = 200 
 
 # ==========================
@@ -59,7 +56,7 @@ def recule(angle, vitesse):
     global dernier_angle
     dernier_angle = angle
     braquer(angle)
-    robot.set_motor(-1, vitesse) # Utilise la direction -1 de ton motor.py
+    robot.set_motor(-1, vitesse) # Commande le pont en H en marche arrière
 
 # ==========================
 # CLAVIER
@@ -87,7 +84,7 @@ try:
             time.sleep(0.02)
             continue
 
-        # Obstacle
+        # obstacle
         if ultra.get_distance() < DISTANCE_STOP:
             robot.stopper()
             actif = False
@@ -95,64 +92,61 @@ try:
 
         s = tracker.get_status()
         cap = (s["left"], s["middle"], s["right"])
-        print(cap, f" | Dernière dir: {derniere_direction}")
+        print(cap)
 
         # =====================
         # TOUT DROIT
         # =====================
         if cap == (1, 1, 1):
-            # Optionnel : si le robot voit tout noir, il va droit et on ne change pas la dernière direction
-            avance(ANGLE_CENTRE, VITESSE_DROITE)
-
-        elif cap == (0, 1, 0):
-            # Ligne parfaitement centrée
             avance(ANGLE_CENTRE, VITESSE_DROITE)
 
         # =====================
-        # VIRAGE GAUCHE
+        # VIRAGE GAUCHE (Tes conditions d'origine)
         # =====================
-        elif cap == (0, 1, 1) or cap == (1, 1, 0): 
-            # Note : Attention à la logique de tes capteurs (0=noir ou 1=noir ?)
-            # Si cap=(0,1,1) signifie que le capteur gauche est sorti du noir :
-            derniere_direction = "gauche"
+        elif cap == (0, 1, 1):
+            derniere_direction = "gauche_leger"
             avance(ANGLE_GAUCHE_LEGER, VITESSE_CORRECTION)
-
+            
         elif cap == (0, 0, 1):
-            # Virage prononcé à gauche
-            derniere_direction = "gauche"
+            derniere_direction = "gauche_fort"
             avance(ANGLE_GAUCHE_FORT, VITESSE_VIRAGE)
 
         # =====================
-        # VIRAGE DROITE
+        # VIRAGE DROITE (Tes conditions d'origine)
         # =====================
-        elif cap == (1, 1, 0) or cap == (0, 1, 1):
-            derniere_direction = "droite"
+        elif cap == (1, 1, 0):
+            derniere_direction = "droite_leger"
             avance(ANGLE_DROITE_LEGER, VITESSE_CORRECTION)
-
+            
         elif cap == (1, 0, 0):
-            # Virage prononcé à droite
-            derniere_direction = "droite"
+            derniere_direction = "droite_fort"
             avance(ANGLE_DROITE_FORT, VITESSE_VIRAGE)
 
         # =====================
-        # PERTE DE LIGNE (0, 0, 0) -> LE RECOURS AGRESSIF
+        # PERTE DE LIGNE INTELLIGENTE
         # =====================
         elif cap == (0, 0, 0):
-            print(f"[ATTENTION] Ligne perdue ! Manœuvre de secours vers : {derniere_direction}")
-            
-            if derniere_direction == "gauche":
-                # On braque à fond à GAUCHE et on RECOULE pour remettre l'avant sur la ligne
-                recule(ANGLE_GAUCHE_FORT, VITESSE_PIVOT_ARRIERE)
-                
-            elif derniere_direction == "droite":
-                # On braque à fond à DROITE et on RECOULE
+            # Cas 1 : On a perdu la ligne alors qu'on tournait déjà FERMEMENT à droite (Virage serré numéro 2)
+            if Lab_direction == "droite_fort":
+                print("[INFO] Épingle manquée à droite ! Recul de secours.")
                 recule(ANGLE_DROITE_FORT, VITESSE_PIVOT_ARRIERE)
                 
+            # Cas 2 : On a perdu la ligne alors qu'on tournait déjà FERMEMENT à gauche
+            elif Lab_direction == "gauche_fort":
+                print("[INFO] Épingle manquée à gauche ! Recul de secours.")
+                recule(ANGLE_GAUCHE_FORT, VITESSE_PIVOT_ARRIERE)
+                
+            # Cas 3 : Perte classique sur virage léger (ton comportement d'origine qui fonctionnait)
+            elif Lab_direction == "gauche_leger":
+                avance(ANGLE_GAUCHE_FORT, VITESSE_RECHERCHE)
+                
+            elif Lab_direction == "droite_leger":
+                avance(ANGLE_DROITE_FORT, VITESSE_RECHERCHE)
+                
             else:
-                # Si on ne sait pas, on recule tout droit lentement
-                recule(ANGLE_CENTRE, VITESSE_PIVOT_ARRIERE)
+                avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
 
-        time.sleep(0.01) # Légèrement plus rapide pour augmenter la réactivité
+        time.sleep(0.02)
 
 except KeyboardInterrupt:
     pass
