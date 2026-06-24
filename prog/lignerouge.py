@@ -29,7 +29,7 @@ class DummyKalman:
         return val
 
 # ==============================================================================
-# VARIABLES GLOBALES DE CONFIGURATION (AJUSTÉES POUR VIRAGE SERRÉ DE 70°)
+# VARIABLES GLOBALES DE CONFIGURATION (AJUSTÉES POUR LE VIRAGE DE 70°)
 # ==============================================================================
 APPMode = 'none'
 colorUpper = np.array([15, 255, 255])
@@ -43,7 +43,7 @@ Threshold = 80
 findLineMove = 1
 tracking_servo_status = 0
 FLCV_Status = 0
-turn_speed = 22      # Vitesse réduite pour garder le contrôle dans les 70°
+turn_speed = 22      # Vitesse réduite pour donner du couple dans le virage serré
 ImgIsNone = 0
 hflip = False
 vflip = False
@@ -205,7 +205,7 @@ class CVThread(threading.Thread):
         self.pause()
 
     # ==============================================================================
-    # CONTROLE DE DIRECTION CORRIGÉ (TÊTE VERROUILLÉE AU CENTRE À 0°)
+    # CONTROLE DE LA TRAJECTOIRE (UNIQUEMENT LE CABRAGE DES ROUES MODIFIÉ À 65°)
     # ==============================================================================
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
@@ -213,9 +213,9 @@ class CVThread(threading.Thread):
             return
 
         if FLCV_Status == 0:    
-            CVThread.scGear.moveAngle(0, 0)  # Roues droites
-            CVThread.scGear.moveAngle(1, 0)  # Tête centrée
-            CVThread.scGear.moveAngle(2, -18) # Inclinaison vers le bas
+            CVThread.scGear.moveAngle(0, 0) 
+            CVThread.scGear.moveAngle(1, 0) 
+            CVThread.scGear.moveAngle(2, -18) 
             FLCV_Status = 1
             
         if posInput is not None and findLineMove == 1:
@@ -225,22 +225,22 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 400: # Grand virage à droite
+            if posInput > 400: # Virage à droite
                 tracking_servo_status = 1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, -65) # Roues tournent fort à droite
-                    CVThread.scGear.moveAngle(1, 0)   # CORRECTION : Tête bloquée à 0°
+                    CVThread.scGear.moveAngle(0, -65) # MODIFIÉ : Braquage poussé à 65° pour le virage serré
+                    CVThread.scGear.moveAngle(1, -25) # Inchangé (mouvement d'origine de la tête)
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
 
-            elif posInput < 240: # Grand virage à gauche
+            elif posInput < 240: # Virage à gauche
                 tracking_servo_status = -1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 65)  # Roues tournent fort à gauche
-                    CVThread.scGear.moveAngle(1, 0)   # CORRECTION : Tête bloquée à 0°
+                    CVThread.scGear.moveAngle(0, 65)  # MODIFIÉ : Braquage poussé à 65° pour le virage serré
+                    CVThread.scGear.moveAngle(1, 25)  # Inchangé (mouvement d'origine de la tête)
                     move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
@@ -251,18 +251,18 @@ class CVThread(threading.Thread):
                 tracking_servo_status = 0 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, 0) 
-                    CVThread.scGear.moveAngle(1, 0)   # Tête au centre
+                    CVThread.scGear.moveAngle(1, 0) 
                     move.video_Tracking_Move(turn_speed, 1) 
                 else: 
                     move.motorStop()
         else: 
             if tracking_servo_status == -1: 
-                CVThread.scGear.moveAngle(0, 65)  
-                CVThread.scGear.moveAngle(1, 0)       # CORRECTION : Tête bloquée à 0°
+                CVThread.scGear.moveAngle(0, 65)  # MODIFIÉ : 65° ici aussi
+                CVThread.scGear.moveAngle(1, 35) 
                 move.video_Tracking_Move(turn_speed, 1) 
             elif tracking_servo_status == 1: 
-                CVThread.scGear.moveAngle(0, -65) 
-                CVThread.scGear.moveAngle(1, 0)       # CORRECTION : Tête bloquée à 0°
+                CVThread.scGear.moveAngle(0, -65) # MODIFIÉ : -65° ici aussi
+                CVThread.scGear.moveAngle(1, -35) 
                 move.video_Tracking_Move(turn_speed, 1)
             else:
                 CVThread.scGear.moveAngle(1, 0)
