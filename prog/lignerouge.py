@@ -1,330 +1,332 @@
-#!/usr/bin/env python3
 import threading
 import cv2
 import numpy as np
-import datetime
 import time
-import imutils
 import sys
 import os
 
-# Imports Adafruit pour les servomoteurs (Votre Code)
-from board import SCL, SDA
-import busio
-from adafruit_motor import servo
-from adafruit_pca9685 import PCA9685
+# Forcer Python à chercher les modules locaux du robot
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
 
-# Imports moteurs de déplacement (roues motrices) et caméra
+# ==========================================
+# IMPORT DU MATÉRIEL (avec fallback simulation)
+# ==========================================
 try:
+    import RPIservo
     import move
-    from picamera2 import Picamera2  
+    from picamera2 import Picamera2
     import libcamera
-    hardware_available = True
-    print("[MATÉRIEL] Caméra et moteurs de propulsion détectés.")
+    HARDWARE_AVAILABLE = True
+    print("✅ Matériel détecté : RPIservo, move, Picamera2")
 except ImportError as e:
-    print(f"[REMARQUE] Mode simulation ou dépendance manquante : {e}")
-    hardware_available = False
+    HARDWARE_AVAILABLE = False
+    print(f"⚠️  Mode simulation (matériel absent) : {e}")
 
-# ====================================================================
-# CONFIGURATION MATÉRIELLE DES SERVOMOTEURS (VOTRE CONFIGURATION)
-# ====================================================================
-PCA_ADDRESS   = 0x5f        # Adresse I²C de la carte Adeept
-PWM_FREQ      = 50          # Hz – fréquence standard servomoteur
+# ==========================================
+# CLASSES DE SIMULATION (si pas de matériel)
+# ==========================================
+class DummyGear:
+    def moveAngle(self, servo_id, angle):
+        print(f"[SIM] Servo {servo_id} → {angle}°")
+    def stopWiggle(self):
+        pass
+    def moveInit(self):
+        pass
 
-MIN_PULSE     = 500         # µs – impulsion mini (0°)
-MAX_PULSE     = 2400        # µs – impulsion maxi (180°)
-ACTUATION     = 180         # degrés – plage totale du servo
+class DummyMove:
+    @staticmethod
+    def setup():
+        pass
+    @staticmethod
+    def video_Tracking_Move(speed, direction):
+        print(f"[SIM] Moteurs → vitesse={speed}, direction={direction}")
+    @staticmethod
+    def motorStop():
+        print("[SIM] Moteurs arrêtés")
 
-ANGLE_MIN     = 0           # limite basse de sécurité
-ANGLE_MAX     = 180         # limite haute de sécurité
+# ==========================================
+# PARAMÈTRES GLOBAUX
+# ==========================================
+CVRun         = 1       # 1 = moteurs actifs, 0 = analyse sans bouger
+linePos_1     = 340     # Hauteur de la ligne d'analyse supérieure (pixels)
+linePos_2     = 420     # Hauteur de la ligne d'analyse inférieure (pixels)
+turn_speed    = 40      # Vitesse de rotation (0-100)
+forward_speed = 50      # Vitesse d'avance (0-100)
+CENTER_MIN    = 220     # Borne gauche de la zone centrale
+CENTER_MAX    = 420     # Borne droite de la zone centrale
+findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
 
-# Canaux des servos sur le robot
-CANAL_DIRECTION = 0         # CH0 : Direction des roues avant
-CANAL_TETE_H    = 1         # CH1 : Rotation horizontale de la tête (Gauche/Droite)
-CANAL_TETE_V    = 2         # CH2 : Inclinaison verticale de la tête (Haut/Bas)
-CANAUX_ROBOT    = [CANAL_DIRECTION, CANAL_TETE_H, CANAL_TETE_V]
+# ==========================================
+# INITIALISATION DU MATÉRIEL
+# ==========================================
+if HARDWARE_AVAILABLE:
+    scGear = RPIservo.ServoCtrl()
+    scGear.moveInit()
+    move.setup()
+else:
+    scGear = DummyGear()
+    move = DummyMove()
 
-# INITIALISATION DU BUS I2C ET PCA9685
-try:
-    i2c = busio.I2C(SCL, SDA)
-    pca = PCA9685(i2c, address=PCA_ADDRESS)
-    pca.frequency = PWM_FREQ
-    pca_available = True
-except Exception as e:
-    print(f"[ERREUR] Impossible d'initialiser le PCA9685 : {e}. Mode virtuel activé.")
-    pca_available = False
-
-# Dictionnaires de suivi de l'état des servos
-_servos: dict[int, servo.Servo] = {}
-_angles: dict[int, float] = {}
-
-def get_servo(canal: int) -> servo.Servo:
-    """Retourne l'objet Servo du canal, en le créant si besoin."""
-    if canal not in _servos:
-        _servos[canal] = servo.Servo(
-            pca.channels[canal],
-            min_pulse=MIN_PULSE,
-            max_pulse=MAX_PULSE,
-            actuation_range=ACTUATION
-        )
-    return _servos[canal]
-
-def set_angle(canal: int, angle: float):
-    """Positionne le servomoteur du canal avec limitation de sécurité."""
-    if not pca_available:
-        return
-    angle_safe = max(ANGLE_MIN, min(ANGLE_MAX, angle))
-    s = get_servo(canal)
-    s.angle = angle_safe
-    _angles[canal] = angle_safe
-
-def centrer_servos():
-    """Ramène les servos du robot en position initiale stable pour la ligne."""
-    print("[INFO] Positionnement initial des servos...")
-    # CH0 (Direction) -> 90° (Tout droit)
-    # CH1 (Tête Gauche/Droite) -> 90° (Bien en face)
-    # CH2 (Tête Haut/Bas) -> 115° (Inclinée vers le sol pour cibler la ligne rouge)
-    set_angle(CANAL_DIRECTION, 90)
-    set_angle(CANAL_TETE_H, 90)
-    set_angle(CANAL_TETE_V, 115) 
-    time.sleep(0.5)
-
-# ====================================================================
-# CONFIGURATION DE LA LOGIQUE VISION ET SUIVI DE LIGNE
-# ====================================================================
-APPMode = 'none'
-CVRun = 1
-linePos_1 = 320      
-linePos_2 = 420      
-lineColorSet = 255   
-findLineMove = 1
-tracking_servo_status = 0 # -1: Gauche, 1: Droite, 0: Centré
-FLCV_Status = 0
-turn_speed = 28      
-hflip = False
-vflip = False
-
+# ==========================================
+# THREAD DE VISION : DÉTECTION LIGNE ROUGE
+# ==========================================
 class CVThread(threading.Thread):
-    font = cv2.FONT_HERSHEY_SIMPLEX
 
-    def __init__(self, *args, **kwargs):
-        self.CVThreading = 0
-        self.CVMode = 'none'
-        self.imgCV = None
-        self.findColorDetection = 0
+    def __init__(self):
+        super().__init__(daemon=True)
+        self._flag    = threading.Event()
+        self._flag.clear()
 
-        self.left_Pos1 = None
-        self.right_Pos1 = None
-        self.center_Pos1 = None
-        self.left_Pos2 = None
-        self.right_Pos2 = None
-        self.center_Pos2 = None
-        self.center = None
+        self.img_input   = None
+        self.threading   = False
 
-        super(CVThread, self).__init__(*args, **kwargs)
-        self.__flag = threading.Event()
-        self.__flag.clear()
+        # Positions détectées sur les deux lignes d'analyse
+        self.left_1  = None
+        self.right_1 = None
+        self.left_2  = None
+        self.right_2 = None
+        self.center  = None  # Centre global de la ligne rouge
 
-    def mode(self, invar, imgInput):
-        self.CVMode = invar
-        self.imgCV = imgInput
-        self.resume()
+    # --- Interface publique ---
+    def send_frame(self, frame):
+        """Envoie une nouvelle image à analyser."""
+        self.img_input = frame
+        self._flag.set()
 
-    def elementDraw(self, imgInput):
-        if self.CVMode == 'findlineCV':
-            try:
-                cv2.putText(imgInput, 'Suivi de ligne rouge actif', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
-                if self.left_Pos1 is not None:
-                    cv2.line(imgInput, (self.left_Pos1, (linePos_1 + 30)), (self.left_Pos1, (linePos_1 - 30)), (255, 128, 64), 2)
-                    cv2.line(imgInput, (self.right_Pos1, (linePos_1 + 30)), (self.right_Pos1, (linePos_1 - 30)), (64, 128, 255), 2)
-                cv2.line(imgInput, (0, linePos_1), (640, linePos_1), (255, 128, 64), 1)
-                
-                if self.center is not None:
-                    center_y = int((linePos_1 + linePos_2) / 2)
-                    cv2.line(imgInput, ((self.center - 20), center_y), ((self.center + 20), center_y), (0, 255, 0), 2)
-            except:
-                pass
-        return imgInput
+    def pause(self):
+        self._flag.clear()
 
-    def findLineCtrl(self, posInput):
-        """Contrôle les servomoteurs et moteurs de propulsion selon la position de la ligne."""
-        global findLineMove, tracking_servo_status, FLCV_Status
-        if not pca_available:
+    # --- Dessin des éléments sur l'image ---
+    def draw(self, frame):
+        """Superpose les indicateurs visuels sur l'image."""
+        try:
+            # Lignes d'analyse horizontales
+            cv2.line(frame, (0, linePos_1), (640, linePos_1), (255, 128, 64), 1)
+            cv2.line(frame, (0, linePos_2), (640, linePos_2), (64, 128, 255), 1)
+
+            # Marqueurs gauche/droite sur ligne 1
+            if self.left_1 is not None:
+                cv2.line(frame, (self.left_1,  linePos_1 - 20), (self.left_1,  linePos_1 + 20), (0, 255, 0), 2)
+                cv2.line(frame, (self.right_1, linePos_1 - 20), (self.right_1, linePos_1 + 20), (0, 0, 255), 2)
+
+            # Marqueurs gauche/droite sur ligne 2
+            if self.left_2 is not None:
+                cv2.line(frame, (self.left_2,  linePos_2 - 20), (self.left_2,  linePos_2 + 20), (0, 255, 0), 2)
+                cv2.line(frame, (self.right_2, linePos_2 - 20), (self.right_2, linePos_2 + 20), (0, 0, 255), 2)
+
+            # Croix sur le centre détecté
+            if self.center is not None:
+                cy = (linePos_1 + linePos_2) // 2
+                cv2.line(frame, (self.center - 15, cy), (self.center + 15, cy), (0, 0, 0), 2)
+                cv2.line(frame, (self.center, cy - 15), (self.center, cy + 15), (0, 0, 0), 2)
+                # Affichage de la position
+                cv2.putText(frame, f'Centre: {self.center}px', (10, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+            status = "Ligne detectee" if self.center is not None else "Ligne perdue"
+            cv2.putText(frame, status, (10, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        except Exception:
+            pass
+        return frame
+
+    # --- Détection de la ligne rouge ---
+    def _detect_line(self, frame):
+        """
+        Convertit en HSV et crée un masque pour le rouge.
+        Le rouge occupe deux plages dans l'espace HSV :
+          - Plage basse : 0–10°
+          - Plage haute : 170–180°
+        """
+        global findLineMove
+
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+
+        mask1 = cv2.inRange(hsv, np.array([0,   70, 50]), np.array([10,  255, 255]))
+        mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
+        mask  = cv2.bitwise_or(mask1, mask2)
+
+        # Nettoyage morphologique (supprime le bruit)
+        mask = cv2.erode(mask,  None, iterations=2)
+        mask = cv2.dilate(mask, None, iterations=2)
+
+        # Extraction des pixels rouges sur les deux lignes d'analyse
+        row1 = mask[linePos_1]
+        row2 = mask[linePos_2]
+
+        idx1 = np.where(row1 == 255)[0]
+        idx2 = np.where(row2 == 255)[0]
+
+        # Vérification que la ligne n'est pas trop large (= ligne perdue / intersection)
+        def line_valid(idx):
+            if idx.size == 0:
+                return False
+            if abs(int(idx[-1]) - int(idx[0])) > 500:
+                return False  # Trop large → probablement une intersection
+            return True
+
+        valid1 = line_valid(idx1)
+        valid2 = line_valid(idx2)
+
+        if not valid1 and not valid2:
+            findLineMove = 0
+            self.left_1 = self.right_1 = None
+            self.left_2 = self.right_2 = None
+            self.center = None
             return
 
-        if FLCV_Status == 0:    
-            centrer_servos()
-            FLCV_Status = 1
-            
-        if posInput is not None and findLineMove == 1:
-            # ── DÉVIATION À DROITE (La ligne s'échappe vers la droite de l'image)
-            if posInput > 400: 
-                tracking_servo_status = 1 
-                if CVRun and hardware_available:
-                    set_angle(CANAL_DIRECTION, 45)   # Braquage des roues à droite
-                    set_angle(CANAL_TETE_H, 65)      # Pivot de la tête à droite (90 - 25) pour garder la ligne en vue
-                    move.video_Tracking_Move(turn_speed, 1) 
-                else:
-                    move.motorStop()
+        findLineMove = 1
 
-            # ── DÉVIATION À GAUCHE (La ligne s'échappe vers la gauche de l'image)
-            elif posInput < 240: 
-                tracking_servo_status = -1 
-                if CVRun and hardware_available:
-                    set_angle(CANAL_DIRECTION, 135)  # Braquage des roues à gauche
-                    set_angle(CANAL_TETE_H, 115)     # Pivot de la tête à gauche (90 + 25) pour anticiper le virage
-                    move.video_Tracking_Move(turn_speed, 1) 
-                else:
-                    move.motorStop()
-                        
-            # ── BIEN CENTRÉ
-            else: 
-                tracking_servo_status = 0 
-                if CVRun and hardware_available:
-                    set_angle(CANAL_DIRECTION, 90)   # Roues droites tout droit
-                    set_angle(CANAL_TETE_H, 90)      # Tête droite face à la piste
-                    move.video_Tracking_Move(turn_speed, 1) 
-                else: 
-                    move.motorStop()
-        else: 
-            # ── PERTE DE VUE (Balayage de recherche automatique basé sur le dernier état connu)
-            if hardware_available:
-                if tracking_servo_status == -1: 
-                    set_angle(CANAL_DIRECTION, 135)  
-                    set_angle(CANAL_TETE_H, 125)     # Regarde agressivement à gauche pour retrouver la ligne
-                    move.video_Tracking_Move(turn_speed, 1) 
-                elif tracking_servo_status == 1: 
-                    set_angle(CANAL_DIRECTION, 45) 
-                    set_angle(CANAL_TETE_H, 55)      # Regarde agressivement à droite
-                    move.video_Tracking_Move(turn_speed, 1)
-                else:
-                    move.motorStop() 
+        # Calcul des centres sur chaque ligne
+        centers = []
+        if valid1 and idx1.size > 0:
+            self.left_1  = int(idx1[0])
+            self.right_1 = int(idx1[-1])
+            centers.append((self.left_1 + self.right_1) // 2)
+        else:
+            self.left_1 = self.right_1 = None
 
-    def findlineCV(self, frame_image):
-        global findLineMove
-        lineColorSet = 255 
-        
-        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
-        
-        # Isolation de la couleur rouge (deux plages HSV complémentaires)
-        lower_red1 = np.array([0, 50, 40])
-        upper_red1 = np.array([15, 255, 255])
-        lower_red2 = np.array([165, 50, 40])
-        upper_red2 = np.array([180, 255, 255])
-        
-        mask1 = cv2.inRange(frame_hsv, lower_red1, upper_red1)
-        mask2 = cv2.inRange(frame_hsv, lower_red2, upper_red2)
-        frame_findline = cv2.bitwise_or(mask1, mask2)
-        
-        frame_findline = cv2.GaussianBlur(frame_findline, (5, 5), 0)
-        frame_findline = cv2.erode(frame_findline, None, iterations=2)
-        frame_findline = cv2.dilate(frame_findline, None, iterations=3)
-        
-        colorPos_1 = frame_findline[linePos_1]
-        colorPos_2 = frame_findline[linePos_2]
-        
-        try:
-            lineColorCount_Pos1 = np.sum(colorPos_1 == lineColorSet)
-            lineColorCount_Pos2 = np.sum(colorPos_2 == lineColorSet)
-            lineIndex_Pos1 = np.where(colorPos_1 == lineColorSet)
-            lineIndex_Pos2 = np.where(colorPos_2 == lineColorSet)
+        if valid2 and idx2.size > 0:
+            self.left_2  = int(idx2[0])
+            self.right_2 = int(idx2[-1])
+            centers.append((self.left_2 + self.right_2) // 2)
+        else:
+            self.left_2 = self.right_2 = None
 
-            if lineIndex_Pos1[0].size > 0 or lineIndex_Pos2[0].size > 0:
-                findLineMove = 1
-            else:
-                findLineMove = 0
+        self.center = sum(centers) // len(centers)
 
-            if lineColorCount_Pos1 == 0: lineColorCount_Pos1 = 1
-            if lineColorCount_Pos2 == 0: lineColorCount_Pos2 = 1
+    # --- Contrôle des moteurs selon la position ---
+    def _control_motors(self):
+        """
+        Oriente et avance le robot en fonction de l'écart
+        entre le centre de la ligne et le centre de l'image (320px).
+        """
+        if not CVRun:
+            move.motorStop()
+            return
 
-            self.left_Pos1 = lineIndex_Pos1[0][1] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
-            self.right_Pos1 = lineIndex_Pos1[0][lineColorCount_Pos1-2] if lineIndex_Pos1[0].size > 1 else lineIndex_Pos1[0][0]
-            self.center_Pos1 = int((self.left_Pos1 + self.right_Pos1) / 2)
+        if self.center is None or findLineMove == 0:
+            # Ligne perdue : arrêt
+            move.motorStop()
+            return
 
-            self.left_Pos2 = lineIndex_Pos2[0][1] if lineIndex_Pos2[0].size > 1 else lineIndex_Pos2[0][0]
-            self.right_Pos2 = lineIndex_Pos2[0][lineColorCount_Pos2-2] if lineIndex_Pos2[0].size > 1 else lineIndex_Pos2[0][0]
-            self.center_Pos2 = int((self.left_Pos2 + self.right_Pos2) / 2)
+        if self.center > CENTER_MAX:
+            # Ligne à droite → tourner à droite
+            scGear.moveAngle(0, -30)
+            move.video_Tracking_Move(turn_speed, 1)
 
-            self.center = int((self.center_Pos1 + self.center_Pos2) / 2)
-            
-        except Exception as e:
-            self.center = None
+        elif self.center < CENTER_MIN:
+            # Ligne à gauche → tourner à gauche
+            scGear.moveAngle(0, 30)
+            move.video_Tracking_Move(turn_speed, 1)
 
-        self.findLineCtrl(self.center)
-        self.pause()
+        else:
+            # Ligne centrée → avancer tout droit
+            scGear.moveAngle(0, 0)
+            move.video_Tracking_Move(forward_speed, 1)
 
-    def pause(self): self.__flag.clear()
-    def resume(self): self.__flag.set()
-
+    # --- Boucle principale du thread ---
     def run(self):
-        while 1:
-            self.__flag.wait()
-            if self.CVMode == 'findlineCV':
-                self.CVThreading = 1
-                self.findlineCV(self.imgCV)
-                self.CVThreading = 0
-            else:
-                self.pause()
-
-class Camera(object): 
-    modeSelect = 'none'
-
-    @staticmethod
-    def modeSet(invar): Camera.modeSelect = invar
-
-    @staticmethod
-    def frames():
-        global hflip, vflip
-        picam2 = Picamera2() 
-        preview_config = picam2.preview_configuration
-        preview_config.size = (640, 480)
-        preview_config.format = 'RGB888'
-        preview_config.transform = libcamera.Transform(hflip=hflip, vflip=vflip)
-        preview_config.colour_space = libcamera.ColorSpace.Sycc()
-        preview_config.buffer_count = 4
-        preview_config.queue = True
-
-        if not picam2.is_open: raise RuntimeError('Impossible de démarrer la caméra.')
-        picam2.start()
-
-        cvt = CVThread()
-        cvt.start()
-
         while True:
-            img = picam2.capture_array()
-            if img is None: continue
-            
-            if Camera.modeSelect == 'none':
-                cvt.pause()
-            else:
-                if not cvt.CVThreading:
-                    cvt.mode(Camera.modeSelect, img)
-                    cvt.resume()
-                try: img = cvt.elementDraw(img)
-                except: pass
+            self._flag.wait()          # Attente d'une nouvelle image
+            if self.img_input is None:
+                continue
+            self.threading = True
+            self._detect_line(self.img_input)
+            self._control_motors()
+            self.threading = False
+            self.pause()               # Attend la prochaine image
 
-            if cv2.imencode('.jpg', img)[0]:
-                yield cv2.imencode('.jpg', img)[1].tobytes()
+# ==========================================
+# GESTION DE LA CAMÉRA
+# ==========================================
+def init_camera():
+    """Initialise et configure la Picamera2."""
+    picam2 = Picamera2()
+    config = picam2.create_preview_configuration(
+        main={"size": (640, 480), "format": "RGB888"}
+    )
+    picam2.configure(config)
+    picam2.start()
+    time.sleep(1)  # Laisse la caméra se stabiliser
+    print("✅ Caméra démarrée.")
+    return picam2
 
+def frames(picam2, cv_thread):
+    """Générateur : capture les images et les envoie au thread CV."""
+    while True:
+        img = picam2.capture_array()
+        if img is None:
+            continue
+
+        # Envoyer l'image au thread de vision s'il est disponible
+        if not cv_thread.threading:
+            cv_thread.send_frame(img.copy())
+
+        # Dessiner les indicateurs sur l'image
+        img = cv_thread.draw(img)
+
+        # Encodage JPEG pour le flux
+        success, encoded = cv2.imencode('.jpg', img)
+        if success:
+            yield encoded.tobytes()
+
+# ==========================================
+# PROGRAMME PRINCIPAL
+# ==========================================
 if __name__ == '__main__':
+    print("=== Suivi de ligne rouge — PiCar-B ===")
+
+    # Orientation de la caméra vers le sol
+    if HARDWARE_AVAILABLE:
+        scGear.moveAngle(2, -15)
+        time.sleep(0.5)
+
+    # Lancement du thread de vision
+    cv_thread = CVThread()
+    cv_thread.start()
+    print("✅ Thread de vision démarré.")
+
+    # Initialisation caméra
+    if HARDWARE_AVAILABLE:
+        picam2 = init_camera()
+    else:
+        print("⚠️  Pas de caméra physique. Utilise une source vidéo de test.")
+        picam2 = cv2.VideoCapture(0)  # Webcam USB pour les tests
+
+    print("🚗 Démarrage du suivi de ligne rouge. Ctrl+C pour arrêter.\n")
+
     try:
-        if hardware_available:
-            move.setup()
-        Camera.modeSet('findlineCV')
-        print("[DEMARRAGE] Suivi de ligne rouge avec balayage dynamique Adafruit activé !")
-        
-        for frame in Camera.frames():
-            time.sleep(0.01)
-            
+        if HARDWARE_AVAILABLE:
+            for frame in frames(picam2, cv_thread):
+                time.sleep(0.03)  # ~30 fps
+        else:
+            # Mode test avec webcam USB
+            while True:
+                ret, img = picam2.read()
+                if not ret:
+                    break
+                if not cv_thread.threading:
+                    cv_thread.send_frame(img.copy())
+                img = cv_thread.draw(img)
+                cv2.imshow("Suivi ligne rouge [SIMULATION]", img)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                time.sleep(0.03)
+
     except KeyboardInterrupt:
-        print("\n[ARRET] Extinction propre du robot...")
+        print("\n🛑 Arrêt demandé par l'utilisateur.")
+
     finally:
-        if hardware_available:
-            try: move.motorStop()
-            except: pass
-        if pca_available:
-            centrer_servos()
-            pca.deinit()
-        print("[INFO] Terminé.")
-
-
+        try:
+            move.motorStop()
+        except Exception:
+            pass
+        if HARDWARE_AVAILABLE:
+            picam2.stop()
+        else:
+            picam2.release()
+            cv2.destroyAllWindows()
+        print("✅ Arrêt propre effectué.")
