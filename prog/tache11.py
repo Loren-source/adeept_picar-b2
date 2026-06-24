@@ -11,25 +11,19 @@ tracker = LineTracker()
 servos = RobotServos()
 
 # ==========================
-# REGLAGES
+# TES REGLAGES D'ORIGINE
 # ==========================
 ANGLE_CENTRE = 97 
+ANGLE_GAUCHE_LEGER = 125
+ANGLE_GAUCHE_FORT = 145 
+ANGLE_DROITE_LEGER = 75
+ANGLE_DROITE_FORT = 55 
 
-# GAUCHE physique (ajustements adoucis pour la fluidité)
-ANGLE_GAUCHE_DOUX = 112    # Pour corriger les petites déviations sans secousse
-ANGLE_GAUCHE_LEGER = 125   # Virage standard
-ANGLE_GAUCHE_FORT = 145    # Virage très serré
-
-# DROITE physique (ajustements adoucis pour la fluidité)
-ANGLE_DROITE_DOUX = 82     # Pour corriger les petites déviations sans secousse
-ANGLE_DROITE_LEGER = 75    # Virage standard
-ANGLE_DROITE_FORT = 55     # Virage très serré
-
-# VITESSES
 VITESSE_DROITE = 30
 VITESSE_CORRECTION = 22
-VITESSE_VIRAGE = 14        # Un poil plus lent pour stabiliser le robot dans le virage serré
+VITESSE_VIRAGE = 15
 VITESSE_RECHERCHE = 12
+VITESSE_RECUL = 15          # Vitesse de la marche arrière de secours
 
 DISTANCE_STOP = 200 
 
@@ -39,7 +33,6 @@ DISTANCE_STOP = 200
 actif = False
 angle_actuel = None
 dernier_angle = ANGLE_CENTRE
-# Mémorise le dernier côté vers lequel le robot a tourné ("gauche" ou "droite")
 derniere_direction = "centre" 
 
 # ==========================
@@ -57,6 +50,12 @@ def avance(angle, vitesse):
     dernier_angle = angle
     braquer(angle)
     robot.set_motor(1, vitesse)
+
+def recule(angle, vitesse):
+    global dernier_angle
+    dernier_angle = angle
+    braquer(angle)
+    robot.set_motor(-1, vitesse)
 
 # ==========================
 # CLAVIER
@@ -90,53 +89,59 @@ try:
             actif = False
             continue
 
-        # Lecture des capteurs
         s = tracker.get_status()
         cap = (s["left"], s["middle"], s["right"])
-        print(cap, f" | Dir: {derniere_direction}")
+        print(cap, f" | Dernière dir: {derniere_direction}")
 
         # =================================================================
-        # LOGIQUE DYNAMIQUE POUR LIGNE LARGE (1 = NOIR, 0 = BLANC)
+        # TA LOGIQUE D'ORIGINE STRICTE (1 = NOIR, 0 = BLANC)
         # =================================================================
         
-        # 1. PARFAITEMENT CENTRÉ (Les 3 capteurs sont bien sur la grosse ligne noire)
         if cap == (1, 1, 1):
             avance(ANGLE_CENTRE, VITESSE_DROITE)
 
-        # 2. DÉVIATION OU VIRAGE À GAUCHE 
-        # (Le robot part à droite, donc le capteur gauche sort de la ligne et passe sur le blanc)
+        # VIRAGE GAUCHE
         elif cap == (0, 1, 1):
-            derniere_direction = "gauche"
-            avance(ANGLE_GAUCHE_DOUX, VITESSE_CORRECTION) # Correction douce au lieu de brutale
-            
-        elif cap == (0, 0, 1):
-            derniere_direction = "gauche"
+            derniere_direction = "gauche_leger"
             avance(ANGLE_GAUCHE_LEGER, VITESSE_CORRECTION)
             
-        elif cap == (0, 0, 0) and derniere_direction == "gauche":
-            # Le robot est sorti complètement par la droite du virage serré à gauche
+        elif cap == (0, 0, 1):
+            derniere_direction = "gauche_fort"
             avance(ANGLE_GAUCHE_FORT, VITESSE_VIRAGE)
 
-        # 3. DÉVIATION OU VIRAGE À DROITE 
-        # (Le robot part à gauche, donc le capteur droit sort de la ligne et passe sur le blanc)
+        # VIRAGE DROITE
         elif cap == (1, 1, 0):
-            derniere_direction = "droite"
-            avance(ANGLE_DROITE_DOUX, VITESSE_CORRECTION) # Correction douce au lieu de brutale
-            
-        elif cap == (1, 0, 0):
-            derniere_direction = "droite"
+            derniere_direction = "droite_leger"
             avance(ANGLE_DROITE_LEGER, VITESSE_CORRECTION)
             
-        elif cap == (0, 0, 0) and derniere_direction == "droite":
-            # Le robot est sorti complètement par la gauche du virage serré à droite
+        elif cap == (1, 0, 0):
+            derniere_direction = "droite_fort"
             avance(ANGLE_DROITE_FORT, VITESSE_VIRAGE)
 
-        # 4. CAS DE PERTE INDÉTERMINÉE (Sécurité)
+        # =================================================================
+        # SÉCURITÉ RECUL SUR PERTE DE LIGNE (0, 0, 0)
+        # =================================================================
         elif cap == (0, 0, 0):
-            # Si on perd la ligne sans historique clair, on avance prudemment en cherchant au centre
-            avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
+            ifCompliance = (derniere_direction == "gauche_fort" or derniere_direction == "gauche_leger")
+            
+            if derniere_direction == "gauche_fort":
+                # Perte dans le virage serré à gauche -> On recule roues braquées à gauche
+                recule(ANGLE_GAUCHE_FORT, VITESSE_RECUL)
+                
+            elif derniere_direction == "droite_fort":
+                # Perte dans l'épingle à droite -> On recule roues braquées à droite
+                recule(ANGLE_DROITE_FORT, VITESSE_RECUL)
+                
+            elif derniere_direction == "gauche_leger":
+                avance(ANGLE_GAUCHE_FORT, VITESSE_RECHERCHE)
+                
+            elif derniere_direction == "droite_leger":
+                avance(ANGLE_DROITE_FORT, VITESSE_RECHERCHE)
+                
+            else:
+                avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
 
-        time.sleep(0.015) # Légèrement plus rapide pour capter les transitions à temps
+        time.sleep(0.02)
 
 except KeyboardInterrupt:
     pass
