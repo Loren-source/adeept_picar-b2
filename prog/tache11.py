@@ -1,126 +1,64 @@
 import time
-import threading
 
 from motor import RobotMotor
-from ultra import Ultrasonic
-from lineTracking import LineTracker
 from servo import RobotServos
+from line import LineTracker
 
 
 robot = RobotMotor()
-ultra = Ultrasonic()
+servo = RobotServos()
 tracker = LineTracker()
-servos = RobotServos()
 
 
-# ==========================
-# REGLAGES
-# ==========================
+# =========================
+# REGLAGES PICAR-B
+# =========================
 
-ANGLE_CENTRE = 97
+CENTRE = 97
 
-# GAUCHE physique
-ANGLE_GAUCHE_LEGER = 125
-ANGLE_GAUCHE_FORT = 155
+GAUCHE_LEGER = 80
+GAUCHE_FORT = 55
 
-# DROITE physique
-ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 40
+DROITE_LEGER = 115
+DROITE_FORT = 140
 
 
-VITESSE_DROITE = 30
-VITESSE_CORRECTION = 22
-
-# réduit pour laisser le temps de tourner
-VITESSE_VIRAGE = 10
-
-VITESSE_RECHERCHE = 9
+VITESSE_RAPIDE = 45
+VITESSE_VIRAGE = 32
+VITESSE_RECUP = 25
 
 
-DISTANCE_STOP = 200
+angle_actuel = CENTRE
+dernier_cote = 0
+# -1 gauche
+#  1 droite
 
 
+# =========================
+# SERVO FLUIDE
+# =========================
 
-# ==========================
-# VARIABLES
-# ==========================
-
-actif = False
-
-angle_actuel = None
-
-derniere_direction = "centre"
-
-
-
-# ==========================
-# MOTEUR + SERVO
-# ==========================
-
-def braquer(angle):
+def tourner(cible):
 
     global angle_actuel
 
-    if angle_actuel != angle:
+    # filtre pour éviter les coups secs
+    angle_actuel = angle_actuel*0.65 + cible*0.35
 
-        servos.set_angle(0, angle)
-        angle_actuel = angle
-
-
-
-def avance(angle, vitesse):
-
-    braquer(angle)
-
-    robot.set_motor(
-        1,
-        vitesse
-    )
+    servo.set_angle(0, angle_actuel)
 
 
 
-# ==========================
-# CLAVIER
-# ==========================
+# =========================
+# BOUCLE PRINCIPALE
+# =========================
 
+print("START")
 
-def clavier():
+servo.set_angle(0, CENTRE)
+robot.set_motor(1, 30)
 
-    global actif
-
-
-    while True:
-
-        c = input().strip().upper()
-
-
-        if c == "M":
-
-            actif = True
-
-            print("START")
-
-
-        elif c == "A":
-
-            actif = False
-
-            robot.stopper()
-
-            print("STOP")
-
-
-
-threading.Thread(
-    target=clavier,
-    daemon=True
-).start()
-
-
-
-# ==========================
-# PROGRAMME PRINCIPAL
-# ==========================
+time.sleep(1)
 
 
 try:
@@ -128,191 +66,96 @@ try:
     while True:
 
 
-        if not actif:
+        data = tracker.get_status()
 
-            time.sleep(0.02)
+        L = data["left"]
+        M = data["middle"]
+        R = data["right"]
 
-            continue
+        etat = (L,M,R)
 
+        print(etat)
 
 
-        # obstacle
 
-        if ultra.get_distance() < DISTANCE_STOP:
+        # ========================
+        # Pleine ligne noire
+        # ========================
 
+        if etat == (1,1,1):
 
-            robot.stopper()
+            tourner(CENTRE)
+            robot.set_motor(1,VITESSE_RAPIDE)
 
-            actif = False
 
-            continue
 
+        # ========================
+        # Ligne part à gauche
+        # ========================
 
+        elif etat == (1,1,0):
 
+            dernier_cote = -1
 
-        s = tracker.get_status()
+            tourner(GAUCHE_LEGER)
+            robot.set_motor(1,VITESSE_VIRAGE)
 
 
-        cap = (
 
-            s["left"],
-            s["middle"],
-            s["right"]
+        elif etat == (1,0,0):
 
-        )
+            dernier_cote = -1
 
+            tourner(GAUCHE_FORT)
+            robot.set_motor(1,VITESSE_RECUP)
 
-        print(cap)
 
 
 
-        # =====================
-        # LIGNE DROITE
-        # =====================
+        # ========================
+        # Ligne part à droite
+        # ========================
 
+        elif etat == (0,1,1):
 
-        if cap == (1,1,1):
+            dernier_cote = 1
 
+            tourner(DROITE_LEGER)
+            robot.set_motor(1,VITESSE_VIRAGE)
 
-            avance(
 
-                ANGLE_CENTRE,
 
-                VITESSE_DROITE
+        elif etat == (0,0,1):
 
-            )
+            dernier_cote = 1
 
+            tourner(DROITE_FORT)
+            robot.set_motor(1,VITESSE_RECUP)
 
 
 
-        # =====================
-        # VIRAGE GAUCHE
-        # capteurs inversés
-        # =====================
+        # ========================
+        # Ligne perdue
+        # ========================
 
+        elif etat == (0,0,0):
 
-        elif cap == (0,1,1):
+            robot.set_motor(1,22)
 
 
-            derniere_direction = "gauche"
+            if dernier_cote == -1:
 
+                tourner(GAUCHE_FORT)
 
-            avance(
 
-                ANGLE_GAUCHE_LEGER,
+            elif dernier_cote == 1:
 
-                VITESSE_CORRECTION
-
-            )
-
-
-
-
-        elif cap == (0,0,1):
-
-
-            derniere_direction = "gauche"
-
-
-            avance(
-
-                ANGLE_GAUCHE_FORT,
-
-                VITESSE_VIRAGE
-
-            )
-
-
-
-
-        # =====================
-        # VIRAGE DROITE
-        # capteurs inversés
-        # =====================
-
-
-
-        elif cap == (1,1,0):
-
-
-            derniere_direction = "droite"
-
-
-            avance(
-
-                ANGLE_DROITE_LEGER,
-
-                VITESSE_CORRECTION
-
-            )
-
-
-
-
-        elif cap == (1,0,0):
-
-
-            derniere_direction = "droite"
-
-
-            avance(
-
-                ANGLE_DROITE_FORT,
-
-                VITESSE_VIRAGE
-
-            )
-
-
-
-
-
-        # =====================
-        # PERTE DE LIGNE
-        # garde le dernier virage
-        # =====================
-
-
-        elif cap == (0,0,0):
-
-
-            if derniere_direction == "gauche":
-
-
-                avance(
-
-                    ANGLE_GAUCHE_FORT,
-
-                    VITESSE_RECHERCHE
-
-                )
-
-
-
-            elif derniere_direction == "droite":
-
-
-                avance(
-
-                    ANGLE_DROITE_FORT,
-
-                    VITESSE_RECHERCHE
-
-                )
-
+                tourner(DROITE_FORT)
 
 
             else:
 
-
-                avance(
-
-                    ANGLE_CENTRE,
-
-                    VITESSE_RECHERCHE
-
-                )
-
+                tourner(CENTRE)
 
 
 
@@ -320,18 +163,8 @@ try:
 
 
 
-
 except KeyboardInterrupt:
-
-    pass
-
-
-
-finally:
-
 
     robot.stopper()
 
-    braquer(ANGLE_CENTRE)
-
-    print("FIN")
+    servo.set_angle(0,CENTRE)
