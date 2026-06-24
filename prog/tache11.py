@@ -2,7 +2,7 @@ import threading
 import time # Assure-toi que l'import de time est bien présent
 from motor import RobotMotor
 from ultra import Ultrasonic  # Changé ultra en Ultra si ton fichier s'appelle Ultra.py
-from line import LineTracker   # Ajusté selon le nom de ton fichier line.py
+from lineTracking import LineTracker   # Ajusté selon le nom de ton fichier line.py
 from servo import RobotServos
 
 robot = RobotMotor()
