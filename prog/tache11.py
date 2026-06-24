@@ -12,39 +12,49 @@ servos = RobotServos()
 tracker = LineTracker()
 
 
+# ==========================
+# REGLAGES
+# ==========================
+
 CENTRE = 97
 
 
-# direction normale
-GAUCHE_LEGER = 104
-DROITE_LEGER = 90
+# petites corrections
+GAUCHE_LEGER = 105
+DROITE_LEGER = 89
 
 
-# virages
+# virages S
 GAUCHE_FORT = 125
 DROITE_FORT = 68
 
 
 VITESSE_LIGNE = 36
-VITESSE_VIRAGE = 24
-VITESSE_PERDU = 15
+VITESSE_VIRAGE = 22
+VITESSE_PERDU = 17
 
 
 angle_actuel = CENTRE
 
 dernier_sens = 0
-# 1 gauche
-# -1 droite
+# 1 = gauche
+# -1 = droite
 
 compteur_virage = 0
 compteur_perdu = 0
 
 
-def tourner(angle):
+
+# ==========================
+# SERVO
+# ==========================
+
+def tourner(cible):
 
     global angle_actuel
 
-    angle_actuel = angle_actuel*0.55 + angle*0.45
+    # plus rapide pour le virage en S
+    angle_actuel = angle_actuel*0.45 + cible*0.55
 
     servos.set_angle(
         0,
@@ -53,14 +63,23 @@ def tourner(angle):
 
 
 
+# ==========================
+# START
+# ==========================
+
 print("START")
 
 tourner(CENTRE)
+
 robot.set_motor(1,30)
 
 time.sleep(1)
 
 
+
+# ==========================
+# BOUCLE
+# ==========================
 
 try:
 
@@ -68,6 +87,7 @@ try:
 
 
         s = tracker.get_status()
+
 
         etat = (
             s["left"],
@@ -80,23 +100,23 @@ try:
 
 
 
-        # =====================
+        # ==========================
         # CENTRE
-        # =====================
+        # ==========================
 
         if etat == (1,1,1):
 
-            compteur_perdu = 0
             compteur_virage = 0
+            compteur_perdu = 0
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
 
 
-        # =====================
-        # GAUCHE
-        # =====================
+        # ==========================
+        # TOURNE GAUCHE
+        # ==========================
 
         elif etat == (1,1,0):
 
@@ -118,9 +138,14 @@ try:
             dernier_sens = 1
 
 
-            if compteur_virage > 4:
+            # réaction rapide pour le S
+
+            if compteur_virage > 2:
+
                 cible = GAUCHE_FORT
+
             else:
+
                 cible = 115
 
 
@@ -128,9 +153,9 @@ try:
 
 
 
-        # =====================
-        # DROITE
-        # =====================
+        # ==========================
+        # TOURNE DROITE
+        # ==========================
 
         elif etat == (0,1,1):
 
@@ -152,9 +177,12 @@ try:
             dernier_sens = -1
 
 
-            if compteur_virage > 4:
+            if compteur_virage > 2:
+
                 cible = DROITE_FORT
+
             else:
+
                 cible = 80
 
 
@@ -163,51 +191,64 @@ try:
 
 
 
-        # =====================
-        # LIGNE PERDUE
-        # =====================
+        # ==========================
+        # PERTE DE LIGNE
+        # ==========================
 
         elif etat == (0,0,0):
 
             compteur_perdu += 1
 
 
-            # au début continuer
-            if compteur_perdu < 15:
+            # continuer un peu le virage
 
-                if dernier_sens == 1:
-                    cible = GAUCHE_FORT
-
-                else:
-                    cible = DROITE_FORT
-
-
-            # ensuite chercher inverse
-            elif compteur_perdu < 35:
+            if compteur_perdu < 20:
 
 
                 if dernier_sens == 1:
-                    cible = DROITE_FORT
 
-                else:
                     cible = GAUCHE_FORT
 
 
-            # balayage
+                elif dernier_sens == -1:
+
+                    cible = DROITE_FORT
+
+
+                else:
+
+                    cible = CENTRE
+
+
+
+            # si toujours perdu :
+            # remettre un peu droit
 
             else:
 
-                if (compteur_perdu // 20) % 2 == 0:
-                    cible = GAUCHE_FORT
+                if dernier_sens == 1:
+
+                    cible = 110
+
+
+                elif dernier_sens == -1:
+
+                    cible = 84
+
+
                 else:
-                    cible = DROITE_FORT
+
+                    cible = CENTRE
+
 
 
             vitesse = VITESSE_PERDU
 
 
 
+
         tourner(cible)
+
 
         robot.set_motor(
             1,
