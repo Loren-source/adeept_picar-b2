@@ -19,8 +19,8 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# corrections normales
-GAUCHE_LEGER = 111
+# corrections légères
+GAUCHE_LEGER = 112
 DROITE_LEGER = 78
 
 
@@ -29,9 +29,10 @@ GAUCHE_FORT = 128
 DROITE_FORT = 55
 
 
-VITESSE_LIGNE = 36
-VITESSE_VIRAGE = 22
-VITESSE_PERDU = 18
+# vitesses optimisées
+VITESSE_LIGNE = 32
+VITESSE_VIRAGE = 18
+VITESSE_PERDU = 15
 
 
 angle_actuel = CENTRE
@@ -39,8 +40,6 @@ angle_actuel = CENTRE
 dernier_sens = 0
 compteur_virage = 0
 perdu_count = 0
-
-ligne_vue_recemment = True
 
 
 
@@ -52,17 +51,12 @@ def tourner(cible):
 
     global angle_actuel
 
-
-    # virage fort = réaction rapide
+    # virage serré = réaction immédiate
     if cible == GAUCHE_FORT or cible == DROITE_FORT:
-
         angle_actuel = cible
 
-
     else:
-
-        # conduite fluide
-        angle_actuel = angle_actuel*0.45 + cible*0.55
+        angle_actuel = angle_actuel*0.55 + cible*0.45
 
 
     servos.set_angle(
@@ -72,6 +66,9 @@ def tourner(cible):
 
 
 
+# ==========================
+# START
+# ==========================
 
 print("START")
 
@@ -102,7 +99,7 @@ try:
 
 
         # =====================
-        # LIGNE CENTREE
+        # LIGNE DROITE
         # =====================
 
         if etat == (1,1,1):
@@ -110,18 +107,14 @@ try:
             compteur_virage = 0
             perdu_count = 0
 
-            ligne_vue_recemment = True
-
-
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
 
 
 
-
         # =====================
-        # CORRECTION GAUCHE
+        # VIRAGE GAUCHE
         # =====================
 
         elif etat == (1,1,0):
@@ -130,11 +123,12 @@ try:
             perdu_count = 0
 
             dernier_sens = 1
-            ligne_vue_recemment = False
 
 
             cible = GAUCHE_LEGER
-            vitesse = VITESSE_LIGNE
+
+            # ralentir dès l'entrée
+            vitesse = VITESSE_VIRAGE
 
 
 
@@ -145,16 +139,12 @@ try:
             perdu_count = 0
 
             dernier_sens = 1
-            ligne_vue_recemment = False
 
 
-
-            if compteur_virage > 5:
-
+            if compteur_virage > 3:
                 cible = GAUCHE_FORT
 
             else:
-
                 cible = 118
 
 
@@ -163,9 +153,8 @@ try:
 
 
 
-
         # =====================
-        # CORRECTION DROITE
+        # VIRAGE DROITE
         # =====================
 
         elif etat == (0,1,1):
@@ -174,12 +163,12 @@ try:
             perdu_count = 0
 
             dernier_sens = -1
-            ligne_vue_recemment = False
 
 
             cible = DROITE_LEGER
-            vitesse = VITESSE_LIGNE
 
+            # ralentir AVANT virage serré
+            vitesse = VITESSE_VIRAGE
 
 
 
@@ -190,16 +179,12 @@ try:
             perdu_count = 0
 
             dernier_sens = -1
-            ligne_vue_recemment = False
 
 
-
-            if compteur_virage > 5:
-
+            if compteur_virage > 3:
                 cible = DROITE_FORT
 
             else:
-
                 cible = 70
 
 
@@ -209,9 +194,8 @@ try:
 
 
 
-
         # =====================
-        # POINTILLES / PERTE
+        # POINTILLES / PERTE LIGNE
         # =====================
 
         elif etat == (0,0,0):
@@ -219,28 +203,16 @@ try:
             perdu_count += 1
 
 
-
-            # -----------------
-            # POINTILLES
-            # -----------------
-            # on garde la direction
-
-            if perdu_count < 25:
-
+            # petit trou = pointillés
+            if perdu_count < 12:
 
                 cible = CENTRE
-
                 vitesse = VITESSE_LIGNE
 
 
 
-
-            # -----------------
-            # VRAIE PERTE
-            # -----------------
-
+            # vraie perte de ligne
             else:
-
 
                 if dernier_sens == 1:
 
@@ -257,9 +229,7 @@ try:
                     cible = CENTRE
 
 
-
                 vitesse = VITESSE_PERDU
-
 
 
 
@@ -280,9 +250,7 @@ try:
 
 
 
-
 except KeyboardInterrupt:
-
 
     print("STOP")
 
