@@ -35,13 +35,7 @@ VITESSE_CORRECTION = 22
 VITESSE_VIRAGE = 15
 VITESSE_RECHERCHE = 12
 
-
 DISTANCE_STOP = 200
-
-
-# nouveau
-COMPTEUR_MAX = 10
-
 
 
 # ==========================
@@ -49,12 +43,12 @@ COMPTEUR_MAX = 10
 # ==========================
 
 actif = False
+
 angle_actuel = None
 
 dernier_angle = ANGLE_CENTRE
-derniere_direction = "centre"
 
-compteur_serre = 0
+derniere_direction = "centre"
 
 
 
@@ -89,30 +83,6 @@ def avance(angle, vitesse):
 
 
 
-def sauvetage(angle):
-
-    print("VIRAGE SERRE")
-
-    robot.stopper()
-
-    time.sleep(0.1)
-
-
-    # petit recul
-    robot.set_motor(1, -12)
-
-    braquer(angle)
-
-    time.sleep(0.25)
-
-
-    # reprise
-    robot.set_motor(1, 12)
-
-
-
-
-
 # ==========================
 # CLAVIER
 # ==========================
@@ -124,6 +94,7 @@ def clavier():
     while True:
 
         c = input().strip().upper()
+
 
         if c == "M":
 
@@ -149,9 +120,6 @@ threading.Thread(
 
 
 
-
-
-
 # ==========================
 # PROGRAMME PRINCIPAL
 # ==========================
@@ -169,6 +137,8 @@ try:
 
 
 
+        # obstacle
+
         if ultra.get_distance() < DISTANCE_STOP:
 
             robot.stopper()
@@ -176,7 +146,6 @@ try:
             actif = False
 
             continue
-
 
 
 
@@ -193,15 +162,11 @@ try:
 
 
 
-
-
         # =====================
         # TOUT DROIT
         # =====================
 
         if cap == (1,1,1):
-
-            compteur_serre = 0
 
             avance(
                 ANGLE_CENTRE,
@@ -211,15 +176,14 @@ try:
 
 
 
-
-
         # =====================
-        # GAUCHE
+        # VIRAGE GAUCHE
         # =====================
 
         elif cap == (0,1,1):
 
             derniere_direction = "gauche"
+
 
             avance(
                 ANGLE_GAUCHE_LEGER,
@@ -232,38 +196,24 @@ try:
 
             derniere_direction = "gauche"
 
-            compteur_serre += 1
 
-
-            if compteur_serre > COMPTEUR_MAX:
-
-                sauvetage(
-                    ANGLE_GAUCHE_MAX
-                )
-
-                compteur_serre = 0
-
-
-            else:
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
+            avance(
+                ANGLE_GAUCHE_FORT,
+                VITESSE_VIRAGE
+            )
 
 
 
 
 
         # =====================
-        # DROITE
+        # VIRAGE DROITE
         # =====================
 
         elif cap == (1,1,0):
 
             derniere_direction = "droite"
+
 
             avance(
                 ANGLE_DROITE_LEGER,
@@ -272,34 +222,15 @@ try:
 
 
 
-
         elif cap == (1,0,0):
 
             derniere_direction = "droite"
 
 
-            compteur_serre += 1
-
-
-            if compteur_serre > COMPTEUR_MAX:
-
-
-                sauvetage(
-                    ANGLE_DROITE_MAX
-                )
-
-                compteur_serre = 0
-
-
-
-            else:
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-
+            avance(
+                ANGLE_DROITE_FORT,
+                VITESSE_VIRAGE
+            )
 
 
 
@@ -307,18 +238,39 @@ try:
 
 
         # =====================
-        # PERTE LIGNE
+        # PERTE DE LIGNE
+        # SEULE PARTIE MODIFIEE
         # =====================
 
         elif cap == (0,0,0):
 
+            print("RECUPERATION")
+
+
+            # arrêt court
+            robot.stopper()
+
+            time.sleep(0.1)
+
+
+
+            # petit recul
+            robot.set_motor(1, -12)
+
+            time.sleep(0.25)
+
+
+
+            # reprendre le virage plus fort
 
             if derniere_direction == "gauche":
+
 
                 avance(
                     ANGLE_GAUCHE_MAX,
                     VITESSE_RECHERCHE
                 )
+
 
 
             elif derniere_direction == "droite":
@@ -328,6 +280,7 @@ try:
                     ANGLE_DROITE_MAX,
                     VITESSE_RECHERCHE
                 )
+
 
 
             else:
@@ -350,6 +303,7 @@ try:
 except KeyboardInterrupt:
 
     pass
+
 
 
 finally:
