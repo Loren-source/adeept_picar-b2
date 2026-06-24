@@ -1,151 +1,280 @@
-import threading
 import time
+import threading
+
 from motor import RobotMotor
 from ultra import Ultrasonic
 from lineTracking import LineTracker
 from servo import RobotServos
+
 
 robot = RobotMotor()
 ultra = Ultrasonic()
 tracker = LineTracker()
 servos = RobotServos()
 
+
 # ==========================
-# TES REGLAGES D'ORIGINE
+# REGLAGES
 # ==========================
-ANGLE_CENTRE = 97 
-ANGLE_GAUCHE_LEGER = 125
-ANGLE_GAUCHE_FORT = 145 
+
+ANGLE_CENTRE = 97
+
+# gauche
+ANGLE_GAUCHE_LEGER = 120
+ANGLE_GAUCHE_FORT = 155
+
+# droite
 ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 55 
+ANGLE_DROITE_FORT = 40
 
-VITESSE_DROITE = 30
+
+VITESSE_LIGNE = 32
 VITESSE_CORRECTION = 22
-VITESSE_VIRAGE = 15
-VITESSE_RECHERCHE = 12
-VITESSE_RECUL = 15          # Vitesse de la marche arrière de secours
+VITESSE_VIRAGE = 13
+VITESSE_RECHERCHE = 10
 
-DISTANCE_STOP = 200 
+
+DISTANCE_STOP = 200
+
 
 # ==========================
-# VARIABLES D'ÉTAT
+# VARIABLES
 # ==========================
+
 actif = False
 angle_actuel = None
-dernier_angle = ANGLE_CENTRE
-derniere_direction = "centre" 
+
+derniere_direction = "centre"
+
+# compteur de maintien virage
+memoire_virage = 0
+
 
 # ==========================
-# FONCTIONS MOTEURS
+# COMMANDES
 # ==========================
+
 def braquer(angle):
     global angle_actuel
-    if angle_actuel != angle:
+
+    if angle != angle_actuel:
         servos.set_angle(0, angle)
-        print("[CH00] →", angle, "°")
         angle_actuel = angle
 
+
+
 def avance(angle, vitesse):
-    global dernier_angle
-    dernier_angle = angle
+
     braquer(angle)
     robot.set_motor(1, vitesse)
 
-def recule(angle, vitesse):
-    global dernier_angle
-    dernier_angle = angle
-    braquer(angle)
-    robot.set_motor(-1, vitesse)
+
 
 # ==========================
 # CLAVIER
 # ==========================
+
 def clavier():
+
     global actif
+
     while True:
-        c = input().strip().upper()
+
+        c = input().upper()
+
         if c == "M":
             actif = True
             print("START")
+
         elif c == "A":
             actif = False
             robot.stopper()
             print("STOP")
 
-threading.Thread(target=clavier, daemon=True).start()
+
+threading.Thread(
+    target=clavier,
+    daemon=True
+).start()
+
+
 
 # ==========================
-# PROGRAMME PRINCIPAL
+# BOUCLE PRINCIPALE
 # ==========================
+
+
 try:
+
     while True:
+
+
         if not actif:
             time.sleep(0.02)
             continue
 
-        # Obstacle sécurité
+
+
+        # obstacle
         if ultra.get_distance() < DISTANCE_STOP:
+
             robot.stopper()
             actif = False
             continue
 
+
+
         s = tracker.get_status()
-        cap = (s["left"], s["middle"], s["right"])
-        print(cap, f" | Dernière dir: {derniere_direction}")
 
-        # =================================================================
-        # TA LOGIQUE D'ORIGINE STRICTE (1 = NOIR, 0 = BLANC)
-        # =================================================================
-        
-        if cap == (1, 1, 1):
-            avance(ANGLE_CENTRE, VITESSE_DROITE)
+        cap = (
+            s["left"],
+            s["middle"],
+            s["right"]
+        )
 
-        # VIRAGE GAUCHE
-        elif cap == (0, 1, 1):
-            derniere_direction = "gauche_leger"
-            avance(ANGLE_GAUCHE_LEGER, VITESSE_CORRECTION)
-            
-        elif cap == (0, 0, 1):
-            derniere_direction = "gauche_fort"
-            avance(ANGLE_GAUCHE_FORT, VITESSE_VIRAGE)
 
-        # VIRAGE DROITE
-        elif cap == (1, 1, 0):
-            derniere_direction = "droite_leger"
-            avance(ANGLE_DROITE_LEGER, VITESSE_CORRECTION)
-            
-        elif cap == (1, 0, 0):
-            derniere_direction = "droite_fort"
-            avance(ANGLE_DROITE_FORT, VITESSE_VIRAGE)
+        print(cap)
 
-        # =================================================================
-        # SÉCURITÉ RECUL SUR PERTE DE LIGNE (0, 0, 0)
-        # =================================================================
-        elif cap == (0, 0, 0):
-            ifCompliance = (derniere_direction == "gauche_fort" or derniere_direction == "gauche_leger")
-            
-            if derniere_direction == "gauche_fort":
-                # Perte dans le virage serré à gauche -> On recule roues braquées à gauche
-                recule(ANGLE_GAUCHE_FORT, VITESSE_RECUL)
-                
-            elif derniere_direction == "droite_fort":
-                # Perte dans l'épingle à droite -> On recule roues braquées à droite
-                recule(ANGLE_DROITE_FORT, VITESSE_RECUL)
-                
-            elif derniere_direction == "gauche_leger":
-                avance(ANGLE_GAUCHE_FORT, VITESSE_RECHERCHE)
-                
-            elif derniere_direction == "droite_leger":
-                avance(ANGLE_DROITE_FORT, VITESSE_RECHERCHE)
-                
+
+
+        # ======================
+        # CENTRE SEUL
+        # ======================
+
+        if cap == (0,1,0):
+
+            derniere_direction = "centre"
+            memoire_virage = 0
+
+            avance(
+                ANGLE_CENTRE,
+                VITESSE_LIGNE
+            )
+
+
+
+        # ======================
+        # TOUT NOIR
+        # ligne large
+        # ======================
+
+        elif cap == (1,1,1):
+
+            if memoire_virage > 0:
+
+
+                if derniere_direction == "gauche":
+
+                    avance(
+                        ANGLE_GAUCHE_LEGER,
+                        VITESSE_CORRECTION
+                    )
+
+
+                elif derniere_direction == "droite":
+
+                    avance(
+                        ANGLE_DROITE_LEGER,
+                        VITESSE_CORRECTION
+                    )
+
+
+                memoire_virage -= 1
+
+
             else:
-                avance(ANGLE_CENTRE, VITESSE_RECHERCHE)
 
-        time.sleep(0.02)
+                avance(
+                    ANGLE_CENTRE,
+                    VITESSE_LIGNE
+                )
+
+
+
+        # ======================
+        # GAUCHE
+        # ======================
+
+        elif cap in [
+            (1,1,0),
+            (1,0,0)
+        ]:
+
+            derniere_direction = "gauche"
+            memoire_virage = 15
+
+
+            avance(
+                ANGLE_GAUCHE_FORT,
+                VITESSE_VIRAGE
+            )
+
+
+
+        # ======================
+        # DROITE
+        # ======================
+
+        elif cap in [
+            (0,1,1),
+            (0,0,1)
+        ]:
+
+
+            derniere_direction = "droite"
+            memoire_virage = 15
+
+
+            avance(
+                ANGLE_DROITE_FORT,
+                VITESSE_VIRAGE
+            )
+
+
+
+
+        # ======================
+        # PERTE LIGNE
+        # ======================
+
+        elif cap == (0,0,0):
+
+
+            if derniere_direction == "gauche":
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
+            elif derniere_direction == "droite":
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_RECHERCHE
+                )
+
+
+            else:
+
+                avance(
+                    ANGLE_CENTRE,
+                    VITESSE_RECHERCHE
+                )
+
+
+
+        time.sleep(0.015)
+
+
 
 except KeyboardInterrupt:
     pass
+
+
 finally:
+
     robot.stopper()
     braquer(ANGLE_CENTRE)
     print("FIN")
