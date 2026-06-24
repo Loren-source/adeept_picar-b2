@@ -19,22 +19,29 @@ servos = RobotServos()
 
 ANGLE_CENTRE = 97
 
+# GAUCHE physique
 ANGLE_GAUCHE_LEGER = 125
-ANGLE_GAUCHE_FORT = 155
+ANGLE_GAUCHE_FORT = 145
+ANGLE_GAUCHE_MAX = 160
 
+# DROITE physique
 ANGLE_DROITE_LEGER = 75
-ANGLE_DROITE_FORT = 35
+ANGLE_DROITE_FORT = 55
+ANGLE_DROITE_MAX = 35
 
 
 VITESSE_DROITE = 30
-VITESSE_CORRECTION = 20
-VITESSE_VIRAGE = 12
-VITESSE_RECHERCHE = 10
+VITESSE_CORRECTION = 22
+VITESSE_VIRAGE = 15
+VITESSE_RECHERCHE = 12
+
 
 DISTANCE_STOP = 200
 
 
-SEUIL_VIRAGE_SERRE = 8
+# nouveau
+COMPTEUR_MAX = 10
+
 
 
 # ==========================
@@ -44,9 +51,11 @@ SEUIL_VIRAGE_SERRE = 8
 actif = False
 angle_actuel = None
 
+dernier_angle = ANGLE_CENTRE
 derniere_direction = "centre"
 
-compteur_virage = 0
+compteur_serre = 0
+
 
 
 # ==========================
@@ -58,13 +67,20 @@ def braquer(angle):
     global angle_actuel
 
     if angle_actuel != angle:
+
         servos.set_angle(0, angle)
+
         print("[CH00] →", angle, "°")
+
         angle_actuel = angle
 
 
 
 def avance(angle, vitesse):
+
+    global dernier_angle
+
+    dernier_angle = angle
 
     braquer(angle)
 
@@ -72,17 +88,26 @@ def avance(angle, vitesse):
 
 
 
-def reculer(angle):
 
-    print("RECUL")
+def sauvetage(angle):
+
+    print("VIRAGE SERRE")
+
+    robot.stopper()
+
+    time.sleep(0.1)
+
+
+    # petit recul
+    robot.set_motor(1, -12)
 
     braquer(angle)
 
-    robot.set_motor(1, -12)
-
     time.sleep(0.25)
 
-    robot.set_motor(1, 10)
+
+    # reprise
+    robot.set_motor(1, 12)
 
 
 
@@ -124,8 +149,11 @@ threading.Thread(
 
 
 
+
+
+
 # ==========================
-# PROGRAMME
+# PROGRAMME PRINCIPAL
 # ==========================
 
 try:
@@ -151,6 +179,7 @@ try:
 
 
 
+
         s = tracker.get_status()
 
         cap = (
@@ -159,22 +188,28 @@ try:
             s["right"]
         )
 
+
         print(cap)
 
 
 
+
+
         # =====================
-        # DROIT
+        # TOUT DROIT
         # =====================
 
         if cap == (1,1,1):
 
-            compteur_virage = 0
+            compteur_serre = 0
 
             avance(
                 ANGLE_CENTRE,
                 VITESSE_DROITE
             )
+
+
+
 
 
 
@@ -186,22 +221,10 @@ try:
 
             derniere_direction = "gauche"
 
-            compteur_virage += 1
-
-
-            if compteur_virage > SEUIL_VIRAGE_SERRE:
-
-                avance(
-                    ANGLE_GAUCHE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-            else:
-
-                avance(
-                    ANGLE_GAUCHE_LEGER,
-                    VITESSE_CORRECTION
-                )
+            avance(
+                ANGLE_GAUCHE_LEGER,
+                VITESSE_CORRECTION
+            )
 
 
 
@@ -209,10 +232,27 @@ try:
 
             derniere_direction = "gauche"
 
-            avance(
-                ANGLE_GAUCHE_FORT,
-                VITESSE_VIRAGE
-            )
+            compteur_serre += 1
+
+
+            if compteur_serre > COMPTEUR_MAX:
+
+                sauvetage(
+                    ANGLE_GAUCHE_MAX
+                )
+
+                compteur_serre = 0
+
+
+            else:
+
+                avance(
+                    ANGLE_GAUCHE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+
+
 
 
 
@@ -225,22 +265,11 @@ try:
 
             derniere_direction = "droite"
 
-            compteur_virage += 1
+            avance(
+                ANGLE_DROITE_LEGER,
+                VITESSE_CORRECTION
+            )
 
-
-            if compteur_virage > SEUIL_VIRAGE_SERRE:
-
-                avance(
-                    ANGLE_DROITE_FORT,
-                    VITESSE_VIRAGE
-                )
-
-            else:
-
-                avance(
-                    ANGLE_DROITE_LEGER,
-                    VITESSE_CORRECTION
-                )
 
 
 
@@ -249,10 +278,29 @@ try:
             derniere_direction = "droite"
 
 
-            avance(
-                ANGLE_DROITE_FORT,
-                VITESSE_VIRAGE
-            )
+            compteur_serre += 1
+
+
+            if compteur_serre > COMPTEUR_MAX:
+
+
+                sauvetage(
+                    ANGLE_DROITE_MAX
+                )
+
+                compteur_serre = 0
+
+
+
+            else:
+
+                avance(
+                    ANGLE_DROITE_FORT,
+                    VITESSE_VIRAGE
+                )
+
+
+
 
 
 
@@ -265,26 +313,32 @@ try:
         elif cap == (0,0,0):
 
 
-            if derniere_direction == "droite":
+            if derniere_direction == "gauche":
 
-                reculer(
-                    ANGLE_DROITE_FORT
+                avance(
+                    ANGLE_GAUCHE_MAX,
+                    VITESSE_RECHERCHE
                 )
 
 
-            elif derniere_direction == "gauche":
+            elif derniere_direction == "droite":
 
-                reculer(
-                    ANGLE_GAUCHE_FORT
+
+                avance(
+                    ANGLE_DROITE_MAX,
+                    VITESSE_RECHERCHE
                 )
 
 
             else:
 
+
                 avance(
                     ANGLE_CENTRE,
                     VITESSE_RECHERCHE
                 )
+
+
 
 
 
