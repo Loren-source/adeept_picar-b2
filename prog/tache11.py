@@ -60,8 +60,6 @@ def tourner(cible):
     global angle_actuel
 
 
-    # NE PAS MODIFIER
-    # c'est le réglage qui passait les virages
     angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
@@ -77,7 +75,6 @@ def tourner(cible):
 # ==========================
 
 print("START")
-
 
 tourner(CENTRE)
 
@@ -134,17 +131,16 @@ try:
         elif etat == (1,1,0):
 
             compteur_perdu = 0
+
             compteur_virage += 1
 
             dernier_sens = 1
-
 
 
             if compteur_virage > 2:
 
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_VIRAGE
-
 
             else:
 
@@ -186,7 +182,6 @@ try:
             dernier_sens = -1
 
 
-
             if compteur_virage > 2:
 
                 cible = DROITE_FORT
@@ -202,7 +197,6 @@ try:
 
 
 
-
         elif etat == (0,0,1):
 
             compteur_perdu = 0
@@ -210,7 +204,6 @@ try:
             compteur_virage += 2
 
             dernier_sens = -1
-
 
 
             cible = DROITE_FORT
@@ -225,7 +218,7 @@ try:
 
 
         # =====================
-        # 000 : POINTILLE OU VIRAGE
+        # POINTILLES OU PERTE
         # =====================
 
         elif etat == (0,0,0):
@@ -236,41 +229,22 @@ try:
 
 
             # =====================
-            # CAS POINTILLES
+            # POINTILLES
             # =====================
-            # seulement si on venait droit
 
-            if dernier_etat == (1,1,1) and compteur_perdu < 40:
+            if compteur_perdu < 18:
 
 
-                cible = CENTRE
+                # garde exactement la trajectoire
+                cible = angle_actuel
 
                 vitesse = VITESSE_LIGNE
 
 
 
 
-
-
             # =====================
-            # 000 DANS UN VIRAGE
-            # =====================
-            # on continue le virage
-
-            elif compteur_perdu < 20:
-
-
-                cible = angle_actuel
-
-                vitesse = VITESSE_VIRAGE
-
-
-
-
-
-
-            # =====================
-            # VRAIMENT PERDU
+            # VRAIE PERTE
             # =====================
 
             else:
@@ -309,9 +283,7 @@ try:
         # APPLICATION
         # =====================
 
-
         tourner(cible)
-
 
 
         robot.set_motor(
@@ -322,8 +294,7 @@ try:
 
 
 
-
-        # mémoire dernier vrai signal
+        # mémoire ligne
 
         if etat != (0,0,0):
 
@@ -333,6 +304,7 @@ try:
 
 
         time.sleep(0.025)
+
 
 
 
