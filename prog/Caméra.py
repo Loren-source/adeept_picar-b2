@@ -558,6 +558,25 @@ class Camera(BaseCamera):
             Camera._picam2 = picam2
         return Camera._picam2.capture_array()
 
+    @staticmethod
+    def stop_capture():
+        """
+        Stop the Picamera2 stream so the internal buffer stops accumulating
+        frames while the robot is turning or not looking at an arrow.
+        """
+        if Camera._picam2 is not None:
+            Camera._picam2.stop()
+
+    @staticmethod
+    def start_capture():
+        """
+        Restart the Picamera2 stream after a stop_capture() call.
+        A short sleep lets the sensor re-expose before the first capture.
+        """
+        if Camera._picam2 is not None:
+            Camera._picam2.start()
+            time.sleep(0.5)   # let auto-exposure settle on the new scene
+
 
 # _______________________________________________________
     @staticmethod

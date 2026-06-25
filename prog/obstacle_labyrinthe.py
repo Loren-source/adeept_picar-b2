@@ -33,8 +33,8 @@ ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attemp
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
 TURN_ANGLE       = 125    # degrees: steering servo deflection for left/right turns
 
-DRIVE_SPEED  = 10    # throttle % for driving forward  (0–100)
-BACKUP_SPEED = 10    # throttle % for reversing
+DRIVE_SPEED  = 20    # throttle % for driving forward  (0–100)
+BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1.0   # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 1.5   # seconds: hold steering angle while clearing a corner
 
@@ -121,6 +121,9 @@ def main():
 
                     if direction is not None:
                         print(f"  Arrow detected: {direction}")
+                        # Stop the camera immediately so the internal buffer stops
+                        # filling — mid-turn frames would corrupt the next detection.
+                        Camera.stop_capture()
                         break
 
                     # Wait before the next capture attempt
@@ -136,12 +139,17 @@ def main():
                     continue   # restart the main loop
 
                 # ── Step 4: steer and drive through the junction ──────────────
+                # Camera is stopped — no frames accumulate during the turn.
                 print(f"  Turning {direction} and advancing through corner...")
                 steer(sc, direction)
                 move.video_Tracking_Move(DRIVE_SPEED, 1)
                 time.sleep(TURN_HOLD)   # hold steering angle while clearing the corner
                 steer(sc, 'forward')    # straighten up once through
                 move.motorStop()
+
+                # Restart the camera now that the robot is aligned in the new
+                # corridor — 0.5 s settle time is handled inside start_capture().
+                Camera.start_capture()
 
             # Brief delay to avoid hammering the distance sensor
             time.sleep(0.05)
