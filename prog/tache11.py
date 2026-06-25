@@ -4,7 +4,7 @@ import time
 
 from motor import RobotMotor
 from servo import RobotServos
-from lineTracking import LineTracker
+from line import LineTracker
 
 
 robot = RobotMotor()
