@@ -19,44 +19,46 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# corrections légères
+# petites corrections
 GAUCHE_LEGER = 112
-DROITE_LEGER = 78
+DROITE_LEGER = 82
 
 
-# virages serrés
+# vrais virages
 GAUCHE_FORT = 128
-DROITE_FORT = 55
+DROITE_FORT = 65
 
 
-# vitesses optimisées
-VITESSE_LIGNE = 32
-VITESSE_VIRAGE = 18
-VITESSE_PERDU = 15
+VITESSE_LIGNE = 34
+VITESSE_VIRAGE = 22
+VITESSE_PERDU = 18
 
 
 angle_actuel = CENTRE
 
+
 dernier_sens = 0
+# 1 = gauche
+# -1 = droite
+
+
 compteur_virage = 0
-perdu_count = 0
+
+dernier_etat = (1,1,1)
+compteur_perdu = 0
 
 
 
 # ==========================
-# SERVO PROGRESSIF
+# SERVO
 # ==========================
 
 def tourner(cible):
 
     global angle_actuel
 
-    # virage serré = réaction immédiate
-    if cible == GAUCHE_FORT or cible == DROITE_FORT:
-        angle_actuel = cible
-
-    else:
-        angle_actuel = angle_actuel*0.55 + cible*0.45
+    # réglage validé sur ton parcours
+    angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
     servos.set_angle(
@@ -80,12 +82,17 @@ time.sleep(1)
 
 
 
+# ==========================
+# BOUCLE PRINCIPALE
+# ==========================
+
 try:
 
     while True:
 
 
         s = tracker.get_status()
+
 
         etat = (
             s["left"],
@@ -99,17 +106,17 @@ try:
 
 
         # =====================
-        # LIGNE DROITE
+        # CENTRE
         # =====================
 
         if etat == (1,1,1):
 
             compteur_virage = 0
-            perdu_count = 0
+            compteur_perdu = 0
+
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
-
 
 
 
@@ -119,33 +126,36 @@ try:
 
         elif etat == (1,1,0):
 
+            compteur_perdu = 0
+
             compteur_virage += 1
-            perdu_count = 0
 
             dernier_sens = 1
 
 
             cible = GAUCHE_LEGER
 
-            # ralentir dès l'entrée
-            vitesse = VITESSE_VIRAGE
-
+            vitesse = 28
 
 
 
         elif etat == (1,0,0):
 
+            compteur_perdu = 0
+
             compteur_virage += 1
-            perdu_count = 0
 
             dernier_sens = 1
 
 
             if compteur_virage > 3:
+
                 cible = GAUCHE_FORT
 
             else:
-                cible = 118
+
+                cible = 120
+
 
 
             vitesse = VITESSE_VIRAGE
@@ -159,33 +169,38 @@ try:
 
         elif etat == (0,1,1):
 
+            compteur_perdu = 0
+
             compteur_virage += 1
-            perdu_count = 0
 
             dernier_sens = -1
 
 
             cible = DROITE_LEGER
 
-            # ralentir AVANT virage serré
-            vitesse = VITESSE_VIRAGE
-
+            vitesse = 28
 
 
 
         elif etat == (0,0,1):
 
+            compteur_perdu = 0
+
             compteur_virage += 1
-            perdu_count = 0
 
             dernier_sens = -1
 
 
+
             if compteur_virage > 3:
+
                 cible = DROITE_FORT
 
+
             else:
-                cible = 70
+
+                cible = 75
+
 
 
             vitesse = VITESSE_VIRAGE
@@ -193,40 +208,58 @@ try:
 
 
 
-
         # =====================
-        # POINTILLES / PERTE LIGNE
+        # 000 : POINTILLÉS OU PERDU
         # =====================
 
         elif etat == (0,0,0):
 
-            perdu_count += 1
+
+            compteur_perdu += 1
 
 
-            # petit trou = pointillés
-            if perdu_count < 12:
+
+            # ======================
+            # CAS POINTILLÉS
+            # ======================
+
+            if dernier_etat == (1,1,1) and compteur_perdu < 25:
+
+
+                # garder trajectoire
 
                 cible = CENTRE
+
                 vitesse = VITESSE_LIGNE
 
 
 
-            # vraie perte de ligne
+            # ======================
+            # VRAIE PERTE
+            # ======================
+
             else:
 
+
                 if dernier_sens == 1:
+
 
                     cible = GAUCHE_FORT
 
 
+
                 elif dernier_sens == -1:
+
 
                     cible = DROITE_FORT
 
 
+
                 else:
 
+
                     cible = CENTRE
+
 
 
                 vitesse = VITESSE_PERDU
@@ -234,14 +267,25 @@ try:
 
 
 
-
         tourner(cible)
+
 
 
         robot.set_motor(
             1,
             vitesse
         )
+
+
+
+        # =====================
+        # MEMOIRE
+        # =====================
+
+        if etat != (0,0,0):
+
+            dernier_etat = etat
+
 
 
         time.sleep(0.025)
@@ -252,8 +296,11 @@ try:
 
 except KeyboardInterrupt:
 
+
     print("STOP")
 
+
     robot.stopper()
+
 
     servos.set_angle(0,CENTRE)
