@@ -4,13 +4,12 @@ import time
 
 from motor import RobotMotor
 from servo import RobotServos
-from lineTracking import LineTracker
+from line import LineTracker
 
 
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
-
 
 
 # ==========================
@@ -20,36 +19,33 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# corrections
-GAUCHE_LEGER = 110
-DROITE_LEGER = 84
+# petites corrections
+GAUCHE_LEGER = 112
+DROITE_LEGER = 82
 
 
-# virages
-GAUCHE_FORT = 123
-DROITE_FORT = 71
+# vrais virages
+GAUCHE_FORT = 128
+DROITE_FORT = 65
 
 
 VITESSE_LIGNE = 34
-VITESSE_VIRAGE = 24
-VITESSE_RECHERCHE = 10
-
+VITESSE_VIRAGE = 22
+VITESSE_PERDU = 18
 
 
 angle_actuel = CENTRE
 
 
-# mémoire direction
 dernier_sens = 0
-# gauche = 1
-# droite = -1
+# 1 = gauche
+# -1 = droite
 
 
 compteur_virage = 0
-compteur_perdu = 0
-
 
 dernier_etat = (1,1,1)
+compteur_perdu = 0
 
 
 
@@ -61,17 +57,14 @@ def tourner(cible):
 
     global angle_actuel
 
-
-    # filtre fluide
-    angle_actuel = angle_actuel*0.7 + cible*0.3
+    # réglage validé sur ton parcours
+    angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
     servos.set_angle(
         0,
         round(angle_actuel,1)
     )
-
-
 
 
 
@@ -83,16 +76,14 @@ print("START")
 
 tourner(CENTRE)
 
-
 robot.set_motor(1,30)
 
-time.sleep(0.7)
-
+time.sleep(1)
 
 
 
 # ==========================
-# LOOP
+# BOUCLE PRINCIPALE
 # ==========================
 
 try:
@@ -115,100 +106,55 @@ try:
 
 
         # =====================
-        # CENTRE / LIGNE LARGE
+        # CENTRE
         # =====================
 
         if etat == (1,1,1):
 
-
+            compteur_virage = 0
             compteur_perdu = 0
 
 
-            # garde mémoire du virage
-
-            if compteur_virage > 0:
-
-
-                if dernier_sens == 1:
-
-                    cible = 104
-
-
-                elif dernier_sens == -1:
-
-                    cible = 90
-
-
-                else:
-
-                    cible = CENTRE
-
-
-                compteur_virage -= 1
-
-
-
-            else:
-
-                cible = CENTRE
-
-
-
+            cible = CENTRE
             vitesse = VITESSE_LIGNE
 
 
 
-
-
         # =====================
-        # GAUCHE LEGER
+        # VIRAGE GAUCHE
         # =====================
 
         elif etat == (1,1,0):
 
-
             compteur_perdu = 0
 
+            compteur_virage += 1
+
             dernier_sens = 1
-
-
-            compteur_virage = 8
 
 
             cible = GAUCHE_LEGER
 
-
-            vitesse = 30
-
+            vitesse = 28
 
 
-
-
-        # =====================
-        # GAUCHE FORT
-        # =====================
 
         elif etat == (1,0,0):
 
-
             compteur_perdu = 0
 
+            compteur_virage += 1
 
             dernier_sens = 1
 
 
-            compteur_virage += 2
-
-
-
-            if compteur_virage > 10:
+            if compteur_virage > 3:
 
                 cible = GAUCHE_FORT
 
-
             else:
 
-                cible = 116
+                cible = 120
 
 
 
@@ -217,57 +163,43 @@ try:
 
 
 
-
         # =====================
-        # DROITE LEGER
+        # VIRAGE DROITE
         # =====================
 
         elif etat == (0,1,1):
 
-
             compteur_perdu = 0
 
+            compteur_virage += 1
 
             dernier_sens = -1
-
-
-            compteur_virage = 8
 
 
             cible = DROITE_LEGER
 
-
-            vitesse = 30
-
+            vitesse = 28
 
 
-
-
-        # =====================
-        # DROITE FORT
-        # =====================
 
         elif etat == (0,0,1):
 
-
             compteur_perdu = 0
 
+            compteur_virage += 1
 
             dernier_sens = -1
 
 
-            compteur_virage += 2
 
-
-
-            if compteur_virage > 10:
+            if compteur_virage > 3:
 
                 cible = DROITE_FORT
 
 
             else:
 
-                cible = 78
+                cible = 75
 
 
 
@@ -276,10 +208,8 @@ try:
 
 
 
-
-
         # =====================
-        # PERTE LIGNE 000
+        # 000 : POINTILLÉS OU PERDU
         # =====================
 
         elif etat == (0,0,0):
@@ -289,40 +219,39 @@ try:
 
 
 
-            # -----------------
-            # POINTILLES
-            # -----------------
+            # ======================
+            # CAS POINTILLÉS
+            # ======================
 
-            if dernier_etat == (1,1,1) and compteur_perdu < 18:
-
-
-                # on continue exactement pareil
-
-                cible = angle_actuel
-
-                vitesse = 28
+            if dernier_etat == (1,1,1) and compteur_perdu < 25:
 
 
+                # garder trajectoire
+
+                cible = CENTRE
+
+                vitesse = VITESSE_LIGNE
 
 
-            # -----------------
-            # PETITE PERTE
-            # -----------------
 
-            elif compteur_perdu < 35:
+            # ======================
+            # VRAIE PERTE
+            # ======================
+
+            else:
 
 
                 if dernier_sens == 1:
 
 
-                    cible = 112
+                    cible = GAUCHE_FORT
 
 
 
                 elif dernier_sens == -1:
 
 
-                    cible = 82
+                    cible = DROITE_FORT
 
 
 
@@ -333,75 +262,25 @@ try:
 
 
 
-                vitesse = 12
+                vitesse = VITESSE_PERDU
 
 
 
-
-
-
-            # -----------------
-            # RECHERCHE BALAYAGE
-            # -----------------
-
-            else:
-
-
-                phase = (compteur_perdu // 20) % 2
-
-
-
-                if phase == 0:
-
-
-                    cible = 123
-
-
-
-                else:
-
-
-                    cible = 71
-
-
-
-                vitesse = VITESSE_RECHERCHE
-
-
-
-
-
-
-        # sécurité
-
-        else:
-
-
-            cible = CENTRE
-
-            vitesse = 20
-
-
-
-
-
-
-        # =====================
-        # ACTION
-        # =====================
 
         tourner(cible)
 
 
+
         robot.set_motor(
             1,
-            int(vitesse)
+            vitesse
         )
 
 
 
-
-        # mémoire capteur
+        # =====================
+        # MEMOIRE
+        # =====================
 
         if etat != (0,0,0):
 
@@ -410,7 +289,6 @@ try:
 
 
         time.sleep(0.025)
-
 
 
 
