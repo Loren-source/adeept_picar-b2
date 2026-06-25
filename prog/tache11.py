@@ -32,7 +32,7 @@ DROITE_FORT = 65
 # vitesses
 VITESSE_LIGNE = 34
 VITESSE_APPROCHE = 30
-VITESSE_VIRAGE = 24
+VITESSE_VIRAGE = 22      # MODIFIÉ
 VITESSE_PERDU = 16
 
 
@@ -60,7 +60,6 @@ def tourner(cible):
     global angle_actuel
 
 
-    # filtre progressif
     angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
@@ -126,7 +125,7 @@ try:
 
 
         # =====================
-        # GAUCHE
+        # GAUCHE LEGER
         # =====================
 
         elif etat == (1,1,0):
@@ -148,14 +147,17 @@ try:
 
 
 
-            vitesse = 30
+            vitesse = VITESSE_APPROCHE
 
 
 
 
+
+        # =====================
+        # GAUCHE FORT
+        # =====================
 
         elif etat == (1,0,0):
-
 
             compteur_perdu = 0
             compteur_virage += 1
@@ -183,11 +185,10 @@ try:
 
 
         # =====================
-        # DROITE
+        # DROITE LEGER
         # =====================
 
         elif etat == (0,1,1):
-
 
             compteur_perdu = 0
             compteur_virage += 1
@@ -207,14 +208,18 @@ try:
 
 
 
-            vitesse = 30
+            vitesse = VITESSE_APPROCHE
 
 
 
 
+
+
+        # =====================
+        # DROITE FORT
+        # =====================
 
         elif etat == (0,0,1):
-
 
             compteur_perdu = 0
             compteur_virage += 1
@@ -242,8 +247,9 @@ try:
 
 
 
+
         # =====================
-        # 000 : POINTILLE OU PERDU
+        # 000 : POINTILLÉS / PERDU
         # =====================
 
         elif etat == (0,0,0):
@@ -254,14 +260,14 @@ try:
 
 
             # ---------------------
-            # POINTILLE
+            # POINTILLÉS
             # ---------------------
 
             if compteur_perdu < 20:
 
 
 
-                # arrivé droit
+                # il venait droit
                 if dernier_etat == (1,1,1):
 
 
@@ -270,7 +276,7 @@ try:
 
 
 
-                # arrivé depuis virage
+                # coupure pendant virage
                 else:
 
 
@@ -281,12 +287,12 @@ try:
 
 
 
+
             # ---------------------
-            # VRAIMENT PERDU
+            # VRAIE PERTE
             # ---------------------
 
             else:
-
 
 
                 if dernier_sens == 1:
@@ -310,8 +316,9 @@ try:
 
 
 
-
                 vitesse = VITESSE_PERDU
+
+
 
 
 
@@ -333,8 +340,7 @@ try:
 
 
 
-
-        # mémoire dernier vrai état
+        # mémoire
 
         if etat != (0,0,0):
 
@@ -344,7 +350,6 @@ try:
 
 
         time.sleep(0.025)
-
 
 
 
