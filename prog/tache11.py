@@ -124,7 +124,6 @@ try:
 
 
 
-
         # =====================
         # VIRAGE GAUCHE
         # =====================
@@ -150,7 +149,6 @@ try:
 
 
 
-
         elif etat == (1,0,0):
 
             compteur_perdu = 0
@@ -163,7 +161,6 @@ try:
             cible = GAUCHE_FORT
 
             vitesse = VITESSE_VIRAGE
-
 
 
 
@@ -182,7 +179,6 @@ try:
             dernier_sens = -1
 
 
-
             if compteur_virage > 2:
 
                 cible = DROITE_FORT
@@ -192,8 +188,6 @@ try:
 
                 cible = DROITE_LEGER
                 vitesse = VITESSE_APPROCHE
-
-
 
 
 
@@ -216,7 +210,6 @@ try:
 
 
 
-
         # =====================
         # POINTILLES OU PERTE
         # =====================
@@ -231,32 +224,21 @@ try:
             # =====================
             # POINTILLES
             # =====================
+            # environ 0.75s
+            # on garde le robot DROIT
 
-            if compteur_perdu < 45:
-
-
-                # robot presque droit :
-                # on traverse les blancs droit
-                if 85 < angle_actuel < 110:
-
-                    cible = CENTRE
+            if compteur_perdu < 30:
 
 
-                # sinon on garde son angle
-                else:
+                cible = CENTRE
 
-                    cible = angle_actuel
-
-
-
-                vitesse = 25
-
+                vitesse = 26
 
 
 
 
             # =====================
-            # VRAIMENT PERDU
+            # VRAIE PERTE
             # =====================
 
             else:
@@ -289,8 +271,6 @@ try:
 
 
 
-
-
         # =====================
         # ACTION
         # =====================
@@ -302,7 +282,6 @@ try:
             1,
             vitesse
         )
-
 
 
 
@@ -332,7 +311,4 @@ except KeyboardInterrupt:
     robot.stopper()
 
 
-    servos.set_angle(
-        0,
-        CENTRE
-    )
+    servos.set_angle(0,CENTRE)
