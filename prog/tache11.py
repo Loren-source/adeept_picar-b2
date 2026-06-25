@@ -19,14 +19,17 @@ tracker = LineTracker()
 CENTRE = 97
 
 
+# petites corrections
 GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
 
+# vrais virages
 GAUCHE_FORT = 128
 DROITE_FORT = 65
 
 
+# vitesses
 VITESSE_LIGNE = 34
 VITESSE_APPROCHE = 27
 VITESSE_VIRAGE = 18
@@ -37,6 +40,9 @@ angle_actuel = CENTRE
 
 
 dernier_sens = 0
+# 1 = gauche
+# -1 = droite
+
 
 compteur_virage = 0
 
@@ -45,11 +51,17 @@ compteur_perdu = 0
 
 
 
+# ==========================
+# SERVO FLUIDE
+# ==========================
+
 def tourner(cible):
 
     global angle_actuel
 
+
     angle_actuel = angle_actuel*0.6 + cible*0.4
+
 
     servos.set_angle(
         0,
@@ -58,7 +70,12 @@ def tourner(cible):
 
 
 
+# ==========================
+# START
+# ==========================
+
 print("START")
+
 
 tourner(CENTRE)
 
@@ -68,6 +85,9 @@ time.sleep(1)
 
 
 
+# ==========================
+# BOUCLE
+# ==========================
 
 try:
 
@@ -88,16 +108,25 @@ try:
 
 
 
+        # =====================
+        # LIGNE CENTREE
+        # =====================
+
         if etat == (1,1,1):
 
             compteur_virage = 0
             compteur_perdu = 0
+
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
 
 
+
+        # =====================
+        # VIRAGE GAUCHE
+        # =====================
 
         elif etat == (1,1,0):
 
@@ -107,10 +136,12 @@ try:
             dernier_sens = 1
 
 
+
             if compteur_virage > 2:
 
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_VIRAGE
+
 
             else:
 
@@ -123,30 +154,41 @@ try:
         elif etat == (1,0,0):
 
             compteur_perdu = 0
+
             compteur_virage += 2
 
             dernier_sens = 1
 
 
+
             cible = GAUCHE_FORT
+
             vitesse = VITESSE_VIRAGE
 
 
 
 
 
+
+        # =====================
+        # VIRAGE DROITE
+        # =====================
+
         elif etat == (0,1,1):
 
             compteur_perdu = 0
+
             compteur_virage += 1
 
             dernier_sens = -1
+
 
 
             if compteur_virage > 2:
 
                 cible = DROITE_FORT
                 vitesse = VITESSE_VIRAGE
+
 
             else:
 
@@ -159,12 +201,15 @@ try:
         elif etat == (0,0,1):
 
             compteur_perdu = 0
+
             compteur_virage += 2
 
             dernier_sens = -1
 
 
+
             cible = DROITE_FORT
+
             vitesse = VITESSE_VIRAGE
 
 
@@ -173,7 +218,7 @@ try:
 
 
         # =====================
-        # 000 AMELIORE
+        # POINTILLES OU PERTE
         # =====================
 
         elif etat == (0,0,0):
@@ -183,20 +228,27 @@ try:
 
 
 
-            # -------- POINTILLES --------
-            # pendant 0.5s environ
-            # il continue la trajectoire
-
-            if compteur_perdu < 20:
-
-
-                cible = angle_actuel
-
-                vitesse = VITESSE_APPROCHE
+            # =====================
+            # POINTILLES
+            # =====================
+            # NE PAS garder l'ancien angle
+            # sinon il sort de la ligne
 
 
+            if compteur_perdu < 35:
 
-            # -------- VRAIE PERTE --------
+
+                cible = CENTRE
+
+                vitesse = VITESSE_LIGNE
+
+
+
+
+
+            # =====================
+            # VRAIMENT PERDU
+            # =====================
 
             else:
 
@@ -207,10 +259,12 @@ try:
                     cible = GAUCHE_FORT
 
 
+
                 elif dernier_sens == -1:
 
 
                     cible = DROITE_FORT
+
 
 
                 else:
@@ -227,8 +281,11 @@ try:
 
 
 
-        tourner(cible)
+        # =====================
+        # ACTION
+        # =====================
 
+        tourner(cible)
 
 
         robot.set_motor(
@@ -238,9 +295,13 @@ try:
 
 
 
+
+        # mémoire dernière ligne vue
+
         if etat != (0,0,0):
 
             dernier_etat = etat
+
 
 
 
