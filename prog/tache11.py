@@ -12,6 +12,7 @@ servos = RobotServos()
 tracker = LineTracker()
 
 
+
 # ==========================
 # REGLAGES
 # ==========================
@@ -19,46 +20,50 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# petites corrections
-GAUCHE_LEGER = 112
-DROITE_LEGER = 82
+# correction douce
+GAUCHE_LEGER = 110
+DROITE_LEGER = 84
 
 
-# vrais virages
-GAUCHE_FORT = 128
-DROITE_FORT = 65
+# virages réels
+GAUCHE_FORT = 122
+DROITE_FORT = 72
 
 
 VITESSE_LIGNE = 34
-VITESSE_VIRAGE = 22
+VITESSE_VIRAGE = 24
 VITESSE_PERDU = 18
+
 
 
 angle_actuel = CENTRE
 
 
+# mémoire
 dernier_sens = 0
-# 1 = gauche
-# -1 = droite
+# 1 gauche
+# -1 droite
 
 
 compteur_virage = 0
 
-dernier_etat = (1,1,1)
 compteur_perdu = 0
+
+dernier_etat = (1,1,1)
 
 
 
 # ==========================
-# SERVO
+# SERVO FLUIDE
 # ==========================
 
 def tourner(cible):
 
     global angle_actuel
 
-    # réglage validé sur ton parcours
-    angle_actuel = angle_actuel*0.6 + cible*0.4
+
+    # plus doux que 0.6/0.4
+    angle_actuel = angle_actuel*0.7 + cible*0.3
 
 
     servos.set_angle(
@@ -74,17 +79,20 @@ def tourner(cible):
 
 print("START")
 
+
 tourner(CENTRE)
 
 robot.set_motor(1,30)
 
-time.sleep(1)
+time.sleep(0.7)
+
 
 
 
 # ==========================
-# BOUCLE PRINCIPALE
+# BOUCLE
 # ==========================
+
 
 try:
 
@@ -106,55 +114,93 @@ try:
 
 
         # =====================
-        # CENTRE
+        # LIGNE LARGE / CENTRE
         # =====================
 
         if etat == (1,1,1):
 
-            compteur_virage = 0
+
             compteur_perdu = 0
 
 
-            cible = CENTRE
+            # on ne casse plus le virage directement
+
+            if dernier_sens == 1 and compteur_virage > 0:
+
+
+                cible = 104
+
+
+                compteur_virage -= 1
+
+
+
+            elif dernier_sens == -1 and compteur_virage > 0:
+
+
+                cible = 90
+
+
+                compteur_virage -= 1
+
+
+
+            else:
+
+
+                cible = CENTRE
+
+
+
             vitesse = VITESSE_LIGNE
 
 
 
+
         # =====================
-        # VIRAGE GAUCHE
+        # VIRAGE GAUCHE LEGER
         # =====================
 
         elif etat == (1,1,0):
 
+
             compteur_perdu = 0
 
-            compteur_virage += 1
-
             dernier_sens = 1
+
+            compteur_virage = 5
 
 
             cible = GAUCHE_LEGER
 
-            vitesse = 28
+            vitesse = 30
 
 
+
+
+        # =====================
+        # VIRAGE GAUCHE FORT
+        # =====================
 
         elif etat == (1,0,0):
 
+
             compteur_perdu = 0
 
-            compteur_virage += 1
 
             dernier_sens = 1
 
+            compteur_virage += 2
 
-            if compteur_virage > 3:
+
+
+            if compteur_virage > 8:
 
                 cible = GAUCHE_FORT
 
             else:
 
-                cible = 120
+                cible = 116
 
 
 
@@ -164,42 +210,49 @@ try:
 
 
         # =====================
-        # VIRAGE DROITE
+        # VIRAGE DROITE LEGER
         # =====================
 
         elif etat == (0,1,1):
 
+
             compteur_perdu = 0
 
-            compteur_virage += 1
-
             dernier_sens = -1
+
+            compteur_virage = 5
 
 
             cible = DROITE_LEGER
 
-            vitesse = 28
+            vitesse = 30
 
 
+
+
+        # =====================
+        # VIRAGE DROITE FORT
+        # =====================
 
         elif etat == (0,0,1):
 
+
             compteur_perdu = 0
 
-            compteur_virage += 1
 
             dernier_sens = -1
 
+            compteur_virage += 2
 
 
-            if compteur_virage > 3:
+
+            if compteur_virage > 8:
 
                 cible = DROITE_FORT
 
-
             else:
 
-                cible = 75
+                cible = 78
 
 
 
@@ -209,7 +262,7 @@ try:
 
 
         # =====================
-        # 000 : POINTILLÉS OU PERDU
+        # 000 : POINTILLE OU PERTE
         # =====================
 
         elif etat == (0,0,0):
@@ -219,14 +272,10 @@ try:
 
 
 
-            # ======================
-            # CAS POINTILLÉS
-            # ======================
+            # ---- POINTILLES ----
 
-            if dernier_etat == (1,1,1) and compteur_perdu < 25:
+            if dernier_etat == (1,1,1) and compteur_perdu < 20:
 
-
-                # garder trajectoire
 
                 cible = CENTRE
 
@@ -234,31 +283,45 @@ try:
 
 
 
-            # ======================
-            # VRAIE PERTE
-            # ======================
+            # ---- RECHERCHE ----
 
             else:
 
 
-                if dernier_sens == 1:
+                # au début on continue le virage
+
+                if compteur_perdu < 25:
 
 
-                    cible = GAUCHE_FORT
+                    if dernier_sens == 1:
+
+                        cible = 115
+
+
+                    elif dernier_sens == -1:
+
+                        cible = 80
+
+
+                    else:
+
+                        cible = CENTRE
 
 
 
-                elif dernier_sens == -1:
-
-
-                    cible = DROITE_FORT
-
-
+                # si ça marche pas on balaie inverse
 
                 else:
 
 
-                    cible = CENTRE
+                    if dernier_sens == 1:
+
+                        cible = 78
+
+
+                    else:
+
+                        cible = 116
 
 
 
@@ -267,20 +330,30 @@ try:
 
 
 
-        tourner(cible)
+        else:
 
+
+            cible = CENTRE
+            vitesse = 25
+
+
+
+
+        # =====================
+        # ACTION
+        # =====================
+
+        tourner(cible)
 
 
         robot.set_motor(
             1,
-            vitesse
+            int(vitesse)
         )
 
 
 
-        # =====================
-        # MEMOIRE
-        # =====================
+        # mémoire état
 
         if etat != (0,0,0):
 
@@ -301,6 +374,5 @@ except KeyboardInterrupt:
 
 
     robot.stopper()
-
 
     servos.set_angle(0,CENTRE)
