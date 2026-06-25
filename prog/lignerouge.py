@@ -29,7 +29,7 @@ class DummyKalman:
         return val
 
 # ==============================================================================
-# VARIABLES GLOBALES DE CONFIGURATION (AJUSTÉES POUR LE VIRAGE DE 70°)
+# VARIABLES GLOBALES DE CONFIGURATION
 # ==============================================================================
 APPMode = 'none'
 colorUpper = np.array([15, 255, 255])
@@ -205,7 +205,7 @@ class CVThread(threading.Thread):
         self.pause()
 
     # ==============================================================================
-    # CONTROLE DE LA TRAJECTOIRE (UNIQUEMENT LE CABRAGE DES ROUES MODIFIÉ À 65°)
+    # CONTROLE DE LA TRAJECTOIRE CORRIGÉ (PROPORTIONNEL POUR ÉVITER LES TREMBLEMENTS)
     # ==============================================================================
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
@@ -225,44 +225,61 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 400: # Virage à droite
-                tracking_servo_status = 1 
+            # 1. Calcul de l'écart par rapport au centre de l'image (320)
+            error_center = posInput - 320  # Négatif à gauche, Positif à droite
+
+            # 2. Zone morte : Si le robot est presque aligné, on reste droit (évite les micro-oscillations)
+            if abs(error_center) < 30:
+                tracking_servo_status = 0
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, -65) # MODIFIÉ : Braquage poussé à 65° pour le virage serré
-                    CVThread.scGear.moveAngle(1, -25) # Inchangé (mouvement d'origine de la tête)
-                    move.video_Tracking_Move(turn_speed, 1) 
-                else:
                     CVThread.scGear.moveAngle(0, 0)
                     CVThread.scGear.moveAngle(1, 0)
+                    move.video_Tracking_Move(turn_speed, 1)
+                else:
                     move.motorStop()
 
-            elif posInput < 240: # Virage à gauche
-                tracking_servo_status = -1 
+            else:
+                # 3. Calcul de l'angle proportionnel fluide
+                # Max error possible ~ 320 pixels. Angle max désiré = 65°
+                # Kp = 65 / 320 ≈ 0.20. On utilise 0.22 pour garder un peu de nervosité.
+                Kp_wheels = 0.22  
+                Kp_cam = 0.08     # Suivi de la caméra un peu plus doux
+
+                # Calcul théorique des angles
+                target_angle_wheels = int(error_center * Kp_wheels)
+                target_angle_cam = int(error_center * Kp_cam)
+
+                # Saturation (Limitation stricte pour protéger les servos)
+                target_angle_wheels = max(min(target_angle_wheels, 65), -65)
+                target_angle_cam = max(min(target_angle_cam, 35), -35)
+
+                # Adaptation des directions (inversion nécessaire selon votre matériel d'origine)
+                servo_wheel_angle = -target_angle_wheels
+                servo_cam_angle = -target_angle_cam
+
+                if error_center > 0:
+                    tracking_servo_status = 1  # Ligne détectée à droite
+                else:
+                    tracking_servo_status = -1 # Ligne détectée à gauche
+
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 65)  # MODIFIÉ : Braquage poussé à 65° pour le virage serré
-                    CVThread.scGear.moveAngle(1, 25)  # Inchangé (mouvement d'origine de la tête)
-                    move.video_Tracking_Move(turn_speed, 1) 
+                    CVThread.scGear.moveAngle(0, servo_wheel_angle)
+                    CVThread.scGear.moveAngle(1, servo_cam_angle)
+                    move.video_Tracking_Move(turn_speed, 1)
                 else:
                     CVThread.scGear.moveAngle(0, 0)
                     CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
                         
-            else: # Ligne droite
-                tracking_servo_status = 0 
-                if CVRun:
-                    CVThread.scGear.moveAngle(0, 0) 
-                    CVThread.scGear.moveAngle(1, 0) 
-                    move.video_Tracking_Move(turn_speed, 1) 
-                else: 
-                    move.motorStop()
         else: 
+            # En cas de perte de la ligne, comportement de sauvegarde (maintien du dernier braquage)
             if tracking_servo_status == -1: 
-                CVThread.scGear.moveAngle(0, 65)  # MODIFIÉ : 65° ici aussi
-                CVThread.scGear.moveAngle(1, 35) 
-                move.video_Tracking_Move(turn_speed, 1) 
+                CVThread.scGear.moveAngle(0, 65)  
+                CVThread.scGear.moveAngle(1, 35)  
+                move.video_Tracking_Move(turn_speed, 1)  
             elif tracking_servo_status == 1: 
-                CVThread.scGear.moveAngle(0, -65) # MODIFIÉ : -65° ici aussi
-                CVThread.scGear.moveAngle(1, -35) 
+                CVThread.scGear.moveAngle(0, -65) 
+                CVThread.scGear.moveAngle(1, -35)  
                 move.video_Tracking_Move(turn_speed, 1)
             else:
                 CVThread.scGear.moveAngle(1, 0)
@@ -495,7 +512,7 @@ if __name__ == '__main__':
     Camera.modeSet('findlineCV')
     Camera.CVRunSet(1)
     
-    print("Démarrage du suivi adaptatif (Direction roues + Balayage Caméra)...")
+    print("Démarrage du suivi adaptatif (Direction proportionnelle)...")
     
     try:
         for frame in Camera.frames():
