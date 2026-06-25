@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 # coding: utf-8
 import os
+import sys
+
+# base_camera, Kalman_filter, PID and switch live in web/ — add it to the path
+_web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web')
+if os.path.isdir(_web_dir) and _web_dir not in sys.path:
+    sys.path.insert(0, _web_dir)
+
 import cv2
 from base_camera import BaseCamera
 import RPIservo
