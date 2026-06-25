@@ -24,14 +24,14 @@ GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
 
-# vrais virages
-GAUCHE_FORT = 128
-DROITE_FORT = 65
+# vrais virages (adoucis)
+GAUCHE_FORT = 125
+DROITE_FORT = 68
 
 
 VITESSE_LIGNE = 34
 VITESSE_VIRAGE = 22
-VITESSE_PERDU = 18
+VITESSE_PERDU = 16
 
 
 angle_actuel = CENTRE
@@ -43,21 +43,22 @@ dernier_sens = 0
 
 
 compteur_virage = 0
+compteur_perdu = 0
 
 dernier_etat = (1,1,1)
-compteur_perdu = 0
 
 
 
 # ==========================
-# SERVO
+# SERVO FLUIDE
 # ==========================
 
 def tourner(cible):
 
     global angle_actuel
 
-    # réglage validé sur ton parcours
+
+    # filtre pour éviter les coups secs
     angle_actuel = angle_actuel*0.6 + cible*0.4
 
 
@@ -74,7 +75,9 @@ def tourner(cible):
 
 print("START")
 
+
 tourner(CENTRE)
+
 
 robot.set_motor(1,30)
 
@@ -83,7 +86,7 @@ time.sleep(1)
 
 
 # ==========================
-# BOUCLE PRINCIPALE
+# BOUCLE
 # ==========================
 
 try:
@@ -106,25 +109,29 @@ try:
 
 
         # =====================
-        # CENTRE
+        # LIGNE DROITE
         # =====================
 
         if etat == (1,1,1):
+
 
             compteur_virage = 0
             compteur_perdu = 0
 
 
             cible = CENTRE
+
             vitesse = VITESSE_LIGNE
 
 
 
+
         # =====================
-        # VIRAGE GAUCHE
+        # GAUCHE LEGER
         # =====================
 
         elif etat == (1,1,0):
+
 
             compteur_perdu = 0
 
@@ -139,13 +146,20 @@ try:
 
 
 
+
+        # =====================
+        # GAUCHE FORT
+        # =====================
+
         elif etat == (1,0,0):
+
 
             compteur_perdu = 0
 
             compteur_virage += 1
 
             dernier_sens = 1
+
 
 
             if compteur_virage > 3:
@@ -163,11 +177,13 @@ try:
 
 
 
+
         # =====================
-        # VIRAGE DROITE
+        # DROITE LEGER
         # =====================
 
         elif etat == (0,1,1):
+
 
             compteur_perdu = 0
 
@@ -182,7 +198,13 @@ try:
 
 
 
+
+        # =====================
+        # DROITE FORT
+        # =====================
+
         elif etat == (0,0,1):
+
 
             compteur_perdu = 0
 
@@ -196,7 +218,6 @@ try:
 
                 cible = DROITE_FORT
 
-
             else:
 
                 cible = 75
@@ -208,8 +229,9 @@ try:
 
 
 
+
         # =====================
-        # 000 : POINTILLÉS OU PERDU
+        # PERTE OU POINTILLES
         # =====================
 
         elif etat == (0,0,0):
@@ -219,14 +241,12 @@ try:
 
 
 
-            # ======================
-            # CAS POINTILLÉS
-            # ======================
+            # --------------------
+            # POINTILLES
+            # --------------------
 
-            if dernier_etat == (1,1,1) and compteur_perdu < 25:
+            if dernier_etat == (1,1,1) and compteur_perdu < 20:
 
-
-                # garder trajectoire
 
                 cible = CENTRE
 
@@ -234,11 +254,14 @@ try:
 
 
 
-            # ======================
-            # VRAIE PERTE
-            # ======================
 
-            else:
+            # --------------------
+            # SORTIE VIRAGE
+            # on garde le virage
+            # --------------------
+
+            elif compteur_perdu < 15:
+
 
 
                 if dernier_sens == 1:
@@ -267,6 +290,44 @@ try:
 
 
 
+
+            # --------------------
+            # RECHERCHE LIGNE
+            # on ouvre le volant
+            # --------------------
+
+            else:
+
+
+
+                if dernier_sens == 1:
+
+
+                    cible = GAUCHE_LEGER
+
+
+
+                elif dernier_sens == -1:
+
+
+                    cible = DROITE_LEGER
+
+
+
+                else:
+
+
+                    cible = CENTRE
+
+
+
+                vitesse = 16
+
+
+
+
+        # appliquer direction
+
         tourner(cible)
 
 
@@ -278,9 +339,8 @@ try:
 
 
 
-        # =====================
-        # MEMOIRE
-        # =====================
+
+        # mémoire
 
         if etat != (0,0,0):
 
