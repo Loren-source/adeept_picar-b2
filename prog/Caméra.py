@@ -515,8 +515,42 @@ class Camera(BaseCamera):
     def set_video_source(source):
         Camera.video_source = source
 
+        # _______________________________________________________
+        # Persistent Picamera2 instance shared by capture_frame().
+        # Initialised on the first call to capture_frame(); None until then.
+        _picam2 = None
 
+        @staticmethod
+        def capture_frame():
+            """
+            Capture and return a single frame as a NumPy array (RGB888, 640x480).
 
+            Unlike frames(), this does NOT stream continuously — it captures one
+            frame on demand. The Picamera2 instance is created once and kept open
+            for subsequent calls, so auto-exposure stays stable across calls.
+
+            Returns:
+                A (480, 640, 3) NumPy array compatible with OpenCV (BGR conventions).
+                Returns None if the camera cannot be read.
+            """
+            global hflip, vflip
+            if Camera._picam2 is None:
+                picam2 = Picamera2()
+                cfg = picam2.preview_configuration
+                cfg.size = (640, 480)
+                cfg.format = 'RGB888'
+                cfg.transform = libcamera.Transform(hflip=hflip, vflip=vflip)
+                cfg.colour_space = libcamera.ColorSpace.Sycc()
+                cfg.buffer_count = 4
+                cfg.queue = True
+                try:
+                    picam2.start()
+                    time.sleep(2)  # allow auto-exposure to stabilise on first init
+                except Exception as e:
+                    print(f"\033[38;5;1mCamera init error:\033[0m {e}")
+                    return None
+                Camera._picam2 = picam2
+            return Camera._picam2.capture_array()
 
 
 # _______________________________________________________
