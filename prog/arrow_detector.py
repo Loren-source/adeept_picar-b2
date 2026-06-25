@@ -1,6 +1,6 @@
 """
 arrow_detector.py
-Detect the direction of an arrow in a camera frame using OpenCV corner detection.
+Detect the direction of an arrow in a camera frame using goodFeaturesToTrack.
 """
 
 import cv2
@@ -9,89 +9,77 @@ import numpy as np
 
 def detect_arrow(frame):
     """
-    Analyse a BGR camera frame and return the direction of a visible arrow.
+    Analyse a camera frame and return the direction of a visible arrow.
 
-    Algorithm (geometric approach using goodFeaturesToTrack):
-      1. Convert to grayscale and binarise to isolate the arrow silhouette.
-      2. Detect strong corners with goodFeaturesToTrack — arrow shapes produce
-         distinctive corners at the arrowhead tip and body vertices.
-      3. Compute the centroid of all detected corner points.
-      4. The corner farthest from the centroid is the arrow-tip candidate,
-         because the tip is the most isolated extreme point of the shape.
-      5. The vector centroid → tip gives the arrow direction.
+    Algorithm:
+      1. Binarise the frame to isolate the arrow silhouette.
+      2. Detect corners with goodFeaturesToTrack.
+      3. Split corners into left/right and up/down halves around the centroid.
+      4. The arrowhead (triangle) always has more corners than the body
+         (rectangle): ~5 corners on the head side vs ~2 on the body side.
+         The half with more corners is therefore the arrowhead direction.
+      5. The axis (horizontal vs vertical) with the larger count imbalance
+         determines whether the arrow is left/right or forward.
 
     Args:
-        frame: BGR (or RGB) image as a NumPy array, e.g. from Picamera2.capture_array().
+        frame: NumPy array from Picamera2.capture_array().
 
     Returns:
-        'left', 'right', 'forward', or None if detection fails or is ambiguous.
+        'left', 'right', 'forward', or None if detection is not confident.
     """
     if frame is None:
         return None
 
     # ── Step 1: Pre-processing ────────────────────────────────────────────────
-    # Convert to grayscale — arrow direction depends only on shape, not colour
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-    # Gaussian blur suppresses pixel noise without destroying the arrow's edges
+    gray    = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # Otsu's thresholding automatically picks the optimal threshold to separate
-    # a dark arrow from a lighter background (or vice-versa with THRESH_BINARY_INV)
+    # THRESH_BINARY_INV makes a dark arrow on a light background white,
+    # which is what goodFeaturesToTrack needs.  Otsu picks the threshold.
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-    # Morphological closing fills small gaps inside the arrow silhouette so
-    # the corners of the shape are cleaner
+    # Close small gaps inside the silhouette for cleaner corner detection
     kernel = np.ones((3, 3), np.uint8)
     binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
 
     # ── Step 2: Corner detection ──────────────────────────────────────────────
-    # goodFeaturesToTrack returns the N strongest "Shi-Tomasi" corners.
-    # An arrow shape reliably produces corners at the three arrowhead vertices
-    # (including the tip) and at the four corners of the rectangular body.
     corners = cv2.goodFeaturesToTrack(
         binary,
-        maxCorners=50,      # upper limit; we use the statistical spread, not every point
-        qualityLevel=0.01,  # accept corners with at least 1 % of the best corner's quality
-        minDistance=10,     # discard corners closer than 10 px to each other
-        blockSize=7         # pixel neighbourhood used to compute corner quality
+        maxCorners=50,
+        qualityLevel=0.01,
+        minDistance=10,
+        blockSize=7
     )
 
     if corners is None or len(corners) < 4:
-        # Too few corners — likely no arrow visible or too much noise
         return None
 
-    # Reshape from (N, 1, 2) to (N, 2): each row is an (x, y) coordinate
     pts = corners.reshape(-1, 2).astype(np.float32)
 
-    # ── Step 3: Centroid of the corner point cloud ────────────────────────────
+    # ── Step 3: Count corners on each side of the centroid ───────────────────
+    # The centroid of the detected corners acts as the dividing line.
+    # It sits between the arrowhead and the body automatically.
     centroid = pts.mean(axis=0)   # (cx, cy)
 
-    # ── Step 4: Identify the arrow tip ───────────────────────────────────────
-    # The arrowhead tip is geometrically isolated — it is the single extreme
-    # point that protrudes farthest from the body, so it sits farthest from
-    # the centroid of all corners.
-    dists = np.linalg.norm(pts - centroid, axis=1)
-    max_dist = float(np.max(dists))
+    right_count = int(np.sum(pts[:, 0] > centroid[0]))
+    left_count  = int(np.sum(pts[:, 0] < centroid[0]))
+    up_count    = int(np.sum(pts[:, 1] < centroid[1]))   # y is downward in image
+    down_count  = int(np.sum(pts[:, 1] > centroid[1]))
 
-    # If the farthest corner is not clearly separated (< 20 px from centroid),
-    # the point cloud is too compact to be an arrow — return None
-    if max_dist < 20:
-        return None
+    h_diff = abs(right_count - left_count)   # horizontal imbalance
+    v_diff = abs(up_count    - down_count)   # vertical imbalance
 
-    tip = pts[np.argmax(dists)]   # (x, y) of the arrow tip
+    # ── Step 4 & 5: Pick the dominant axis and arrowhead side ────────────────
+    # Require a minimum imbalance of 2 to avoid returning a direction
+    # when the corner distribution is nearly symmetric (ambiguous frame).
+    MIN_IMBALANCE = 2
 
-    # ── Step 5: Map centroid → tip vector to a cardinal direction ─────────────
-    # Image coordinate system: x increases to the right, y increases downward.
-    dx = float(tip[0] - centroid[0])   # positive = tip is to the right
-    dy = float(tip[1] - centroid[1])   # positive = tip is below centroid
+    if h_diff < MIN_IMBALANCE and v_diff < MIN_IMBALANCE:
+        return None   # not confident enough
 
-    # The dominant axis (horizontal vs. vertical) determines the direction:
-    #   |dx| > |dy|  →  arrow is mainly horizontal  →  left or right
-    #   |dy| > |dx|  →  arrow is mainly vertical:
-    #                     tip above centroid (dy < 0) = arrow pointing up = forward
-    #                     tip below centroid (dy > 0) = downward arrow (unused)
-    if abs(dx) > abs(dy):
-        return 'right' if dx > 0 else 'left'
+    if h_diff >= v_diff:
+        # Horizontal arrow: the side with more corners is the arrowhead
+        return 'right' if right_count > left_count else 'left'
     else:
-        return 'forward' if dy < 0 else None
+        # Vertical arrow: more corners above centroid = arrow points up = forward
+        return 'forward' if up_count > down_count else None
