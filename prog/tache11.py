@@ -45,9 +45,9 @@ dernier_sens = 0
 
 
 compteur_virage = 0
-compteur_perdu = 0
 
 dernier_etat = (1,1,1)
+compteur_perdu = 0
 
 
 
@@ -75,6 +75,7 @@ def tourner(cible):
 # ==========================
 
 print("START")
+
 
 tourner(CENTRE)
 
@@ -108,7 +109,7 @@ try:
 
 
         # =====================
-        # LIGNE DROITE
+        # LIGNE CENTREE
         # =====================
 
         if etat == (1,1,1):
@@ -131,7 +132,6 @@ try:
         elif etat == (1,1,0):
 
             compteur_perdu = 0
-
             compteur_virage += 1
 
             dernier_sens = 1
@@ -182,16 +182,17 @@ try:
             dernier_sens = -1
 
 
+
             if compteur_virage > 2:
 
                 cible = DROITE_FORT
                 vitesse = VITESSE_VIRAGE
 
-
             else:
 
                 cible = DROITE_LEGER
                 vitesse = VITESSE_APPROCHE
+
 
 
 
@@ -216,7 +217,6 @@ try:
 
 
 
-
         # =====================
         # POINTILLES OU PERTE
         # =====================
@@ -232,19 +232,31 @@ try:
             # POINTILLES
             # =====================
 
-            if compteur_perdu < 18:
+            if compteur_perdu < 45:
 
 
-                # garde exactement la trajectoire
-                cible = angle_actuel
+                # robot presque droit :
+                # on traverse les blancs droit
+                if 85 < angle_actuel < 110:
 
-                vitesse = VITESSE_LIGNE
+                    cible = CENTRE
+
+
+                # sinon on garde son angle
+                else:
+
+                    cible = angle_actuel
+
+
+
+                vitesse = 25
+
 
 
 
 
             # =====================
-            # VRAIE PERTE
+            # VRAIMENT PERDU
             # =====================
 
             else:
@@ -280,7 +292,7 @@ try:
 
 
         # =====================
-        # APPLICATION
+        # ACTION
         # =====================
 
         tourner(cible)
@@ -294,7 +306,8 @@ try:
 
 
 
-        # mémoire ligne
+
+        # mémoire dernière ligne vue
 
         if etat != (0,0,0):
 
@@ -310,7 +323,6 @@ try:
 
 
 
-
 except KeyboardInterrupt:
 
 
@@ -320,4 +332,7 @@ except KeyboardInterrupt:
     robot.stopper()
 
 
-    servos.set_angle(0,CENTRE)
+    servos.set_angle(
+        0,
+        CENTRE
+    )
