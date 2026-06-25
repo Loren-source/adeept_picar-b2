@@ -19,20 +19,20 @@ tracker = LineTracker()
 CENTRE = 97
 
 
-# corrections
+# petites corrections
 GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
 
-# vrais virages
-GAUCHE_FORT = 128
-DROITE_FORT = 65
+# vrais virages (corrigés)
+GAUCHE_FORT = 124
+DROITE_FORT = 68
 
 
 # vitesses
 VITESSE_LIGNE = 34
 VITESSE_APPROCHE = 30
-VITESSE_VIRAGE = 22      # MODIFIÉ
+VITESSE_VIRAGE = 22
 VITESSE_PERDU = 16
 
 
@@ -85,7 +85,7 @@ time.sleep(1)
 
 
 # ==========================
-# BOUCLE
+# BOUCLE PRINCIPALE
 # ==========================
 
 try:
@@ -108,14 +108,13 @@ try:
 
 
         # =====================
-        # LIGNE CENTREE
+        # LIGNE DROITE
         # =====================
 
         if etat == (1,1,1):
 
             compteur_virage = 0
             compteur_perdu = 0
-
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
@@ -125,7 +124,7 @@ try:
 
 
         # =====================
-        # GAUCHE LEGER
+        # VIRAGE GAUCHE
         # =====================
 
         elif etat == (1,1,0):
@@ -133,38 +132,30 @@ try:
             compteur_perdu = 0
             compteur_virage += 1
 
-
             dernier_sens = 1
 
 
             if compteur_virage > 4:
 
-                cible = 120
+                cible = 118
 
             else:
 
                 cible = GAUCHE_LEGER
 
 
-
-            vitesse = VITESSE_APPROCHE
-
+            vitesse = 28
 
 
 
 
-        # =====================
-        # GAUCHE FORT
-        # =====================
 
         elif etat == (1,0,0):
 
             compteur_perdu = 0
             compteur_virage += 1
 
-
             dernier_sens = 1
-
 
 
             if compteur_virage > 3:
@@ -173,8 +164,7 @@ try:
 
             else:
 
-                cible = 122
-
+                cible = 120
 
 
             vitesse = VITESSE_VIRAGE
@@ -185,7 +175,7 @@ try:
 
 
         # =====================
-        # DROITE LEGER
+        # VIRAGE DROITE
         # =====================
 
         elif etat == (0,1,1):
@@ -193,40 +183,30 @@ try:
             compteur_perdu = 0
             compteur_virage += 1
 
-
             dernier_sens = -1
-
 
 
             if compteur_virage > 4:
 
-                cible = 75
+                cible = 76
 
             else:
 
                 cible = DROITE_LEGER
 
 
-
-            vitesse = VITESSE_APPROCHE
-
+            vitesse = 28
 
 
 
 
-
-        # =====================
-        # DROITE FORT
-        # =====================
 
         elif etat == (0,0,1):
 
             compteur_perdu = 0
             compteur_virage += 1
 
-
             dernier_sens = -1
-
 
 
             if compteur_virage > 3:
@@ -235,8 +215,7 @@ try:
 
             else:
 
-                cible = 72
-
+                cible = 74
 
 
             vitesse = VITESSE_VIRAGE
@@ -246,40 +225,33 @@ try:
 
 
 
-
-
         # =====================
-        # 000 : POINTILLÉS / PERDU
+        # 000 : POINTILLE / PERDU
         # =====================
 
         elif etat == (0,0,0):
-
 
             compteur_perdu += 1
 
 
 
-            # ---------------------
-            # POINTILLÉS
-            # ---------------------
+            # ==================
+            # POINTILLES
+            # ==================
 
             if compteur_perdu < 20:
 
 
-
-                # il venait droit
                 if dernier_etat == (1,1,1):
 
-
+                    # trou dans ligne droite
                     cible = CENTRE
                     vitesse = VITESSE_LIGNE
 
 
-
-                # coupure pendant virage
                 else:
 
-
+                    # garder trajectoire actuelle
                     cible = angle_actuel
                     vitesse = VITESSE_APPROCHE
 
@@ -287,33 +259,28 @@ try:
 
 
 
-
-            # ---------------------
+            # ==================
             # VRAIE PERTE
-            # ---------------------
+            # ==================
 
             else:
 
 
                 if dernier_sens == 1:
 
-
-                    cible = GAUCHE_FORT
-
+                    # récupération gauche douce
+                    cible = 118
 
 
                 elif dernier_sens == -1:
 
-
-                    cible = DROITE_FORT
-
+                    # récupération droite douce
+                    cible = 76
 
 
                 else:
 
-
                     cible = CENTRE
-
 
 
                 vitesse = VITESSE_PERDU
@@ -322,12 +289,9 @@ try:
 
 
 
-
-
         # =====================
         # APPLICATION
         # =====================
-
 
         tourner(cible)
 
@@ -339,7 +303,6 @@ try:
 
 
 
-
         # mémoire
 
         if etat != (0,0,0):
@@ -348,9 +311,7 @@ try:
 
 
 
-
         time.sleep(0.025)
-
 
 
 
@@ -361,9 +322,7 @@ except KeyboardInterrupt:
 
     print("STOP")
 
-
     robot.stopper()
-
 
     servos.set_angle(
         0,
