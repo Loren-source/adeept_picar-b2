@@ -269,10 +269,9 @@ class CVThread(threading.Thread):
         global findLineMove
         lineColorSet = 255 
         
-        # Correction : Picamera2 capture en RGB, conversion RGB -> HSV
+        # CORRECTION : La caméra capture en RGB. Conversion RGB -> HSV requise pour isoler le rouge
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV)
         
-        # Plages de couleurs pour le Rouge en HSV
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
         lower_red2 = np.array([170, 70, 50])
@@ -327,7 +326,7 @@ class CVThread(threading.Thread):
         self.findLineCtrl(self.center)
         self.pause()
 
-    # AJOUT IMPÉRATIF DU DÉCORATEUR @staticmethod
+    # CORRECTION : Ajout du décorateur statique pour empêcher le crash du Thread
     @staticmethod
     def servoMove(ID, Dir, errorInput):
         if not CVThread.hardware_is_ready:
@@ -351,11 +350,8 @@ class CVThread(threading.Thread):
         time.sleep(0.1)
 
     def findColor(self, frame_image):
-        global APPMode
-        if APPMode == 'APP':
-            hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV) # Corrigé pour Picamera2 (RGB)
-        else:
-            hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV) # Corrigé pour Picamera2 (RGB)
+        # CORRECTION : Picamera2 capture en RGB
+        hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV)
         mask = cv2.inRange(hsv, colorLower, colorUpper)
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
@@ -446,47 +442,50 @@ class Camera(object):
         global ImgIsNone, hflip, vflip
         
         if not hardware_available:
-            print("Erreur : Picamera2 non disponible en mode simulation.")
+            print("Erreur : Impossible d'utiliser Picamera2 sans matériel.")
             return
 
         picam2 = Picamera2() 
         
-        # Configuration correcte et moderne pour Picamera2
+        # CORRECTION : Configuration normalisée pour Picamera2 (Bookworm / Bullseye)
         config = picam2.create_preview_configuration()
         config["main"]["size"] = (640, 480)
         config["main"]["format"] = "RGB888"
-        
-        # Gestion optionnelle des flips selon les fonctionnalités de la version installée
         picam2.configure(config)
 
         try:
             picam2.start()
+            print("Picamera2 démarrée avec succès.")
         except Exception as e:
             print(f"Error starting Picamera2: {e}")
             return
 
         cvt = CVThread()
-        cvt.daemon = True # Évite de bloquer le script à la fermeture
+        cvt.daemon = True # Permet au programme de s'arrêter proprement avec Ctrl+C
         cvt.start()
 
         while True:
+            # Diagnostic 1: Est-ce que la caméra capture l'image ?
             img = picam2.capture_array()
 
             if img is None:
+                print("Diagnostic : Image reçue vide (None)...")
                 continue
             
             if Camera.modeSelect == 'none':
                 cvt.pause()
             else:
                 if not cvt.CVThreading:
-                    cvt.mode(Camera.modeSelect, img.copy()) # .copy() évite les conflits d'accès mémoire entre threads
+                    # Diagnostic 2: Transmission de la frame au thread de traitement
+                    print(f"Diagnostic : Envoi d'une frame au traitement OpenCV. Mode : {Camera.modeSelect}")
+                    cvt.mode(Camera.modeSelect, img.copy())
                     cvt.resume()
                 try:
                     img = cvt.elementDraw(img)
                 except Exception as e:
                     pass
 
-            # Conversion RGB (Picam) -> BGR (OpenCV s'attend à du BGR pour imencode)
+            # CORRECTION : OpenCV exige du BGR pour l'encodage d'image JPEG de sortie
             img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             if cv2.imencode('.jpg', img_bgr)[0]:
                 yield cv2.imencode('.jpg', img_bgr)[1].tobytes()
@@ -506,8 +505,7 @@ if __name__ == '__main__':
             for frame in Camera.frames():
                 time.sleep(0.01)
         else:
-            print("Exécution en mode virtuel (Simulation PC). Aucun flux Picamera2.")
-            # Mode simulation : On simule l'activité du thread pour le test syntaxique
+            print("Exécution en mode virtuel (Simulation PC).")
             cvt = CVThread()
             cvt.start()
             while True:
@@ -519,5 +517,6 @@ if __name__ == '__main__':
             try:
                 import move
                 move.motorStop()
-            except:
-                pass
+                print("Moteurs coupés avec succès.")
+            except Exception as e:
+                print(f"Impossible de stopper les moteurs : {e}")
