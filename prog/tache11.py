@@ -312,4 +312,4 @@ except KeyboardInterrupt:
 
 
     servos.set_angle(0,CENTRE)
-Il fait les 3 virages mais rate les pointillés
+
