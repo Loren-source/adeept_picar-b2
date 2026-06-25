@@ -7,43 +7,43 @@ import imutils
 import sys
 import os
 
-# Forcer Python à regarder dans le dossier local du script pour trouver RPIservo et move
+# Forcer Python à regarder dans le dossier local du script
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-# Gestion des imports matériels réels (RPIservo, move, picamera2)
+# Gestion des imports matériels réels
+hardware_available = False
 try:
     import RPIservo
     import move
-    from picamera2 import Picamera2  
-    import libcamera
+    from picamera2 import Picamera2  # Version moderne pour Raspberry Pi OS
     print("Matériel détecté et initialisé avec succès.")
+    hardware_available = True
 except ImportError as e:
     print(f"Mode simulation ou dépendance manquante : {e}")
 
+# CLASSE VIRTUELLE POUR S'AFFRANCHIR DU FICHIER KALMAN_FILTER.PY MANQUANT
 class DummyKalman:
     def __init__(self, *args): 
         pass
     def kalman(self, val): 
         return val
 
-# ==============================================================================
-# VARIABLES GLOBALES DE CONFIGURATION
-# ==============================================================================
+# Variables globales de configuration
 APPMode = 'none'
-colorUpper = np.array([15, 255, 255])
-colorLower = np.array([0, 50, 40])
+colorUpper = np.array([10, 255, 255])
+colorLower = np.array([0, 0, 0])
 CVRun = 1
-linePos_1 = 280      # Remonté pour anticiper le virage plus tôt
-linePos_2 = 420      # Bas de l'image (juste devant le robot)
-lineColorSet = 255   
+linePos_1 = 340      # Hauteur de la ligne d'analyse supérieure
+linePos_2 = 420      # Hauteur de la ligne d'analyse inférieure
+lineColorSet = 255   # Par défaut à 255 pour le masque blanc
 frameRender = 1
 Threshold = 80
 findLineMove = 1
 tracking_servo_status = 0
 FLCV_Status = 0
-turn_speed = 22      # Vitesse réduite pour donner du couple dans le virage serré
+turn_speed = 40
 ImgIsNone = 0
 hflip = False
 vflip = False
@@ -51,6 +51,7 @@ vflip = False
 class CVThread(threading.Thread):
     font = cv2.FONT_HERSHEY_SIMPLEX
 
+    # Utilisation de la classe virtuelle
     kalman_filter_X = DummyKalman()
     kalman_filter_Y = DummyKalman()
     P_direction = -1
@@ -66,15 +67,21 @@ class CVThread(threading.Thread):
     Y_lock = 0
     X_lock = 0
     tor = 17
+    
+    # Rendre la variable accessible à la classe
+    hardware_is_ready = hardware_available
 
-    try:
-        scGear = RPIservo.ServoCtrl()
-        scGear.moveInit()
-        move.setup()
-        hardware_available = True
-    except NameError:
-        print("Avertissement : RPIservo ou move indisponible. Utilisation du mode virtuel.")
-        hardware_available = False
+    if hardware_available:
+        try:
+            scGear = RPIservo.ServoCtrl()
+            scGear.moveInit()
+            move.setup()
+        except Exception as e:
+            print(f"Erreur initialisation matériel : {e}")
+            hardware_is_ready = False
+
+    if not hardware_available or not hardware_is_ready:
+        print("Avertissement : Utilisation du mode virtuel pour les moteurs/servos.")
         class DummyGear:
             def moveAngle(self, id, angle): pass
             def stopWiggle(self): pass
@@ -146,8 +153,8 @@ class CVThread(threading.Thread):
                               (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
 
         elif self.CVMode == 'findlineCV':
-            if CVThread.hardware_available:
-                CVThread.scGear.moveAngle(2, -18) 
+            if CVThread.hardware_is_ready:
+                CVThread.scGear.moveAngle(2, -15) # Oriente la caméra vers le sol
 
             try:
                 cv2.putText(imgInput, 'Following Red Line', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
@@ -166,8 +173,8 @@ class CVThread(threading.Thread):
                     center_y = int((linePos_1 + linePos_2) / 2)
                     cv2.line(imgInput, ((self.center - 20), center_y), ((self.center + 20), center_y), (0, 0, 0), 1)
                     cv2.line(imgInput, ((self.center), center_y + 20), ((self.center), center_y - 20), (0, 0, 0), 1)
-            except:
-                pass
+            except Exception as e:
+                print(f"Erreur d'affichage elementDraw: {e}")
 
         elif self.CVMode == 'watchDog':
             if self.drawing:
@@ -181,7 +188,8 @@ class CVThread(threading.Thread):
 
         if self.avg is None:
             self.avg = gray.copy().astype("float")
-            return 'background model'
+            self.pause()
+            return
 
         cv2.accumulateWeighted(gray, self.avg, 0.5)
         self.frameDelta = cv2.absdiff(gray, cv2.convertScaleAbs(self.avg))
@@ -200,22 +208,19 @@ class CVThread(threading.Thread):
             self.motionCounter += 1
             self.lastMovtionCaptured = datetime.datetime.now()
 
-        if (datetime.datetime.now() - self.lastMovtionCaptured).seconds >= 0.5:
+        if (datetime.datetime.now() - self.lastMovtionCaptured).total_seconds() >= 0.5:
             self.drawing = 0
         self.pause()
 
-    # ==============================================================================
-    # CONTROLE DE LA TRAJECTOIRE CORRIGÉ (PROPORTIONNEL POUR ÉVITER LES TREMBLEMENTS)
-    # ==============================================================================
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
-        if not CVThread.hardware_available:
+        if not CVThread.hardware_is_ready:
             return
 
         if FLCV_Status == 0:    
-            CVThread.scGear.moveAngle(0, 0) 
-            CVThread.scGear.moveAngle(1, 0) 
-            CVThread.scGear.moveAngle(2, -18) 
+            CVThread.scGear.moveAngle(0, 0)
+            CVThread.scGear.moveAngle(1, 0)
+            CVThread.scGear.moveAngle(2, 0)
             FLCV_Status = 1
             
         if posInput is not None and findLineMove == 1:
@@ -225,84 +230,60 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            # 1. Calcul de l'écart par rapport au centre de l'image (320)
-            error_center = posInput - 320  # Négatif à gauche, Positif à droite
-
-            # 2. Zone morte : Si le robot est presque aligné, on reste droit (évite les micro-oscillations)
-            if abs(error_center) < 30:
-                tracking_servo_status = 0
+            if posInput > 480: # Déviation à droite
+                tracking_servo_status = 1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, 0)
-                    CVThread.scGear.moveAngle(1, 0)
-                    move.video_Tracking_Move(turn_speed, 1)
+                    CVThread.scGear.moveAngle(0, -30) 
+                    move.video_Tracking_Move(turn_speed, 1) 
                 else:
+                    CVThread.scGear.moveAngle(0, 0)
                     move.motorStop()
 
-            else:
-                # 3. Calcul de l'angle proportionnel fluide
-                # Max error possible ~ 320 pixels. Angle max désiré = 65°
-                # Kp = 65 / 320 ≈ 0.20. On utilise 0.22 pour garder un peu de nervosité.
-                Kp_wheels = 0.22  
-                Kp_cam = 0.08     # Suivi de la caméra un peu plus doux
-
-                # Calcul théorique des angles
-                target_angle_wheels = int(error_center * Kp_wheels)
-                target_angle_cam = int(error_center * Kp_cam)
-
-                # Saturation (Limitation stricte pour protéger les servos)
-                target_angle_wheels = max(min(target_angle_wheels, 65), -65)
-                target_angle_cam = max(min(target_angle_cam, 35), -35)
-
-                # Adaptation des directions (inversion nécessaire selon votre matériel d'origine)
-                servo_wheel_angle = -target_angle_wheels
-                servo_cam_angle = -target_angle_cam
-
-                if error_center > 0:
-                    tracking_servo_status = 1  # Ligne détectée à droite
-                else:
-                    tracking_servo_status = -1 # Ligne détectée à gauche
-
+            elif posInput < 180: # Déviation à gauche
+                tracking_servo_status = -1 
                 if CVRun:
-                    CVThread.scGear.moveAngle(0, servo_wheel_angle)
-                    CVThread.scGear.moveAngle(1, servo_cam_angle)
-                    move.video_Tracking_Move(turn_speed, 1)
+                    CVThread.scGear.moveAngle(0, 30) 
+                    move.video_Tracking_Move(turn_speed, 1) 
                 else:
                     CVThread.scGear.moveAngle(0, 0)
-                    CVThread.scGear.moveAngle(1, 0)
                     move.motorStop()
                         
+            else: # Centré
+                tracking_servo_status = 0 
+                if CVRun:
+                    CVThread.scGear.moveAngle(0, 0) 
+                    move.video_Tracking_Move(turn_speed, 1) 
+                else: 
+                    move.motorStop()
         else: 
-            # En cas de perte de la ligne, comportement de sauvegarde (maintien du dernier braquage)
+            move.motorStop() 
+            FLCV_Status = -1
             if tracking_servo_status == -1: 
-                CVThread.scGear.moveAngle(0, 65)  
-                CVThread.scGear.moveAngle(1, 35)  
-                move.video_Tracking_Move(turn_speed, 1)  
+                CVThread.scGear.moveAngle(0, 30) 
+                move.video_Tracking_Move(turn_speed, 1) 
             elif tracking_servo_status == 1: 
-                CVThread.scGear.moveAngle(0, -65) 
-                CVThread.scGear.moveAngle(1, -35)  
-                move.video_Tracking_Move(turn_speed, 1)
-            else:
-                CVThread.scGear.moveAngle(1, 0)
-                move.motorStop() 
+                CVThread.scGear.moveAngle(0, -30) 
+                move.video_Tracking_Move(turn_speed, 1) 
 
     def findlineCV(self, frame_image):
         global findLineMove
         lineColorSet = 255 
         
-        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
+        # Correction : Picamera2 capture en RGB, conversion RGB -> HSV
+        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV)
         
-        lower_red1 = np.array([0, 50, 40])
-        upper_red1 = np.array([15, 255, 255])
-        lower_red2 = np.array([165, 50, 40])
+        # Plages de couleurs pour le Rouge en HSV
+        lower_red1 = np.array([0, 70, 50])
+        upper_red1 = np.array([10, 255, 255])
+        lower_red2 = np.array([170, 70, 50])
         upper_red2 = np.array([180, 255, 255])
         
         mask1 = cv2.inRange(frame_hsv, lower_red1, upper_red1)
         mask2 = cv2.inRange(frame_hsv, lower_red2, upper_red2)
         frame_findline = cv2.bitwise_or(mask1, mask2)
         
-        frame_findline = cv2.GaussianBlur(frame_findline, (5, 5), 0)
         frame_findline = cv2.erode(frame_findline, None, iterations=2)
-        frame_findline = cv2.dilate(frame_findline, None, iterations=3)
+        frame_findline = cv2.dilate(frame_findline, None, iterations=2)
         
         colorPos_1 = frame_findline[linePos_1]
         colorPos_2 = frame_findline[linePos_2]
@@ -315,12 +296,12 @@ class CVThread(threading.Thread):
             lineIndex_Pos2 = np.where(colorPos_2 == lineColorSet)
 
             if lineIndex_Pos1[0].size > 0:
-                if abs(lineIndex_Pos1[0][-1] - lineIndex_Pos1[0][0]) > 550:
+                if abs(lineIndex_Pos1[0][-1] - lineIndex_Pos1[0][0]) > 500:
                     findLineMove = 0    
                 else:
                     findLineMove = 1
             elif lineIndex_Pos2[0].size > 0:
-                if abs(lineIndex_Pos2[0][-1] - lineIndex_Pos2[0][0]) > 550:
+                if abs(lineIndex_Pos2[0][-1] - lineIndex_Pos2[0][0]) > 500:
                     findLineMove = 0
                 else:
                     findLineMove = 1
@@ -346,8 +327,10 @@ class CVThread(threading.Thread):
         self.findLineCtrl(self.center)
         self.pause()
 
+    # AJOUT IMPÉRATIF DU DÉCORATEUR @staticmethod
+    @staticmethod
     def servoMove(ID, Dir, errorInput):
-        if not CVThread.hardware_available:
+        if not CVThread.hardware_is_ready:
             return
         if ID == 1:
             errorGenOut = CVThread.kalman_filter_X.kalman(errorInput)
@@ -370,9 +353,9 @@ class CVThread(threading.Thread):
     def findColor(self, frame_image):
         global APPMode
         if APPMode == 'APP':
-            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV) # Corrigé pour Picamera2 (RGB)
         else:
-            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV) # Corrigé pour Picamera2 (RGB)
         mask = cv2.inRange(hsv, colorLower, colorUpper)
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
@@ -461,35 +444,33 @@ class Camera(object):
     @staticmethod
     def frames():
         global ImgIsNone, hflip, vflip
+        
+        if not hardware_available:
+            print("Erreur : Picamera2 non disponible en mode simulation.")
+            return
+
         picam2 = Picamera2() 
         
-        preview_config = picam2.preview_configuration
-        preview_config.size = (640, 480)
-        preview_config.format = 'RGB888'
-        preview_config.transform = libcamera.Transform(hflip=hflip, vflip=vflip)
-        preview_config.colour_space = libcamera.ColorSpace.Sycc()
-        preview_config.buffer_count = 4
-        preview_config.queue = True
-
-        if not picam2.is_open:
-            raise RuntimeError('Could not start camera.')
+        # Configuration correcte et moderne pour Picamera2
+        config = picam2.create_preview_configuration()
+        config["main"]["size"] = (640, 480)
+        config["main"]["format"] = "RGB888"
+        
+        # Gestion optionnelle des flips selon les fonctionnalités de la version installée
+        picam2.configure(config)
 
         try:
             picam2.start()
         except Exception as e:
             print(f"Error starting Picamera2: {e}")
+            return
 
         cvt = CVThread()
+        cvt.daemon = True # Évite de bloquer le script à la fermeture
         cvt.start()
 
         while True:
-            try:
-                request = picam2.capture_request()
-                img = request.make_array('main')
-                request.release()
-            except Exception:
-                time.sleep(0.01)
-                continue
+            img = picam2.capture_array()
 
             if img is None:
                 continue
@@ -498,29 +479,45 @@ class Camera(object):
                 cvt.pause()
             else:
                 if not cvt.CVThreading:
-                    cvt.mode(Camera.modeSelect, img)
+                    cvt.mode(Camera.modeSelect, img.copy()) # .copy() évite les conflits d'accès mémoire entre threads
                     cvt.resume()
                 try:
                     img = cvt.elementDraw(img)
-                except:
+                except Exception as e:
                     pass
 
-            if cv2.imencode('.jpg', img)[0]:
-                yield cv2.imencode('.jpg', img)[1].tobytes()
+            # Conversion RGB (Picam) -> BGR (OpenCV s'attend à du BGR pour imencode)
+            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+            if cv2.imencode('.jpg', img_bgr)[0]:
+                yield cv2.imencode('.jpg', img_bgr)[1].tobytes()
 
+
+# ==========================================
+# BOUCLE PRINCIPALE D'ACTIVATION DU ROBOT
+# ==========================================
 if __name__ == '__main__':
     Camera.modeSet('findlineCV')
     Camera.CVRunSet(1)
     
-    print("Démarrage du suivi adaptatif (Direction proportionnelle)...")
+    print("Démarrage du flux vidéo et du suivi de la ligne rouge...")
     
     try:
-        for frame in Camera.frames():
-            time.sleep(0.01)
-            
+        if hardware_available:
+            for frame in Camera.frames():
+                time.sleep(0.01)
+        else:
+            print("Exécution en mode virtuel (Simulation PC). Aucun flux Picamera2.")
+            # Mode simulation : On simule l'activité du thread pour le test syntaxique
+            cvt = CVThread()
+            cvt.start()
+            while True:
+                time.sleep(1)
+                
     except KeyboardInterrupt:
-        print("\nArrêt.")
-        try:
-            move.motorStop()
-        except:
-            pass
+        print("\nArrêt du robot demandé par l'utilisateur.")
+        if hardware_available:
+            try:
+                import move
+                move.motorStop()
+            except:
+                pass
