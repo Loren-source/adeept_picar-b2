@@ -7,19 +7,18 @@ import imutils
 import sys
 import os
 
-# Forcer Python à regarder dans le dossier local du script
+# Forcer Python à regarder dans le dossier local du script pour trouver RPIservo et move
 script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-# Gestion des imports matériels réels
-hardware_available = False
+# Gestion des imports matériels réels (RPIservo, move, picamera2)
 try:
     import RPIservo
     import move
-    from picamera2 import Picamera2  # Version moderne pour Raspberry Pi OS
+    from picamera2 import Picamera2  # Version moderne pour Raspberry Pi OS (Bookworm/Bullseye)
+    import libcamera
     print("Matériel détecté et initialisé avec succès.")
-    hardware_available = True
 except ImportError as e:
     print(f"Mode simulation ou dépendance manquante : {e}")
 
@@ -51,7 +50,7 @@ vflip = False
 class CVThread(threading.Thread):
     font = cv2.FONT_HERSHEY_SIMPLEX
 
-    # Utilisation de la classe virtuelle
+    # Utilisation de la classe virtuelle pour stabiliser sans dépendance externe
     kalman_filter_X = DummyKalman()
     kalman_filter_Y = DummyKalman()
     P_direction = -1
@@ -67,21 +66,16 @@ class CVThread(threading.Thread):
     Y_lock = 0
     X_lock = 0
     tor = 17
-    
-    # Rendre la variable accessible à la classe
-    hardware_is_ready = hardware_available
 
-    if hardware_available:
-        try:
-            scGear = RPIservo.ServoCtrl()
-            scGear.moveInit()
-            move.setup()
-        except Exception as e:
-            print(f"Erreur initialisation matériel : {e}")
-            hardware_is_ready = False
-
-    if not hardware_available or not hardware_is_ready:
-        print("Avertissement : Utilisation du mode virtuel pour les moteurs/servos.")
+    # Initialisation sécurisée du matériel si disponible
+    try:
+        scGear = RPIservo.ServoCtrl()
+        scGear.moveInit()
+        move.setup()
+        hardware_available = True
+    except NameError:
+        print("Avertissement : RPIservo ou move indisponible. Utilisation du mode virtuel.")
+        hardware_available = False
         class DummyGear:
             def moveAngle(self, id, angle): pass
             def stopWiggle(self): pass
@@ -153,7 +147,7 @@ class CVThread(threading.Thread):
                               (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
 
         elif self.CVMode == 'findlineCV':
-            if CVThread.hardware_is_ready:
+            if CVThread.hardware_available:
                 CVThread.scGear.moveAngle(2, -15) # Oriente la caméra vers le sol
 
             try:
@@ -173,8 +167,8 @@ class CVThread(threading.Thread):
                     center_y = int((linePos_1 + linePos_2) / 2)
                     cv2.line(imgInput, ((self.center - 20), center_y), ((self.center + 20), center_y), (0, 0, 0), 1)
                     cv2.line(imgInput, ((self.center), center_y + 20), ((self.center), center_y - 20), (0, 0, 0), 1)
-            except Exception as e:
-                print(f"Erreur d'affichage elementDraw: {e}")
+            except:
+                pass
 
         elif self.CVMode == 'watchDog':
             if self.drawing:
@@ -188,8 +182,7 @@ class CVThread(threading.Thread):
 
         if self.avg is None:
             self.avg = gray.copy().astype("float")
-            self.pause()
-            return
+            return 'background model'
 
         cv2.accumulateWeighted(gray, self.avg, 0.5)
         self.frameDelta = cv2.absdiff(gray, cv2.convertScaleAbs(self.avg))
@@ -208,13 +201,13 @@ class CVThread(threading.Thread):
             self.motionCounter += 1
             self.lastMovtionCaptured = datetime.datetime.now()
 
-        if (datetime.datetime.now() - self.lastMovtionCaptured).total_seconds() >= 0.5:
+        if (datetime.datetime.now() - self.lastMovtionCaptured).seconds >= 0.5:
             self.drawing = 0
         self.pause()
 
     def findLineCtrl(self, posInput):
         global findLineMove, tracking_servo_status, FLCV_Status
-        if not CVThread.hardware_is_ready:
+        if not CVThread.hardware_available:
             return
 
         if FLCV_Status == 0:    
@@ -269,9 +262,8 @@ class CVThread(threading.Thread):
         global findLineMove
         lineColorSet = 255 
         
-        # CORRECTION : La caméra capture en RGB. Conversion RGB -> HSV requise pour isoler le rouge
-        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV)
-        
+        # Traitement OpenCV pour isoler le rouge
+        frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
         lower_red2 = np.array([170, 70, 50])
@@ -326,10 +318,8 @@ class CVThread(threading.Thread):
         self.findLineCtrl(self.center)
         self.pause()
 
-    # CORRECTION : Ajout du décorateur statique pour empêcher le crash du Thread
-    @staticmethod
     def servoMove(ID, Dir, errorInput):
-        if not CVThread.hardware_is_ready:
+        if not CVThread.hardware_available:
             return
         if ID == 1:
             errorGenOut = CVThread.kalman_filter_X.kalman(errorInput)
@@ -350,8 +340,11 @@ class CVThread(threading.Thread):
         time.sleep(0.1)
 
     def findColor(self, frame_image):
-        # CORRECTION : Picamera2 capture en RGB
-        hsv = cv2.cvtColor(frame_image, cv2.COLOR_RGB2HSV)
+        global APPMode
+        if APPMode == 'APP':
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2RGB)
+        else:
+            hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, colorLower, colorUpper)
         mask = cv2.erode(mask, None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
@@ -440,83 +433,67 @@ class Camera(object):
     @staticmethod
     def frames():
         global ImgIsNone, hflip, vflip
-        
-        if not hardware_available:
-            print("Erreur : Impossible d'utiliser Picamera2 sans matériel.")
-            return
-
         picam2 = Picamera2() 
         
-        # CORRECTION : Configuration normalisée pour Picamera2 (Bookworm / Bullseye)
-        config = picam2.create_preview_configuration()
-        config["main"]["size"] = (640, 480)
-        config["main"]["format"] = "RGB888"
-        picam2.configure(config)
+        preview_config = picam2.preview_configuration
+        preview_config.size = (640, 480)
+        preview_config.format = 'RGB888'
+        preview_config.transform = libcamera.Transform(hflip=hflip, vflip=vflip)
+        preview_config.colour_space = libcamera.ColorSpace.Sycc()
+        preview_config.buffer_count = 4
+        preview_config.queue = True
+
+        if not picam2.is_open:
+            raise RuntimeError('Could not start camera.')
 
         try:
             picam2.start()
-            print("Picamera2 démarrée avec succès.")
         except Exception as e:
             print(f"Error starting Picamera2: {e}")
-            return
 
         cvt = CVThread()
-        cvt.daemon = True # Permet au programme de s'arrêter proprement avec Ctrl+C
         cvt.start()
 
         while True:
-            # Diagnostic 1: Est-ce que la caméra capture l'image ?
             img = picam2.capture_array()
 
             if img is None:
-                print("Diagnostic : Image reçue vide (None)...")
                 continue
             
             if Camera.modeSelect == 'none':
                 cvt.pause()
             else:
                 if not cvt.CVThreading:
-                    # Diagnostic 2: Transmission de la frame au thread de traitement
-                    print(f"Diagnostic : Envoi d'une frame au traitement OpenCV. Mode : {Camera.modeSelect}")
-                    cvt.mode(Camera.modeSelect, img.copy())
+                    cvt.mode(Camera.modeSelect, img)
                     cvt.resume()
                 try:
                     img = cvt.elementDraw(img)
-                except Exception as e:
+                except:
                     pass
 
-            # CORRECTION : OpenCV exige du BGR pour l'encodage d'image JPEG de sortie
-            img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-            if cv2.imencode('.jpg', img_bgr)[0]:
-                yield cv2.imencode('.jpg', img_bgr)[1].tobytes()
-
+            if cv2.imencode('.jpg', img)[0]:
+                yield cv2.imencode('.jpg', img)[1].tobytes()
 
 # ==========================================
 # BOUCLE PRINCIPALE D'ACTIVATION DU ROBOT
 # ==========================================
 if __name__ == '__main__':
+    # 1. Configuration du mode sur le suivi de ligne rouge
     Camera.modeSet('findlineCV')
+    
+    # 2. Autorisation d'activation des moteurs physiques
     Camera.CVRunSet(1)
     
     print("Démarrage du flux vidéo et du suivi de la ligne rouge...")
     
     try:
-        if hardware_available:
-            for frame in Camera.frames():
-                time.sleep(0.01)
-        else:
-            print("Exécution en mode virtuel (Simulation PC).")
-            cvt = CVThread()
-            cvt.start()
-            while True:
-                time.sleep(1)
-                
+        # 3. Lancement de la lecture continue des images de la caméra
+        for frame in Camera.frames():
+            time.sleep(0.01)
+            
     except KeyboardInterrupt:
         print("\nArrêt du robot demandé par l'utilisateur.")
-        if hardware_available:
-            try:
-                import move
-                move.motorStop()
-                print("Moteurs coupés avec succès.")
-            except Exception as e:
-                print(f"Impossible de stopper les moteurs : {e}")
+        try:
+            move.motorStop()
+        except:
+            pass
