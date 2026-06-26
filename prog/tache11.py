@@ -185,57 +185,38 @@ try:
         # =====================
         # BLANC / POINTILLES
         # =====================
-
+        
         elif etat == (0,0,0):
-
+        
             compteur_perdu += 1
-
-            # Cas n°1 :
-            # Le robot vient d'une ligne droite.
-            # On traverse simplement le premier blanc.
-
-            if dernier_etat == (1,1,1):
-
-                compteur_blanc += 1
-
-                if compteur_blanc <= 3:
-
-                    # On garde le robot parfaitement droit
-                    cible = CENTRE
-
-                    # On accélère légèrement pour limiter
-                    # le temps passé sur le blanc.
-                    vitesse = VITESSE_BLANC
-
-                else:
-
-                    # Si le blanc dure vraiment longtemps,
-                    # ce n'est plus un simple espace entre
-                    # deux pointillés.
-
-                    cible = CENTRE
-                    vitesse = VITESSE_PERDU
-
-            # Cas n°2 :
-            # On sort d'un virage.
-            # Là c'est une vraie perte de ligne.
-
+        
+            # Pendant les premières lectures du blanc,
+            # on garde le robot parfaitement droit.
+            if compteur_perdu <= 8:
+        
+                angle_actuel = CENTRE
+                servos.set_angle(0, CENTRE)
+        
+                cible = CENTRE
+                vitesse = VITESSE_BLANC
+        
+            # Si le blanc dure trop longtemps,
+            # on considère que la ligne est perdue.
             else:
-
+        
                 if dernier_sens == 1:
-
+        
                     cible = GAUCHE_FORT
-
+        
                 elif dernier_sens == -1:
-
+        
                     cible = DROITE_FORT
-
+        
                 else:
-
+        
                     cible = CENTRE
-
+        
                 vitesse = VITESSE_PERDU
-
         # =====================
         # ACTION
         # =====================
