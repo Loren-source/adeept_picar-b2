@@ -36,7 +36,7 @@ DRIVE_SPEED  = 40    # throttle % for driving forward  (0–100)
 TURN_SPEED   = 80    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
-TURN_HOLD    = 2.5   # seconds: hold steering angle while clearing a corner
+TURN_HOLD    = 1   # seconds: hold steering angle while clearing a corner
 
 
 # ──────────────────────────────────────────────────────────────────────────────
