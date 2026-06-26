@@ -29,9 +29,9 @@ DROITE_FORT = 65
 
 
 # vitesses
-VITESSE_LIGNE = 40
+VITESSE_LIGNE = 34
 VITESSE_APPROCHE = 27
-VITESSE_VIRAGE = 20
+VITESSE_VIRAGE = 18
 VITESSE_PERDU = 14
 
 
@@ -119,8 +119,10 @@ try:
 
         if etat_robot == "POINTILLE":
 
-            # On garde exactement le cap mémorisé
-            tourner(angle_pointille)
+            # On ne réenvoie l'angle au servo qu'au tout début
+            # de la traversée (le servo reste mécaniquement en place ensuite)
+            if compteur_111 == 0 and compteur_perdu == 0:
+                tourner(angle_pointille)
 
             robot.set_motor(1, 38)
 
@@ -226,11 +228,19 @@ try:
 
             dernier_sens = 1
 
+            # CORRECTION : on ne saute plus directement à FORT.
+            # Une lecture isolée de (1,0,0) peut venir du bruit
+            # d'une ligne large / d'un pointillé, pas forcément
+            # d'un vrai virage serré.
+            if compteur_virage > 2:
 
+                cible = GAUCHE_FORT
+                vitesse = VITESSE_VIRAGE
 
-            cible = GAUCHE_FORT
+            else:
 
-            vitesse = VITESSE_VIRAGE
+                cible = GAUCHE_LEGER
+                vitesse = VITESSE_APPROCHE
 
 
 
@@ -272,11 +282,17 @@ try:
 
             dernier_sens = -1
 
+            # CORRECTION : même logique progressive que (0,1,1),
+            # au lieu d'un saut direct à DROITE_FORT.
+            if compteur_virage > 2:
 
+                cible = DROITE_FORT
+                vitesse = VITESSE_VIRAGE
 
-            cible = DROITE_FORT
+            else:
 
-            vitesse = VITESSE_VIRAGE
+                cible = DROITE_LEGER
+                vitesse = VITESSE_APPROCHE
 
 
 
@@ -288,10 +304,14 @@ try:
 
         elif etat == (0, 0, 0):
 
-            # Si on vient d'une ligne droite,
-            # on entre dans le mode pointillés.
+            # CORRECTION : on accepte maintenant aussi (1,1,0) et (0,1,1)
+            # comme "venant de la ligne", à condition que l'angle soit
+            # encore raisonnablement centré (le robot n'était pas
+            # vraiment en train de tourner fort).
+            venait_de_ligne = dernier_etat in ((1, 1, 1), (1, 1, 0), (0, 1, 1))
+            proche_centre = abs(angle_actuel - CENTRE) < 8
 
-            if dernier_etat == (1, 1, 1):
+            if venait_de_ligne and proche_centre:
 
                 # On ne mémorise l'angle qu'à la première entrée
                 if etat_robot != "POINTILLE":
@@ -311,15 +331,30 @@ try:
 
             if dernier_sens == 1:
 
-                cible = GAUCHE_FORT
+                base_cible = GAUCHE_FORT
 
             elif dernier_sens == -1:
 
-                cible = DROITE_FORT
+                base_cible = DROITE_FORT
 
             else:
 
-                cible = CENTRE
+                base_cible = CENTRE
+
+            # CORRECTION : balayage de récupération.
+            # Si on reste bloqué trop longtemps à fond dans une direction
+            # sans rien retrouver, on relâche progressivement vers le
+            # centre au lieu de rester braqué à 65°/128° pour toujours.
+            # Cela permet de "rebalayer" et de retrouver la ligne.
+            if compteur_perdu > 15:
+
+                progression = min((compteur_perdu - 15) / 15, 1)
+
+                cible = base_cible + (CENTRE - base_cible) * progression
+
+            else:
+
+                cible = base_cible
 
             vitesse = VITESSE_PERDU
 
