@@ -33,7 +33,7 @@ CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detectio
 TURN_ANGLE       = 90    # degrees: steering servo deflection for left/right turns
 
 DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
-TURN_SPEED   = 80    # throttle % during cornering — needs more torque than straight driving
+TURN_SPEED   = 70    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 0.5   # seconds: hold steering angle while clearing a corner
