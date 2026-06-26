@@ -31,7 +31,7 @@ DIST_MIN         = 20    # cm: stop and read arrow when distance >= DIST_MIN
 DIST_MAX         = 30    # cm: stop and read arrow when distance <= DIST_MAX
 ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attempts
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
-TURN_ANGLE       = 110    # degrees: steering servo deflection for left/right turns
+TURN_ANGLE       = 100    # degrees: steering servo deflection for left/right turns
 
 DRIVE_SPEED  = 15    # throttle % for driving forward  (0–100)
 BACKUP_SPEED = 15    # throttle % for reversing
