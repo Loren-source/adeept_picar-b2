@@ -51,7 +51,7 @@ compteur_perdu = 0
 
 # Mode pointillés
 compteur_pointille = 0
-MAX_POINTILLE = 12
+MAX_POINTILLE = 15
 VITESSE_POINTILLE = 38
 
 # ==========================
