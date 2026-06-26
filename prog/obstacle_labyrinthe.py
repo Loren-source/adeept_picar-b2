@@ -35,7 +35,7 @@ CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detectio
 # Absolute servo angles for channel 0 (steering) — same scale as tache11.py.
 # Centre is slightly above 90 to match the physical servo neutral.
 ANGLE_CENTER = 97    # straight ahead
-ANGLE_LEFT   = 128   # full left turn
+ANGLE_LEFT   = 120   # full left turn
 ANGLE_RIGHT  = 65    # full right turn
 
 DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
