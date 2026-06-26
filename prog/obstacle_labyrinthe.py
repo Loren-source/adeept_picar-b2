@@ -17,10 +17,11 @@ Run from the prog/ directory.
 import time
 
 from ultra import Ultrasonic          # ultra.py  — ultrasonic distance sensor (returns mm)
-from Caméra import Camera, CVThread    # Caméra.py — provides capture_frame() for on-demand capture
+from Caméra import Camera             # Caméra.py — provides capture_frame() for on-demand capture
                                       # Note: importing Caméra also calls move.setup() via
                                       #       CVThread class-level statements on import.
 import move                           # move.py   — motor control
+from servo import RobotServos         # servo.py  — persistent I2C/PCA9685, no re-init per call
 from arrow_detector import detect_arrow   # arrow_detector.py — OpenCV arrow analysis
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -30,10 +31,15 @@ DIST_MIN         = 25    # cm: stop and read arrow when distance >= DIST_MIN
 DIST_MAX         = 30    # cm: stop and read arrow when distance <= DIST_MAX
 ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attempts
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
-TURN_ANGLE       = 90    # degrees: steering servo deflection for left/right turns
+
+# Absolute servo angles for channel 0 (steering) — same scale as tache11.py.
+# Centre is slightly above 90 to match the physical servo neutral.
+ANGLE_CENTER = 97    # straight ahead
+ANGLE_LEFT   = 128   # full left turn
+ANGLE_RIGHT  = 65    # full right turn
 
 DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
-TURN_SPEED   = 70    # throttle % during cornering — needs more torque than straight driving
+TURN_SPEED   = 80    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 0.5   # seconds: hold steering angle while clearing a corner
@@ -42,21 +48,18 @@ TURN_HOLD    = 0.5   # seconds: hold steering angle while clearing a corner
 # ──────────────────────────────────────────────────────────────────────────────
 # Steering helper
 # ──────────────────────────────────────────────────────────────────────────────
-def steer(sc, direction):
+def steer(servos, direction):
     """
-    Set the steering servo (servo ID 0) for the requested direction.
-
-    Convention from Caméra.py / camera_opencv.py:
-      moveAngle(0, +TURN_ANGLE) → turn left
-      moveAngle(0, -TURN_ANGLE) → turn right
-      moveAngle(0,  0)          → straight ahead
+    Set the steering servo (channel 0) to an absolute angle.
+    Uses RobotServos which keeps the I2C/PCA9685 connection open persistently,
+    avoiding the per-call re-initialisation glitch in RPIservo.ServoCtrl.
     """
     if direction == 'left':
-        sc.moveAngle(0, TURN_ANGLE)
+        servos.set_angle(0, ANGLE_LEFT)
     elif direction == 'right':
-        sc.moveAngle(0, -TURN_ANGLE)
+        servos.set_angle(0, ANGLE_RIGHT)
     else:
-        sc.moveAngle(0, 0)
+        servos.set_angle(0, ANGLE_CENTER)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -68,10 +71,10 @@ def main():
     # Ultrasonic sensor (GPIO 23 = trigger, 24 = echo — ultra.py defaults)
     ultrasonic = Ultrasonic()
 
-    # Reuse the ServoCtrl instance Caméra.py already created at import time.
-    # Creating a second instance would open a competing I2C client on the same bus.
-    sc = CVThread.scGear
-    steer(sc, 'forward')  # ensure steering is straight before we start
+    # RobotServos creates one persistent I2C + PCA9685 connection and caches
+    # Servo objects per channel — no re-init glitch on every set_angle call.
+    servos = RobotServos()
+    steer(servos, 'forward')  # ensure steering is straight before we start
 
     # Trigger the first camera capture now so Picamera2 initialises (2 s warm-up
     # is handled inside Camera.capture_frame() on its first call).
@@ -86,7 +89,7 @@ def main():
             # ── Step 1: drive forward ─────────────────────────────────────────
             # video_Tracking_Move controls both motor banks (M1 + M2).
             # direction=1 → forward,  direction=-1 → backward.
-            steer(sc, 'forward')
+            steer(servos, 'forward')
             move.video_Tracking_Move(DRIVE_SPEED, 1)
 
             # ── Step 2: check distance ────────────────────────────────────────
@@ -131,7 +134,7 @@ def main():
                 if direction is None:
                     # ── Step 5: no arrow found — reverse slightly and retry ────
                     print(f"  No arrow found after {ARROW_TIMEOUT:.0f} s — reversing to retry...")
-                    steer(sc, 'forward')
+                    steer(servos, 'forward')
                     move.video_Tracking_Move(BACKUP_SPEED, -1)   # reverse
                     time.sleep(BACKUP_TIME)
                     move.motorStop()
@@ -140,18 +143,18 @@ def main():
                 # ── Step 4: back up briefly before turning ───────────────────
                 # Camera is already stopped — no frames accumulate during this.
                 print(f"  Backing up before turn...")
-                steer(sc, 'forward')
+                steer(servos, 'forward')
                 move.video_Tracking_Move(BACKUP_SPEED, -1)
                 time.sleep(BACKUP_TIME)
                 move.motorStop()
 
                 # ── Step 5: steer and drive through the junction ──────────────
                 print(f"  Turning {direction} and advancing through corner...")
-                steer(sc, direction)
+                steer(servos, direction)
                 time.sleep(0.5)     # let wheels reach their angle before driving
                 move.video_Tracking_Move(TURN_SPEED, 1)
                 time.sleep(TURN_HOLD)   # hold steering angle while clearing the corner
-                steer(sc, 'forward')    # straighten up once through
+                steer(servos, 'forward')    # straighten up once through
                 move.motorStop()
 
                 # Restart the camera now that the robot is aligned in the new
@@ -166,7 +169,7 @@ def main():
     finally:
         # Always release hardware on exit
         move.motorStop()
-        steer(sc, 'forward')
+        servos.set_angle(0, ANGLE_CENTER)
         move.destroy()    # deinitialises the PCA9685 motor driver
         print("Shutdown complete.")
 
