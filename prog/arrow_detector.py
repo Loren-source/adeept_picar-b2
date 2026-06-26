@@ -25,7 +25,7 @@ def detect_arrow(frame):
         frame: NumPy array from Picamera2.capture_array().
 
     Returns:
-        'left', 'right', 'forward', or None if detection is not confident.
+        'left', 'right', or None if detection is not confident.
     """
     if frame is None:
         return None
@@ -77,9 +77,5 @@ def detect_arrow(frame):
     if h_diff < MIN_IMBALANCE and v_diff < MIN_IMBALANCE:
         return None   # not confident enough
 
-    if h_diff >= v_diff:
-        # Horizontal arrow: the side with more corners is the arrowhead
-        return 'right' if right_count > left_count else 'left'
-    else:
-        # Vertical arrow: more corners above centroid = arrow points up = forward
-        return 'forward' if up_count > down_count else None
+    # Only horizontal arrows are expected; vertical imbalance is ignored.
+    return 'right' if right_count > left_count else 'left'
