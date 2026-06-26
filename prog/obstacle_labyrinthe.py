@@ -138,8 +138,15 @@ def main():
                     move.motorStop()
                     continue   # restart the main loop
 
-                # ── Step 4: steer and drive through the junction ──────────────
-                # Camera is stopped — no frames accumulate during the turn.
+                # ── Step 4: back up briefly before turning ───────────────────
+                # Camera is already stopped — no frames accumulate during this.
+                print(f"  Backing up before turn...")
+                steer(sc, 'forward')
+                move.video_Tracking_Move(BACKUP_SPEED, -1)
+                time.sleep(BACKUP_TIME)
+                move.motorStop()
+
+                # ── Step 5: steer and drive through the junction ──────────────
                 print(f"  Turning {direction} and advancing through corner...")
                 steer(sc, direction)
                 move.video_Tracking_Move(DRIVE_SPEED, 1)
