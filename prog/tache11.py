@@ -49,7 +49,10 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-
+# Mode pointillés
+mode_pointille = False
+angle_pointille = CENTRE
+temps_pointille = 0.0
 
 # ==========================
 # SERVO FLUIDE
@@ -223,33 +226,36 @@ try:
 
         elif etat == (0,0,0):
 
-
             compteur_perdu += 1
 
+            if not mode_pointille:
+                mode_pointille = True
+                temps_pointille = time.time()
+                angle_pointille = angle_actuel
 
-            # ===== POINTILLES =====
-            # Pendant un court instant, on conserve exactement
-            # la trajectoire et l'angle courant afin d'éviter
-            # de braquer entre deux pointillés.
-            if compteur_perdu <= 8:
-
-                cible = angle_actuel
-                vitesse = 36
-
-            # Si la ligne n'est toujours pas retrouvée,
-            # on lance seulement maintenant une recherche.
-            else:
+            # Maintien de trajectoire pendant les pointillés
+            if time.time() - temps_pointille < 0.35:
 
                 if dernier_sens == 1:
+                    angle_pointille = min(angle_pointille + 0.15, GAUCHE_FORT)
 
+                elif dernier_sens == -1:
+                    angle_pointille = max(angle_pointille - 0.15, DROITE_FORT)
+
+                cible = angle_pointille
+                vitesse = 36
+
+            else:
+
+                mode_pointille = False
+
+                if dernier_sens == 1:
                     cible = GAUCHE_FORT
 
                 elif dernier_sens == -1:
-
                     cible = DROITE_FORT
 
                 else:
-
                     cible = CENTRE
 
                 vitesse = VITESSE_PERDU
@@ -277,6 +283,9 @@ try:
 
         if etat != (0,0,0):
 
+            mode_pointille = False
+            compteur_perdu = 0
+            angle_pointille = angle_actuel
             dernier_etat = etat
 
 
