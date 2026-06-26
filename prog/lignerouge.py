@@ -360,3 +360,16 @@ if __name__ == '__main__':
             picam2.release()
             cv2.destroyAllWindows()
         print("✅ Arrêt propre effectué.")
+
+    except KeyboardInterrupt:
+        print("\nStopped by user.")
+    finally:
+        # Always release hardware on exit
+        move.motorStop()
+        steer(sc, 'forward')
+        move.destroy()    # deinitialises the PCA9685 motor driver
+        print("Shutdown complete.")
+
+
+if __name__ == '__main__':
+    main()
