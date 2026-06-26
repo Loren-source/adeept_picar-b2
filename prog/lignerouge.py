@@ -6,6 +6,7 @@ import time
 import imutils
 import sys
 import os
+from flask import Flask, Response
 
 # Forcer Python à regarder dans le dossier local du script pour trouver RPIservo et move
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -223,7 +224,7 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 480: # Déviation à droite
+            if posInput > 380:
                 tracking_servo_status = 1 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, -30) 
@@ -232,7 +233,7 @@ class CVThread(threading.Thread):
                     CVThread.scGear.moveAngle(0, 0)
                     move.motorStop()
 
-            elif posInput < 180: # Déviation à gauche
+            elif posInput < 260:
                 tracking_servo_status = -1 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, 30) 
@@ -241,7 +242,7 @@ class CVThread(threading.Thread):
                     CVThread.scGear.moveAngle(0, 0)
                     move.motorStop()
                         
-            else: # Centré
+            else:
                 tracking_servo_status = 0 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, 0) 
@@ -262,7 +263,6 @@ class CVThread(threading.Thread):
         global findLineMove
         lineColorSet = 255 
         
-        # Traitement OpenCV pour isoler le rouge
         frame_hsv = cv2.cvtColor(frame_image, cv2.COLOR_BGR2HSV)
         lower_red1 = np.array([0, 70, 50])
         upper_red1 = np.array([10, 255, 255])
@@ -311,6 +311,8 @@ class CVThread(threading.Thread):
             self.center_Pos2 = int((self.left_Pos2 + self.right_Pos2) / 2)
 
             self.center = int((self.center_Pos1 + self.center_Pos2) / 2)
+
+            print(f"Centre : {self.center} | G1:{self.left_Pos1} D1:{self.right_Pos1} | G2:{self.left_Pos2} D2:{self.right_Pos2}")
             
         except Exception as e:
             self.center = None
@@ -474,26 +476,37 @@ class Camera(object):
             if cv2.imencode('.jpg', img)[0]:
                 yield cv2.imencode('.jpg', img)[1].tobytes()
 
+
 # ==========================================
-# BOUCLE PRINCIPALE D'ACTIVATION DU ROBOT
+# SERVEUR FLASK + ACTIVATION DU ROBOT
 # ==========================================
+app = Flask(__name__)
+
+def generate():
+    for frame in Camera.frames():
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/video')
+def video():
+    return Response(
+        generate(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+@app.route('/')
+def index():
+    return '''
+    <html>
+    <body style="background:black; text-align:center">
+        <h2 style="color:white">Robot Camera</h2>
+        <img src="/video" width="640" height="480">
+    </body>
+    </html>
+    '''
+
 if __name__ == '__main__':
-    # 1. Configuration du mode sur le suivi de ligne rouge
     Camera.modeSet('findlineCV')
-    
-    # 2. Autorisation d'activation des moteurs physiques
     Camera.CVRunSet(1)
-    
-    print("Démarrage du flux vidéo et du suivi de la ligne rouge...")
-    
-    try:
-        # 3. Lancement de la lecture continue des images de la caméra
-        for frame in Camera.frames():
-            time.sleep(0.01)
-            
-    except KeyboardInterrupt:
-        print("\nArrêt du robot demandé par l'utilisateur.")
-        try:
-            move.motorStop()
-        except:
-            pass
+    print("Serveur démarré sur http://10.101.2.84:5000")
+    app.run(host='0.0.0.0', port=5000, threaded=True)
