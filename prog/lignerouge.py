@@ -35,8 +35,8 @@ APPMode = 'none'
 colorUpper = np.array([10, 255, 255])
 colorLower = np.array([0, 0, 0])
 CVRun = 1
-linePos_1 = 340      # Hauteur de la ligne d'analyse supérieure
-linePos_2 = 420      # Hauteur de la ligne d'analyse inférieure
+linePos_1 = 280      # Hauteur de la ligne d'analyse supérieure
+linePos_2 = 360      # Hauteur de la ligne d'analyse inférieure
 lineColorSet = 255   # Par défaut à 255 pour le masque blanc
 frameRender = 1
 Threshold = 80
@@ -148,7 +148,6 @@ class CVThread(threading.Thread):
                               (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
 
         elif self.CVMode == 'findlineCV':
-
             try:
                 cv2.putText(imgInput, 'Following Red Line', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
                 
@@ -212,7 +211,7 @@ class CVThread(threading.Thread):
         if FLCV_Status == 0:    
             CVThread.scGear.moveAngle(0, 0)
             CVThread.scGear.moveAngle(1, 0)
-            CVThread.scGear.moveAngle(2, -15)  # Tête fixée vers le sol
+            CVThread.scGear.moveAngle(2, -30)  # Tête fixée vers le sol, une seule fois
             FLCV_Status = 1
             
         if posInput is not None and findLineMove == 1:
