@@ -49,10 +49,7 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# Mode pointillés
-compteur_pointille = 0
-MAX_POINTILLE = 15
-VITESSE_POINTILLE = 38
+
 
 # ==========================
 # SERVO FLUIDE
@@ -224,25 +221,59 @@ try:
         # POINTILLES OU PERTE
         # =====================
 
-        elif etat == (0,0,0):
+        elif etat == (0, 0, 0):
 
-            compteur_pointille += 1
+            # -------------------------------
+            # Si on vient d'une ligne droite,
+            # on suppose qu'il s'agit de pointillés.
+            # -------------------------------
 
-            if compteur_pointille <= MAX_POINTILLE:
+            if dernier_etat == (1, 1, 1):
 
-                cible = angle_actuel
-                vitesse = VITESSE_POINTILLE
+                compteur_perdu += 1
+
+                # Pendant les pointillés :
+                # - on ne braque jamais
+                # - on garde une vitesse élevée
+                # - on ne cherche pas la ligne
+
+                if compteur_perdu <= 10:
+
+                    cible = CENTRE
+                    vitesse = 36
+
+                else:
+
+                    # Là seulement on considère
+                    # que la ligne est réellement perdue.
+
+                    cible = CENTRE
+                    vitesse = VITESSE_PERDU
+
+            # -------------------------------
+            # Si on venait d'un virage,
+            # un 000 signifie probablement
+            # qu'on vient de perdre la ligne.
+            # -------------------------------
 
             else:
 
+                compteur_perdu += 1
+
                 if dernier_sens == 1:
+
                     cible = GAUCHE_FORT
+
                 elif dernier_sens == -1:
+
                     cible = DROITE_FORT
+
                 else:
+
                     cible = CENTRE
 
                 vitesse = VITESSE_PERDU
+
 
         # =====================
         # ACTION
@@ -261,12 +292,9 @@ try:
 
         # mémoire dernière ligne vue
 
-        if etat != (0,0,0):
-
-            compteur_pointille = 0
+        if etat != (0, 0, 0):
             compteur_perdu = 0
             dernier_etat = etat
-
 
 
 
