@@ -43,7 +43,7 @@ Threshold = 80
 findLineMove = 1
 tracking_servo_status = 0
 FLCV_Status = 0
-turn_speed = 40
+turn_speed = 55
 ImgIsNone = 0
 hflip = False
 vflip = False
@@ -148,8 +148,6 @@ class CVThread(threading.Thread):
                               (int(self.box_x + self.radius), int(self.box_y - self.radius)), (255, 255, 255), 1)
 
         elif self.CVMode == 'findlineCV':
-            if CVThread.hardware_available:
-                CVThread.scGear.moveAngle(2, -15) # Oriente la caméra vers le sol
 
             try:
                 cv2.putText(imgInput, 'Following Red Line', (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
@@ -214,7 +212,7 @@ class CVThread(threading.Thread):
         if FLCV_Status == 0:    
             CVThread.scGear.moveAngle(0, 0)
             CVThread.scGear.moveAngle(1, 0)
-            CVThread.scGear.moveAngle(2, 0)
+            CVThread.scGear.moveAngle(2, -15)  # Tête fixée vers le sol
             FLCV_Status = 1
             
         if posInput is not None and findLineMove == 1:
@@ -224,7 +222,7 @@ class CVThread(threading.Thread):
                 self.tracking_servo_right_mark = 0
                 FLCV_Status = 1
                 
-            if posInput > 380:
+            if posInput > 340:
                 tracking_servo_status = 1 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, -30) 
@@ -233,7 +231,7 @@ class CVThread(threading.Thread):
                     CVThread.scGear.moveAngle(0, 0)
                     move.motorStop()
 
-            elif posInput < 260:
+            elif posInput < 300:
                 tracking_servo_status = -1 
                 if CVRun:
                     CVThread.scGear.moveAngle(0, 30) 
