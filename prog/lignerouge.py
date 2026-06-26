@@ -10,9 +10,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 if script_dir not in sys.path:
     sys.path.insert(0, script_dir)
 
-# ==========================================
-# IMPORT DU MATÉRIEL (avec fallback simulation)
-# ==========================================
+
 try:
     import RPIservo
     import move
@@ -24,9 +22,7 @@ except ImportError as e:
     HARDWARE_AVAILABLE = False
     print(f"⚠️  Mode simulation (matériel absent) : {e}")
 
-# ==========================================
-# CLASSES DE SIMULATION (si pas de matériel)
-# ==========================================
+
 class DummyGear:
     def moveAngle(self, servo_id, angle):
         print(f"[SIM] Servo {servo_id} → {angle}°")
@@ -45,25 +41,24 @@ class DummyMove:
     @staticmethod
     def motorStop():
         print("[SIM] Moteurs arrêtés")
+    @staticmethod
+    def destroy():
+        print("[SIM] Libération des ressources moteurs")
 
-# ==========================================
-# PARAMÈTRES GLOBAUX
-# ==========================================
+
 CVRun         = 1       # 1 = moteurs actifs, 0 = analyse sans bouger
 linePos_1     = 330     # Hauteur de la ligne d'analyse supérieure (pixels)
 linePos_2     = 410     # Hauteur de la ligne d'analyse inférieure (pixels)
 turn_speed    = 80      # Vitesse en virage (0-100) — augmenter si le robot ne tourne pas assez vite
 forward_speed = 70      # Vitesse en ligne droite (0-100) — réduire si le robot rate les virages
-CENTER_MIN    = 290     # Borne gauche de la zone centrale — rapprocher du centre = détecte les virages plus tôt
-CENTER_MAX    = 360     # Borne droite de la zone centrale — rapprocher du centre = détecte les virages plus tôt
+CENTER_MIN    = 290     # Borne gauche de la zone centrale
+CENTER_MAX    = 360     # Borne droite de la zone centrale
 findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
 reverse_speed    = 20   # Vitesse de marche arrière (0-100)
 reverse_steer    = 39   # Angle de braquage en marche arrière (degrés)
-reverse_duration = 0.4 # Durée de la marche arrière (secondes) avant de reprendre
+reverse_duration = 0.4  # Durée de la marche arrière (secondes) avant de reprendre
 
-# ==========================================
-# INITIALISATION DU MATÉRIEL
-# ==========================================
+
 if HARDWARE_AVAILABLE:
     scGear = RPIservo.ServoCtrl()
     scGear.moveInit()
@@ -72,9 +67,7 @@ else:
     scGear = DummyGear()
     move = DummyMove()
 
-# ==========================================
-# THREAD DE VISION : DÉTECTION LIGNE ROUGE
-# ==========================================
+
 class CVThread(threading.Thread):
 
     def __init__(self):
@@ -126,7 +119,6 @@ class CVThread(threading.Thread):
                 cy = (linePos_1 + linePos_2) // 2
                 cv2.line(frame, (self.center - 15, cy), (self.center + 15, cy), (0, 0, 0), 2)
                 cv2.line(frame, (self.center, cy - 15), (self.center, cy + 15), (0, 0, 0), 2)
-                # Affichage de la position
                 cv2.putText(frame, f'Centre: {self.center}px', (10, 30),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
 
@@ -139,12 +131,6 @@ class CVThread(threading.Thread):
 
     # --- Détection de la ligne rouge ---
     def _detect_line(self, frame):
-        """
-        Convertit en HSV et crée un masque pour le rouge.
-        Le rouge occupe deux plages dans l'espace HSV :
-          - Plage basse : 0–10°
-          - Plage haute : 170–180°
-        """
         global findLineMove
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -153,23 +139,20 @@ class CVThread(threading.Thread):
         mask2 = cv2.inRange(hsv, np.array([170, 70, 50]), np.array([180, 255, 255]))
         mask  = cv2.bitwise_or(mask1, mask2)
 
-        # Nettoyage morphologique (supprime le bruit)
         mask = cv2.erode(mask,  None, iterations=2)
         mask = cv2.dilate(mask, None, iterations=2)
 
-        # Extraction des pixels rouges sur les deux lignes d'analyse
         row1 = mask[linePos_1]
         row2 = mask[linePos_2]
 
         idx1 = np.where(row1 == 255)[0]
         idx2 = np.where(row2 == 255)[0]
 
-        # Vérification que la ligne n'est pas trop large (= ligne perdue / intersection)
         def line_valid(idx):
             if idx.size == 0:
                 return False
             if abs(int(idx[-1]) - int(idx[0])) > 500:
-                return False  # Trop large → probablement une intersection
+                return False
             return True
 
         valid1 = line_valid(idx1)
@@ -184,7 +167,6 @@ class CVThread(threading.Thread):
 
         findLineMove = 1
 
-        # Calcul des centres sur chaque ligne
         centers = []
         if valid1 and idx1.size > 0:
             self.left_1  = int(idx1[0])
@@ -204,12 +186,6 @@ class CVThread(threading.Thread):
 
     # --- Contrôle des moteurs selon la position ---
     def _control_motors(self):
-        """
-        Oriente et avance le robot selon 3 cas :
-          CAS 1 : Timer de marche arrière actif  → on continue de reculer
-          CAS 2 : Ligne perdue, timer non armé   → on arme le timer et on recule
-          CAS 3 : Ligne retrouvée                → suivi normal avant
-        """
         if not CVRun:
             move.motorStop()
             return
@@ -239,7 +215,7 @@ class CVThread(threading.Thread):
             move.video_Tracking_Move(reverse_speed, -1)
             return
 
-        # CAS 3 : ligne retrouvée → suivi normal
+        # CAS 3 : ligne retrouvée -> suivi normal
         self.reverse_until = 0
 
         if self.center > CENTER_MAX:
@@ -273,32 +249,27 @@ class CVThread(threading.Thread):
 # GESTION DE LA CAMÉRA
 # ==========================================
 def init_camera():
-    """Initialise et configure la Picamera2."""
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(
         main={"size": (640, 480), "format": "RGB888"}
     )
     picam2.configure(config)
     picam2.start()
-    time.sleep(1)  # Laisse la caméra se stabiliser
+    time.sleep(1)
     print("✅ Caméra démarrée.")
     return picam2
 
 def frames(picam2, cv_thread):
-    """Générateur : capture les images et les envoie au thread CV."""
     while True:
         img = picam2.capture_array()
         if img is None:
             continue
 
-        # Envoyer l'image au thread de vision s'il est disponible
         if not cv_thread.threading:
             cv_thread.send_frame(img.copy())
 
-        # Dessiner les indicateurs sur l'image
         img = cv_thread.draw(img)
 
-        # Encodage JPEG pour le flux
         success, encoded = cv2.imencode('.jpg', img)
         if success:
             yield encoded.tobytes()
@@ -347,29 +318,32 @@ if __name__ == '__main__':
                 time.sleep(0.03)
 
     except KeyboardInterrupt:
-        print("\n🛑 Arrêt demandé par l'utilisateur.")
+        print("\n🛑 Arrêt demandé par l'utilisateur (Ctrl+C).")
 
     finally:
+        # Nettoyage et arrêt propre du matériel dans tous les cas
         try:
             move.motorStop()
         except Exception:
             pass
+            
+        try:
+            scGear.moveAngle(0, 0) # Remet les roues droites en partant
+        except Exception:
+            pass
+
         if HARDWARE_AVAILABLE:
-            picam2.stop()
+            try:
+                picam2.stop()
+            except Exception:
+                pass
         else:
             picam2.release()
             cv2.destroyAllWindows()
-        print("✅ Arrêt propre effectué.")
-
-    except KeyboardInterrupt:
-        print("\nStopped by user.")
-    finally:
-        # Always release hardware on exit
-        move.motorStop()
-        steer(sc, 'forward')
-        move.destroy()    # deinitialises the PCA9685 motor driver
-        print("Shutdown complete.")
-
-
-if __name__ == '__main__':
-    main()
+            
+        try:
+            move.destroy()  # Désinitialise le driver PCA9685 du moteur
+        except Exception:
+            pass
+            
+        print("✅ Arrêt propre effectué. Shutdown complete.")
