@@ -27,8 +27,8 @@ from arrow_detector import detect_arrow   # arrow_detector.py — OpenCV arrow a
 # ──────────────────────────────────────────────────────────────────────────────
 # Tunable constants — adjust these for your maze and robot
 # ──────────────────────────────────────────────────────────────────────────────
-DIST_MIN         = 25    # cm: stop and read arrow when distance >= DIST_MIN
-DIST_MAX         = 30    # cm: stop and read arrow when distance <= DIST_MAX
+DIST_MIN         = 35    # cm: stop and read arrow when distance >= DIST_MIN
+DIST_MAX         = 40    # cm: stop and read arrow when distance <= DIST_MAX
 ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attempts
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
 
