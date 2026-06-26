@@ -17,11 +17,10 @@ Run from the prog/ directory.
 import time
 
 from ultra import Ultrasonic          # ultra.py  — ultrasonic distance sensor (returns mm)
-from Caméra import Camera             # Caméra.py — provides capture_frame() for on-demand capture
+from Caméra import Camera, CVThread    # Caméra.py — provides capture_frame() for on-demand capture
                                       # Note: importing Caméra also calls move.setup() via
                                       #       CVThread class-level statements on import.
 import move                           # move.py   — motor control
-import RPIservo                       # RPIservo.py — servo control
 from arrow_detector import detect_arrow   # arrow_detector.py — OpenCV arrow analysis
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -33,9 +32,10 @@ ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attemp
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
 TURN_ANGLE       = 90    # degrees: steering servo deflection for left/right turns
 
-DRIVE_SPEED  = 40 # throttle % for driving forward  (0–100)
+DRIVE_SPEED  = 40    # throttle % for driving forward  (0–100)
+TURN_SPEED   = 80    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
-BACKUP_TIME  = 1   # seconds: how long to reverse when no arrow is found
+BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 2.5   # seconds: hold steering angle while clearing a corner
 
 
@@ -68,10 +68,9 @@ def main():
     # Ultrasonic sensor (GPIO 23 = trigger, 24 = echo — ultra.py defaults)
     ultrasonic = Ultrasonic()
 
-    # Steering servo controller (servo ID 0 = front steering).
-    # Caméra import already called move.setup() via CVThread class-level statements.
-    sc = RPIservo.ServoCtrl()
-    sc.moveInit()         # centre all servos to their neutral positions
+    # Reuse the ServoCtrl instance Caméra.py already created at import time.
+    # Creating a second instance would open a competing I2C client on the same bus.
+    sc = CVThread.scGear
     steer(sc, 'forward')  # ensure steering is straight before we start
 
     # Trigger the first camera capture now so Picamera2 initialises (2 s warm-up
@@ -150,7 +149,7 @@ def main():
                 print(f"  Turning {direction} and advancing through corner...")
                 steer(sc, direction)
                 time.sleep(0.5)     # let wheels reach their angle before driving
-                move.video_Tracking_Move(DRIVE_SPEED, 1)
+                move.video_Tracking_Move(TURN_SPEED, 1)
                 time.sleep(TURN_HOLD)   # hold steering angle while clearing the corner
                 steer(sc, 'forward')    # straighten up once through
                 move.motorStop()
