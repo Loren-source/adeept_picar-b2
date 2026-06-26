@@ -33,8 +33,8 @@ ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attemp
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
 TURN_ANGLE       = 90    # degrees: steering servo deflection for left/right turns
 
-DRIVE_SPEED  = 20    # throttle % for driving forward  (0–100)
-BACKUP_SPEED = 20    # throttle % for reversing
+DRIVE_SPEED  = 40    # throttle % for driving forward  (0–100)
+BACKUP_SPEED = 40    # throttle % for reversing
 BACKUP_TIME  = 1.5   # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 5   # seconds: hold steering angle while clearing a corner
 
