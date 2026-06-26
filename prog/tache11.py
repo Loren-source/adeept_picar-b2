@@ -18,7 +18,6 @@ tracker = LineTracker()
 
 CENTRE = 97
 
-
 # petites corrections
 GAUCHE_LEGER = 112
 DROITE_LEGER = 82
@@ -30,11 +29,19 @@ DROITE_FORT = 65
 
 
 # vitesses
-VITESSE_LIGNE = 40
+VITESSE_LIGNE = 34
 VITESSE_APPROCHE = 27
-VITESSE_VIRAGE = 20
+VITESSE_VIRAGE = 18
 VITESSE_PERDU = 14
 
+
+# ==========================
+# ETATS
+# ==========================
+
+etat_robot = "NORMAL"
+angle_pointille = CENTRE
+compteur_111 = 0
 
 angle_actuel = CENTRE
 
@@ -106,6 +113,64 @@ try:
 
 
         print(etat)
+        # ==========================================================
+        # MODE POINTILLES
+        # ==========================================================
+
+        if etat_robot == "POINTILLE":
+
+            # On garde exactement le cap mémorisé
+            tourner(angle_pointille)
+
+            robot.set_motor(1, 38)
+
+            # Seule une vraie ligne pleine compte comme "retour"
+            if etat == (1, 1, 1):
+
+                compteur_111 += 1
+
+            else:
+
+                compteur_111 = 0
+
+            # Après quelques lectures stables (segments courts),
+            # on revient au suivi normal.
+            if compteur_111 >= 2:
+                etat_robot = "NORMAL"
+
+                compteur_111 = 0
+
+                dernier_etat = etat
+
+            # Sécurité : si on reste trop longtemps à 000,
+            # ce n'est plus un pointillé mais une vraie perte.
+            if etat == (0, 0, 0):
+
+                compteur_perdu += 1
+
+                if compteur_perdu > 20:
+
+                    etat_robot = "NORMAL"
+
+                    compteur_perdu = 0
+
+                    if dernier_sens == 1:
+                        cible = GAUCHE_FORT
+                    elif dernier_sens == -1:
+                        cible = DROITE_FORT
+                    else:
+                        cible = CENTRE
+
+                    tourner(cible)
+                    robot.set_motor(1, VITESSE_PERDU)
+
+            else:
+
+                compteur_perdu = 0
+
+            time.sleep(0.025)
+
+            continue
 
 
 
@@ -223,56 +288,42 @@ try:
 
         elif etat == (0, 0, 0):
 
-            # -------------------------------
             # Si on vient d'une ligne droite,
-            # on suppose qu'il s'agit de pointillés.
-            # -------------------------------
+            # on entre dans le mode pointillés.
 
             if dernier_etat == (1, 1, 1):
 
-                compteur_perdu += 1
+                # On ne mémorise l'angle qu'à la première entrée
+                if etat_robot != "POINTILLE":
+                    angle_pointille = angle_actuel
 
-                # Pendant les pointillés :
-                # - on ne braque jamais
-                # - on garde une vitesse élevée
-                # - on ne cherche pas la ligne
+                etat_robot = "POINTILLE"
 
-                if compteur_perdu <= 10:
+                compteur_111 = 0
 
-                    cible = CENTRE
-                    vitesse = 36
+                compteur_perdu = 0
 
-                else:
+                continue
 
-                    # Là seulement on considère
-                    # que la ligne est réellement perdue.
+            # Sinon, vraie perte
 
-                    cible = CENTRE
-                    vitesse = VITESSE_PERDU
+            compteur_perdu += 1
 
-            # -------------------------------
-            # Si on venait d'un virage,
-            # un 000 signifie probablement
-            # qu'on vient de perdre la ligne.
-            # -------------------------------
+            if dernier_sens == 1:
+
+                cible = GAUCHE_FORT
+
+            elif dernier_sens == -1:
+
+                cible = DROITE_FORT
 
             else:
 
-                compteur_perdu += 1
+                cible = CENTRE
 
-                if dernier_sens == 1:
+            vitesse = VITESSE_PERDU
 
-                    cible = GAUCHE_FORT
 
-                elif dernier_sens == -1:
-
-                    cible = DROITE_FORT
-
-                else:
-
-                    cible = CENTRE
-
-                vitesse = VITESSE_PERDU
 
 
         # =====================
@@ -292,9 +343,10 @@ try:
 
         # mémoire dernière ligne vue
 
-        if etat != (0, 0, 0):
-            compteur_perdu = 0
+        if etat != (0,0,0):
+
             dernier_etat = etat
+
 
 
 
