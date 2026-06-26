@@ -7,10 +7,6 @@ from servo import RobotServos
 from lineTracking import LineTracker
 
 
-# ==========================
-# INITIALISATION
-# ==========================
-
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
@@ -22,49 +18,39 @@ tracker = LineTracker()
 
 CENTRE = 97
 
-# petites corrections
 GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
-# vrais virages
 GAUCHE_FORT = 128
 DROITE_FORT = 65
 
-# vitesses
+
 VITESSE_LIGNE = 34
-VITESSE_POINTILLE = 38
+VITESSE_BLANC = 38       # Traversée du blanc avant les pointillés
 VITESSE_APPROCHE = 27
 VITESSE_VIRAGE = 18
 VITESSE_PERDU = 14
 
 
-# ==========================
-# ETATS
-# ==========================
-
-MODE_NORMAL = 0
-MODE_POINTILLE = 1
-
-etat_robot = MODE_NORMAL
-
 angle_actuel = CENTRE
-angle_pointille = CENTRE
+
 
 dernier_sens = 0
-# 1 = gauche
-# -1 = droite
 
 compteur_virage = 0
 compteur_perdu = 0
-compteur_111 = 0
 
 dernier_etat = (1,1,1)
 
-entree_pointille = False
+# ==========================
+# NOUVEAU
+# ==========================
+
+compteur_blanc = 0
 
 
 # ==========================
-# SERVO FLUIDE
+# SERVO
 # ==========================
 
 def tourner(cible):
@@ -109,73 +95,35 @@ try:
 
         print(etat)
 
-        # =====================================================
-        # MODE POINTILLES
-        # =====================================================
+        # =====================
+        # Si la ligne est retrouvée
+        # =====================
 
-        if etat_robot == MODE_POINTILLE:
+        if etat != (0,0,0):
 
-            # Une seule commande servo au début
-            if entree_pointille:
-                tourner(angle_pointille)
-                entree_pointille = False
+            compteur_blanc = 0
+            compteur_perdu = 0
 
-            robot.set_motor(1, VITESSE_POINTILLE)
+            dernier_etat = etat
 
-            # Ligne retrouvée
-            if etat == (1,1,1):
-
-                compteur_111 += 1
-
-                if compteur_111 >= 2:
-
-                    etat_robot = MODE_NORMAL
-
-                    compteur_111 = 0
-                    compteur_perdu = 0
-                    dernier_etat = etat
-
-            else:
-
-                compteur_111 = 0
-
-            # Toujours dans le blanc
-            if etat == (0,0,0):
-
-                compteur_perdu += 1
-
-                # Sécurité : si vraiment perdu
-                if compteur_perdu > 20:
-
-                    etat_robot = MODE_NORMAL
-
-                    compteur_perdu = 0
-
-            else:
-
-                compteur_perdu = 0
-
-            time.sleep(0.025)
-
-            continue
-
-        # =====================================================
-        # MODE NORMAL
-        # =====================================================
+        # =====================
+        # LIGNE CENTREE
+        # =====================
 
         if etat == (1,1,1):
 
             compteur_virage = 0
-            compteur_perdu = 0
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
+        # =====================
+        # VIRAGE GAUCHE
+        # =====================
+
         elif etat == (1,1,0):
 
-            compteur_perdu = 0
             compteur_virage += 1
-
             dernier_sens = 1
 
             if compteur_virage > 2:
@@ -188,22 +136,26 @@ try:
                 cible = GAUCHE_LEGER
                 vitesse = VITESSE_APPROCHE
 
+
         elif etat == (1,0,0):
 
-            # On garde la logique qui fonctionnait
-            compteur_perdu = 0
             compteur_virage += 2
 
             dernier_sens = 1
 
+            # On garde exactement la logique
+            # qui passait les virages.
+
             cible = GAUCHE_FORT
             vitesse = VITESSE_VIRAGE
 
+        # =====================
+        # VIRAGE DROITE
+        # =====================
+
         elif etat == (0,1,1):
 
-            compteur_perdu = 0
             compteur_virage += 1
-
             dernier_sens = -1
 
             if compteur_virage > 2:
@@ -219,61 +171,74 @@ try:
 
         elif etat == (0,0,1):
 
-            # On garde la logique qui fonctionnait
-            compteur_perdu = 0
             compteur_virage += 2
 
             dernier_sens = -1
+
+            # On garde exactement la logique
+            # qui passait les virages.
 
             cible = DROITE_FORT
             vitesse = VITESSE_VIRAGE
 
 
-        # =====================================
-        # 000 : POINTILLES OU PERTE
-        # =====================================
+        # =====================
+        # BLANC / POINTILLES
+        # =====================
 
         elif etat == (0,0,0):
 
-            # Les pointillés ne sont détectés
-            # qu'après une vraie ligne droite.
+            compteur_perdu += 1
+
+            # Cas n°1 :
+            # Le robot vient d'une ligne droite.
+            # On traverse simplement le premier blanc.
 
             if dernier_etat == (1,1,1):
 
-                etat_robot = MODE_POINTILLE
+                compteur_blanc += 1
 
-                angle_pointille = angle_actuel
+                if compteur_blanc <= 3:
 
-                compteur_111 = 0
-                compteur_perdu = 0
+                    # On garde le robot parfaitement droit
+                    cible = CENTRE
 
-                entree_pointille = True
+                    # On accélère légèrement pour limiter
+                    # le temps passé sur le blanc.
+                    vitesse = VITESSE_BLANC
 
-                continue
+                else:
 
-            # -----------------------------
-            # Vraie perte de ligne
-            # -----------------------------
+                    # Si le blanc dure vraiment longtemps,
+                    # ce n'est plus un simple espace entre
+                    # deux pointillés.
 
-            compteur_perdu += 1
+                    cible = CENTRE
+                    vitesse = VITESSE_PERDU
 
-            if dernier_sens == 1:
-
-                cible = GAUCHE_FORT
-
-            elif dernier_sens == -1:
-
-                cible = DROITE_FORT
+            # Cas n°2 :
+            # On sort d'un virage.
+            # Là c'est une vraie perte de ligne.
 
             else:
 
-                cible = CENTRE
+                if dernier_sens == 1:
 
-            vitesse = VITESSE_PERDU
+                    cible = GAUCHE_FORT
 
-        # =====================================
+                elif dernier_sens == -1:
+
+                    cible = DROITE_FORT
+
+                else:
+
+                    cible = CENTRE
+
+                vitesse = VITESSE_PERDU
+
+        # =====================
         # ACTION
-        # =====================================
+        # =====================
 
         tourner(cible)
 
@@ -282,8 +247,9 @@ try:
             vitesse
         )
 
-        # On mémorise uniquement les états où la ligne est visible.
+        # On mémorise le dernier état utile
         if etat != (0,0,0):
+
             dernier_etat = etat
 
         time.sleep(0.025)
