@@ -49,7 +49,7 @@ class DummyMove:
 CVRun         = 1       # 1 = moteurs actifs, 0 = analyse sans bouger
 linePos_1     = 330     # Hauteur de la ligne d'analyse supérieure (pixels)
 linePos_2     = 410     # Hauteur de la ligne d'analyse inférieure (pixels)
-turn_speed    = 80      # Vitesse en virage (0-100) — augmenter si le robot ne tourne pas assez vite
+turn_speed    = 90      # Vitesse en virage (0-100) — augmenter si le robot ne tourne pas assez vite
 forward_speed = 60      # Vitesse en ligne droite (0-100) — réduire si le robot rate les virages
 CENTER_MIN    = 290     # Borne gauche de la zone centrale
 CENTER_MAX    = 360     # Borne droite de la zone centrale
