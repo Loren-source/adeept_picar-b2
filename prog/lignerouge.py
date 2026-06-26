@@ -57,7 +57,7 @@ forward_speed = 50      # Vitesse en ligne droite (0-100) — réduire si le rob
 CENTER_MIN    = 290     # Borne gauche de la zone centrale — rapprocher du centre = détecte les virages plus tôt
 CENTER_MAX    = 360     # Borne droite de la zone centrale — rapprocher du centre = détecte les virages plus tôt
 findLineMove  = 1       # 1 = ligne détectée, 0 = ligne perdue
-reverse_speed    = 40   # Vitesse de marche arrière (0-100)
+reverse_speed    = 20   # Vitesse de marche arrière (0-100)
 reverse_steer    = 39   # Angle de braquage en marche arrière (degrés)
 reverse_duration = 0.4 # Durée de la marche arrière (secondes) avant de reprendre
 
