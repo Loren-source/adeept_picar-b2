@@ -58,49 +58,46 @@ try:
         etat = (s["left"], s["middle"], s["right"])
 
         if etat == (1,1,1):
-
             compteur_blanc = 0
             compteur_centre += 1
-
+        
             if compteur_centre >= 10:
                 dernier_sens = 0
-
+        
             cible = CENTRE
             vitesse = VITESSE_LIGNE
 
         else:
             compteur_centre = 0
 
-            if etat == (1,1,0):
-
+           if etat == (1,1,0):
                 compteur_blanc = 0
                 dernier_sens = 1
-
-                cible = GAUCHE_FORT if compteur_virage > 2 else GAUCHE_LEGER
-                vitesse = VITESSE_VIRAGE if compteur_virage > 2 else VITESSE_APPROCHE
-
-            elif etat == (1,0,0):
-
+            
+                cible = GAUCHE_FORT
+                vitesse = VITESSE_APPROCHE
+        
+           elif etat == (1,0,0):
                 compteur_blanc = 0
                 dernier_sens = 1
+            
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_VIRAGE
 
-            elif etat == (0,1,1):
-
+           elif etat == (0,1,1):
                 compteur_blanc = 0
                 dernier_sens = -1
-
-                cible = DROITE_FORT if compteur_virage > 2 else DROITE_LEGER
-                vitesse = VITESSE_VIRAGE if compteur_virage > 2 else VITESSE_APPROCHE
+            
+                cible = DROITE_FORT
+                vitesse = VITESSE_APPROCHE
 
             elif etat == (0,0,1):
-
                 compteur_blanc = 0
                 dernier_sens = -1
+            
                 cible = DROITE_FORT
                 vitesse = VITESSE_VIRAGE
-
+        
             else:  # 000
 
                 compteur_blanc += 1
