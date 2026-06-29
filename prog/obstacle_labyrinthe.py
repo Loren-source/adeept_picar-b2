@@ -44,6 +44,9 @@ BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 0.5     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 1.2   # seconds: hold steering angle while clearing a corner
 
+TURN_OBSTACLE_DIST         = 10   # cm: if obstacle closer than this during a turn, interrupt
+TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Steering helper
@@ -60,6 +63,46 @@ def steer(servos, direction):
         servos.set_angle(0, ANGLE_RIGHT)
     else:
         servos.set_angle(0, ANGLE_CENTER)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Turn with mid-turn obstacle check
+# ──────────────────────────────────────────────────────────────────────────────
+def turn_with_obstacle_check(ultrasonic, servos, direction, duration, speed):
+    """
+    Steer and drive forward for `duration` seconds while polling the ultrasonic sensor.
+    If an obstacle is detected closer than TURN_OBSTACLE_DIST cm the robot:
+      1. Stops.
+      2. Reverses straight for TURN_OBSTACLE_BACKUP_TIME seconds.
+      3. Resumes the turn for however many seconds were still remaining.
+    """
+    poll_interval = 0.05  # seconds between distance checks
+
+    steer(servos, direction)
+    move.video_Tracking_Move(speed, 1)
+
+    remaining = duration
+    while remaining > 0:
+        t0 = time.time()
+        time.sleep(min(poll_interval, remaining))
+        remaining -= time.time() - t0
+
+        if remaining <= 0:
+            break
+
+        dist = ultrasonic.get_distance() / 10.0  # mm → cm
+        if dist < TURN_OBSTACLE_DIST:
+            print(f"  Obstacle mid-turn ({dist:.1f} cm) — reversing ({remaining:.2f}s left)...")
+            move.motorStop()
+            steer(servos, 'forward')
+            move.video_Tracking_Move(BACKUP_SPEED, -1)
+            time.sleep(TURN_OBSTACLE_BACKUP_TIME)
+            move.motorStop()
+            print(f"  Resuming turn for {remaining:.2f}s...")
+            steer(servos, direction)
+            move.video_Tracking_Move(speed, 1)
+
+    move.motorStop()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -150,12 +193,9 @@ def main():
 
                 # ── Step 5: steer and drive through the junction ──────────────
                 print(f"  Turning {direction} and advancing through corner...")
-                steer(servos, direction)
                 time.sleep(0.5)     # let wheels reach their angle before driving
-                move.video_Tracking_Move(TURN_SPEED, 1)
-                time.sleep(TURN_HOLD)   # hold steering angle while clearing the corner
+                turn_with_obstacle_check(ultrasonic, servos, direction, TURN_HOLD, TURN_SPEED)
                 steer(servos, 'forward')    # straighten up once through
-                move.motorStop()
 
                 # Restart the camera now that the robot is aligned in the new
                 # corridor — 0.5 s settle time is handled inside start_capture().
