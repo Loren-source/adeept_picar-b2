@@ -69,8 +69,7 @@ try:
 
         else:
             compteur_centre = 0
-
-           if etat == (1,1,0):
+            if etat == (1,1,0):
                 compteur_blanc = 0
                 dernier_sens = 1
             
