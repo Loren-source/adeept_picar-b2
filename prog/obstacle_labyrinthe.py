@@ -42,7 +42,8 @@ DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
 TURN_SPEED   = 50    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
-TURN_HOLD    = 1.2   # seconds: hold steering angle while clearing a corner
+TURN_HOLD    = 0.8   # seconds: hold steering angle while clearing a corner
+TURN_HOLD_OPPOSITE = 0.4
 
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
@@ -68,7 +69,7 @@ def steer(servos, direction):
 # ──────────────────────────────────────────────────────────────────────────────
 # Turn with mid-turn obstacle check
 # ──────────────────────────────────────────────────────────────────────────────
-def turn_with_obstacle_check(ultrasonic, servos, direction, duration, speed):
+def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_opposite, speed):
     """
     Steer and drive forward for `duration` seconds while polling the ultrasonic sensor.
     If an obstacle is detected closer than TURN_OBSTACLE_DIST cm the robot:
@@ -90,17 +91,17 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, speed):
         if remaining <= 0:
             break
 
-        dist = ultrasonic.get_distance() / 10.0  # mm → cm
-        if dist < TURN_OBSTACLE_DIST:
-            print(f"  Obstacle mid-turn ({dist:.1f} cm) — reversing ({remaining:.2f}s left)...")
-            move.motorStop()
-            steer(servos, 'forward')
-            move.video_Tracking_Move(BACKUP_SPEED, -1)
-            time.sleep(TURN_OBSTACLE_BACKUP_TIME)
-            move.motorStop()
-            print(f"  Resuming turn for {remaining:.2f}s...")
-            steer(servos, direction)
-            move.video_Tracking_Move(speed, 1)
+    steer(servos, -direction)
+    move.video_Tracking_Move(speed, -1)
+
+    remaining = duration_opposite
+    while remaining > 0:
+        t0 = time.time()
+        time.sleep(min(poll_interval, remaining))
+        remaining -= time.time() - t0
+
+        if remaining <= 0:
+            break
 
     move.motorStop()
 
@@ -194,7 +195,7 @@ def main():
                 # ── Step 5: steer and drive through the junction ──────────────
                 print(f"  Turning {direction} and advancing through corner...")
                 time.sleep(0.5)     # let wheels reach their angle before driving
-                turn_with_obstacle_check(ultrasonic, servos, direction, TURN_HOLD, TURN_SPEED)
+                turn_with_obstacle_check(ultrasonic, servos, direction, TURN_HOLD, TURN_HOLD_OPPOSITE, TURN_SPEED)
                 steer(servos, 'forward')    # straighten up once through
 
                 # Restart the camera now that the robot is aligned in the new
