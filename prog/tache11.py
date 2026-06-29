@@ -26,7 +26,7 @@ GAUCHE_FORT = 128
 DROITE_FORT = 65
 
 VITESSE_LIGNE = 34
-VITESSE_APPROCHE = 27
+VITESSE_APPROCHE = 18
 VITESSE_VIRAGE = 18
 VITESSE_RECHERCHE = 14
 
@@ -35,11 +35,10 @@ dernier_angle = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
 dernier_sens = 0
-compteur_virage = 0
 compteur_blanc = 0
 compteur_centre = 0
 
-SERVO_ALPHA = 0.4
+SERVO_ALPHA = 0.8
 
 
 def tourner(cible):
@@ -61,7 +60,6 @@ try:
         if etat == (1,1,1):
 
             compteur_blanc = 0
-            compteur_virage = 0
             compteur_centre += 1
 
             if compteur_centre >= 10:
@@ -76,7 +74,6 @@ try:
             if etat == (1,1,0):
 
                 compteur_blanc = 0
-                compteur_virage += 1
                 dernier_sens = 1
 
                 cible = GAUCHE_FORT if compteur_virage > 2 else GAUCHE_LEGER
@@ -85,7 +82,6 @@ try:
             elif etat == (1,0,0):
 
                 compteur_blanc = 0
-                compteur_virage += 2
                 dernier_sens = 1
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_VIRAGE
@@ -93,7 +89,6 @@ try:
             elif etat == (0,1,1):
 
                 compteur_blanc = 0
-                compteur_virage += 1
                 dernier_sens = -1
 
                 cible = DROITE_FORT if compteur_virage > 2 else DROITE_LEGER
@@ -102,7 +97,6 @@ try:
             elif etat == (0,0,1):
 
                 compteur_blanc = 0
-                compteur_virage += 2
                 dernier_sens = -1
                 cible = DROITE_FORT
                 vitesse = VITESSE_VIRAGE
