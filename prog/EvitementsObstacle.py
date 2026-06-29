@@ -1,4 +1,10 @@
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Mission C : Évitement d'obstacles intelligent et maintien de zone.
+Le robot attend un signal visuel (papier bleu au sol), s'élance pour le quitter,
+puis navigue de manière autonome en évitant les obstacles.
+"""
 
 import time
 import sys
@@ -18,7 +24,7 @@ import move
 import RPIservo
 import ultra
 
-
+# Vitesses (0 à 100)
 SPEED_FORWARD    = 50    # Vitesse en ligne droite
 SPEED_TURN       = 50    # Vitesse pendant les virages d'évitement
 SPEED_BACK       = 40    # Vitesse en marche arrière
@@ -46,7 +52,7 @@ LINE_PIN_RIGHT   = 17
 print("🔧 Initialisation du matériel...")
 scGear = RPIservo.ServoCtrl()
 scGear.moveInit()  # Initialise les servos sur leurs positions de départ
-move.setup()     # Initialise le contrôleur de moteurs PCA9685
+move.setup()       # Initialise le contrôleur de moteurs PCA9685
 
 # Initialisation des capteurs infrarouges de sol
 track_left   = InputDevice(pin=LINE_PIN_LEFT)
@@ -67,12 +73,12 @@ def init_camera():
     return picam2
 
 def detect_blue(picam2):
-    """Capture une image et renvoie True si le plot bleu est détecté."""
+    """Capture une image et renvoie True si le papier bleu est détecté."""
     img = picam2.capture_array()
     if img is None:
         return False
 
-    # Conversion RGB vers HSV (attention, picam2 capture en RGB natif et non BGR)
+    # Conversion RGB vers HSV (picam2 capture en RGB natif)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
     mask = cv2.inRange(hsv, BLUE_LOWER, BLUE_UPPER)
     blue_pixels = np.sum(mask == 255)
@@ -88,6 +94,10 @@ def read_ir_sensors():
 def is_out_of_zone():
     """Vérifie si les 3 capteurs sont hors-sol, signifiant la fin du parcours."""
     left, middle, right = read_ir_sensors()
+    
+    # Ligne de débug pratique pour voir ce que lisent tes capteurs au sol
+    print(f"🔍 DEBUG IR -> Gauche: {left} | Milieu: {middle} | Droite: {right}")
+    
     # Si les trois capteurs lisent 0 en même temps, le robot a quitté la zone de jeu
     if left == 0 and middle == 0 and right == 0:
         return True
@@ -129,13 +139,12 @@ def ir_correction():
 
     return False
 
-
 def get_distance():
     """Effectue 3 mesures ultrason et renvoie la moyenne filtrée."""
     readings = []
     for _ in range(3):
         d = ultra.checkdist()
-        if 0 < d < 200:  # Ignore les valeurs aberrantes ou hors de portée
+        if 0 < d < 200:  # Ignore les valeurs aberrantes
             readings.append(d)
         time.sleep(0.02)
     if not readings:
@@ -201,7 +210,6 @@ def avoid_obstacle():
     time.sleep(TURN_TIME)
     scGear.moveAngle(0, 0)  # Remise en ligne droite après le virage
 
-
 if __name__ == '__main__':
     print("\n=========================================")
     print("🚀 DÉMARRAGE : Mission C — PiCar-B Autonome")
@@ -216,12 +224,12 @@ if __name__ == '__main__':
     # Initialisation de la caméra
     picam2 = init_camera()
 
-    # --- PHASE 1 : Attente du signal de départ (Plot Bleu) ---
-    print("\n👀 Phase d'attente active : Présentez le plot bleu face à la caméra...")
+    # --- PHASE 1 : Attente du signal de départ (Papier Bleu) ---
+    print("\n👀 Phase d'attente active : Présentez le papier bleu face à la caméra...")
     try:
         while True:
             if detect_blue(picam2):
-                print("\n🔵 SIGNAL REÇU ! Le plot bleu a été validé. Départ imminent.")
+                print("\n🔵 SIGNAL REÇU ! Le papier bleu a été validé.")
                 break
             time.sleep(0.1)
     except KeyboardInterrupt:
@@ -229,10 +237,17 @@ if __name__ == '__main__':
         picam2.stop()
         sys.exit(0)
 
-    time.sleep(0.5)
+    time.sleep(0.2)
 
     # --- PHASE 2 : Exécution de la mission autonome ---
     print("\n🤖 Mode autonome activé. Le robot navigue...")
+    
+    # 🚗 CORRECTION : On avance d'abord pendant 0.5s pour quitter la zone du papier bleu !
+    print("🚀 Propulsion initiale pour quitter la marque bleue de départ...")
+    scGear.moveAngle(0, 0)
+    move.move(SPEED_FORWARD, 1, "mid")
+    time.sleep(0.5) 
+    
     try:
         while True:
             # 1. Condition d'arrêt : Sommes-nous sortis de la zone ?
@@ -242,14 +257,13 @@ if __name__ == '__main__':
 
             # 2. Sécurité des bordures : Priorité absolue aux lignes de sol
             if ir_correction():
-                # Si le robot vient d'effectuer une correction de trajectoire, 
-                # on saute la suite de la boucle pour ré-analyser immédiatement le sol.
+                # Si une correction est appliquée, on saute la suite de la boucle pour ré-analyser immédiatement le sol.
                 continue
 
             # 3. Navigation standard et évitement d'obstacles
             avoid_obstacle()
 
-            # Petite pause pour ne pas saturer le processeur
+            # Petite pause pour ne pas surcharger le processeur
             time.sleep(0.02)
 
     except KeyboardInterrupt:
