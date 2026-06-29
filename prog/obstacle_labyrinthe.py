@@ -99,6 +99,8 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
         if remaining <= 0:
             break
 
+    time.sleep(0.5)
+
     steer(servos, opposite_direction(direction))
     move.video_Tracking_Move(speed, -1)
 
