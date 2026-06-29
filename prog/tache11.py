@@ -1,190 +1,134 @@
 #!/usr/bin/env python3
+"""
+Suivi de ligne PiCar-B - Automate expérimental
+
+Etats:
+0 = SUIVI
+1 = ABSENCE_COURTE (pointillés probables)
+2 = RECHERCHE_PROGRESSIVE
+3 = RECHERCHE_LARGE
+
+Réglages à ajuster sur le robot.
+"""
 
 import time
-
 from motor import RobotMotor
 from servo import RobotServos
 from lineTracking import LineTracker
-
 
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
 
-
-# ==========================
-# REGLAGES VALIDES (inchangés)
-# ==========================
-
 CENTRE = 97
+GAIN = 15
 
-GAUCHE_LEGER = 112
-DROITE_LEGER = 82
+ANGLE_G = 128
+ANGLE_D = 65
 
-GAUCHE_FORT = 128
-DROITE_FORT = 65
+VMAX = 34
+VMIN = 18
+VSEARCH = 14
 
-VITESSE_LIGNE = 34
-VITESSE_APPROCHE = 27
-VITESSE_VIRAGE = 18
-VITESSE_PERDU = 14
+SERVO_ALPHA = 0.40
+ERR_ALPHA = 0.30
 
-angle_actuel = CENTRE
+ABSENCE_COURTE = 12      # ~300 ms
+RECHERCHE = 24           # ~600 ms
+RECHERCHE_LARGE = 40     # ~1 s
 
-dernier_sens = 0
-# 1 = gauche, -1 = droite
+SUIVI = 0
+ABSENT = 1
+PROGRESSIF = 2
+LARGE = 3
 
-compteur_virage = 0
-dernier_etat = (1, 1, 1)
-compteur_perdu = 0
+etat_ctrl = SUIVI
+blancs = 0
 
-# ==========================
-# NOUVEAU : mémoire de "ligne droite confirmée"
-# ==========================
-# Nombre de cycles consécutifs centrés nécessaires avant de considérer
-# qu'on est VRAIMENT en ligne droite (et donc d'oublier le dernier virage).
-CENTRE_CONFIRME = 8
-compteur_centre = 0
+angle = CENTRE
+erreur = 0.0
 
-# NOUVEAU : seuil dédié aux pointillés, distinct du seuil "vraiment perdu"
-# Mesurez vos pointillés réels (longueur du segment noir + longueur du blanc)
-# et ajustez ce chiffre : à VITESSE_LIGNE, le robot avance pendant
-# SEUIL_POINTILLE * 0.025s. Si vos gaps blancs durent plus que ça, augmentez.
-SEUIL_POINTILLE = 45      # ancien : 25 → souvent trop court, cause la perte
-SEUIL_VRAIMENT_PERDU = 70  # au-delà, on admet qu'on a vraiment quitté la piste
-
+def clamp(x,a,b):
+    return max(a,min(b,x))
 
 def tourner(cible):
-    global angle_actuel
-    angle_actuel = angle_actuel * 0.6 + cible * 0.4
-    servos.set_angle(0, round(angle_actuel, 1))
+    global angle
+    angle = angle*(1-SERVO_ALPHA)+cible*SERVO_ALPHA
+    servos.set_angle(0,round(angle,1))
 
-
-print("START")
 tourner(CENTRE)
-robot.set_motor(1, 30)
+robot.set_motor(1,30)
 time.sleep(1)
 
 try:
     while True:
 
         s = tracker.get_status()
-        etat = (s["left"], s["middle"], s["right"])
-        print(etat)
+        etat=(s["left"],s["middle"],s["right"])
 
-        # =====================
-        # LIGNE CENTREE
-        # =====================
-        if etat == (1, 1, 1):
-            compteur_virage = 0
-            compteur_perdu = 0
-            compteur_centre += 1
+        mesure=None
 
-            # NOUVEAU : on efface la mémoire du dernier virage une fois
-            # qu'on a confirmé plusieurs cycles de ligne droite stable.
-            # C'est ce qui empêche un virage déjà passé de "ressurgir"
-            # plus tard sur une zone de pointillés.
-            if compteur_centre > CENTRE_CONFIRME:
-                dernier_sens = 0
+        if etat==(1,1,1):
+            mesure=0
+        elif etat==(1,1,0):
+            mesure=1
+        elif etat==(1,0,0):
+            mesure=2
+        elif etat==(0,1,1):
+            mesure=-1
+        elif etat==(0,0,1):
+            mesure=-2
 
-            cible = CENTRE
-            vitesse = VITESSE_LIGNE
+        if mesure is not None:
+            blancs=0
+            etat_ctrl=SUIVI
+            erreur=(1-ERR_ALPHA)*erreur+ERR_ALPHA*mesure
 
-        # =====================
-        # VIRAGE GAUCHE
-        # =====================
-        elif etat == (1, 1, 0):
-            compteur_perdu = 0
-            compteur_centre = 0
-            compteur_virage += 1
-            dernier_sens = 1
+        else:
+            blancs+=1
 
-            if compteur_virage > 2:
-                cible = GAUCHE_FORT
-                vitesse = VITESSE_VIRAGE
-            else:
-                cible = GAUCHE_LEGER
-                vitesse = VITESSE_APPROCHE
+            if blancs<=ABSENCE_COURTE:
+                etat_ctrl=ABSENT
 
-        elif etat == (1, 0, 0):
-            compteur_perdu = 0
-            compteur_centre = 0
-            compteur_virage += 2
-            dernier_sens = 1
-            cible = GAUCHE_FORT
-            vitesse = VITESSE_VIRAGE
+            elif blancs<=RECHERCHE:
+                etat_ctrl=PROGRESSIF
 
-        # =====================
-        # VIRAGE DROITE
-        # =====================
-        elif etat == (0, 1, 1):
-            compteur_perdu = 0
-            compteur_centre = 0
-            compteur_virage += 1
-            dernier_sens = -1
-
-            if compteur_virage > 2:
-                cible = DROITE_FORT
-                vitesse = VITESSE_VIRAGE
-            else:
-                cible = DROITE_LEGER
-                vitesse = VITESSE_APPROCHE
-
-        elif etat == (0, 0, 1):
-            compteur_perdu = 0
-            compteur_centre = 0
-            compteur_virage += 2
-            dernier_sens = -1
-            cible = DROITE_FORT
-            vitesse = VITESSE_VIRAGE
-
-        # =====================
-        # POINTILLES OU PERTE
-        # =====================
-        elif etat == (0, 0, 0):
-            compteur_perdu += 1
-            compteur_centre = 0
-
-            # PHASE 1 : on vient de quitter une ligne centrée → très
-            # probablement un pointillé. On garde tout droit, sans
-            # appliquer aucun "dernier_sens" (qui ne doit JAMAIS
-            # intervenir tant qu'on pense être sur un pointillé).
-            if dernier_etat == (1, 1, 1) and compteur_perdu < SEUIL_POINTILLE:
-                cible = CENTRE
-                vitesse = VITESSE_LIGNE
-
-            # PHASE 2 : zone intermédiaire — on n'est plus sûr d'être
-            # sur un pointillé, mais pas encore "vraiment perdu".
-            # On continue tout droit en ralentissant légèrement,
-            # plutôt que de braquer franchement (ce qui causait le bug).
-            elif compteur_perdu < SEUIL_VRAIMENT_PERDU:
-                cible = CENTRE
-                vitesse = VITESSE_PERDU
-
-            # PHASE 3 : vraiment perdu (sortie de virage par ex.) →
-            # on utilise dernier_sens, mais seulement ici, et seulement
-            # si on n'est pas dans le cas pointillé ci-dessus.
-            else:
-                if dernier_sens == 1:
-                    cible = GAUCHE_FORT
-                elif dernier_sens == -1:
-                    cible = DROITE_FORT
+                if erreur>=0:
+                    erreur=min(erreur+0.08,2.0)
                 else:
-                    cible = CENTRE
-                vitesse = VITESSE_PERDU
+                    erreur=max(erreur-0.08,-2.0)
 
-        # =====================
-        # ACTION
-        # =====================
+            else:
+                etat_ctrl=LARGE
+                erreur=0
+
+        cible=CENTRE+GAIN*erreur
+        cible=clamp(cible,ANGLE_D,ANGLE_G)
+
+        if etat_ctrl==SUIVI:
+            vitesse=max(VMIN,int(VMAX-abs(erreur)*5))
+
+        elif etat_ctrl==ABSENT:
+            vitesse=max(VMIN,int(VMAX-2))
+
+        elif etat_ctrl==PROGRESSIF:
+            vitesse=VSEARCH
+
+        else:
+            vitesse=VSEARCH
+            cible=CENTRE
+
         tourner(cible)
-        robot.set_motor(1, vitesse)
+        robot.set_motor(1,vitesse)
 
-        if etat != (0, 0, 0):
-            dernier_etat = etat
+        print(etat,
+              "mode=",etat_ctrl,
+              "blancs=",blancs,
+              "err=",round(erreur,2),
+              "ang=",round(angle,1))
 
         time.sleep(0.025)
 
 except KeyboardInterrupt:
-    print("STOP")
     robot.stopper()
-    servos.set_angle(0, CENTRE)
+    servos.set_angle(0,CENTRE)
