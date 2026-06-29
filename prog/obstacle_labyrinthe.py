@@ -44,7 +44,7 @@ BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 0.5     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 1.2   # seconds: hold steering angle while clearing a corner
 
-TURN_OBSTACLE_DIST         = 10   # cm: if obstacle closer than this during a turn, interrupt
+TURN_OBSTACLE_DIST         = 20   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
 
