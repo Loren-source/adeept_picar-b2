@@ -39,12 +39,12 @@ ANGLE_LEFT   = 120   # full left turn
 ANGLE_RIGHT  = 65    # full right turn
 
 DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
-TURN_SPEED   = 80    # throttle % during cornering — needs more torque than straight driving
+TURN_SPEED   = 50    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 1.2   # seconds: hold steering angle while clearing a corner
 
-TURN_OBSTACLE_DIST         = 20   # cm: if obstacle closer than this during a turn, interrupt
+TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
 
