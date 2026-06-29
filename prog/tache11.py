@@ -76,14 +76,14 @@ try:
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_APPROCHE
         
-           elif etat == (1,0,0):
+            elif etat == (1,0,0):
                 compteur_blanc = 0
                 dernier_sens = 1
             
                 cible = GAUCHE_FORT
                 vitesse = VITESSE_VIRAGE
 
-           elif etat == (0,1,1):
+            elif etat == (0,1,1):
                 compteur_blanc = 0
                 dernier_sens = -1
             
