@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Suivi de ligne PiCar-B - Automate expérimental
+Patch v2 basé sur le code d'origine.
 
-Etats:
-0 = SUIVI
-1 = ABSENCE_COURTE (pointillés probables)
-2 = RECHERCHE_PROGRESSIVE
-3 = RECHERCHE_LARGE
-
-Réglages à ajuster sur le robot.
+Améliorations :
+- Conservation de la logique de virage d'origine.
+- Mémoire adaptative des blancs.
+- Réinitialisation de dernier_sens après une vraie ligne droite.
+- Sauvegarde de l'angle réellement envoyé au servo.
 """
 
 import time
@@ -21,114 +19,134 @@ servos = RobotServos()
 tracker = LineTracker()
 
 CENTRE = 97
-GAIN = 15
 
-ANGLE_G = 128
-ANGLE_D = 65
+GAUCHE_LEGER = 112
+DROITE_LEGER = 82
+GAUCHE_FORT = 128
+DROITE_FORT = 65
 
-VMAX = 34
-VMIN = 18
-VSEARCH = 14
+VITESSE_LIGNE = 34
+VITESSE_APPROCHE = 27
+VITESSE_VIRAGE = 18
+VITESSE_RECHERCHE = 14
 
-SERVO_ALPHA = 0.40
-ERR_ALPHA = 0.30
+angle_actuel = CENTRE
+dernier_angle = CENTRE
+derniere_vitesse = VITESSE_LIGNE
 
-ABSENCE_COURTE = 12      # ~300 ms
-RECHERCHE = 24           # ~600 ms
-RECHERCHE_LARGE = 40     # ~1 s
+dernier_sens = 0
+compteur_virage = 0
+compteur_blanc = 0
+compteur_centre = 0
 
-SUIVI = 0
-ABSENT = 1
-PROGRESSIF = 2
-LARGE = 3
+SERVO_ALPHA = 0.4
 
-etat_ctrl = SUIVI
-blancs = 0
-
-angle = CENTRE
-erreur = 0.0
-
-def clamp(x,a,b):
-    return max(a,min(b,x))
 
 def tourner(cible):
-    global angle
-    angle = angle*(1-SERVO_ALPHA)+cible*SERVO_ALPHA
-    servos.set_angle(0,round(angle,1))
+    global angle_actuel
+    angle_actuel = angle_actuel * (1 - SERVO_ALPHA) + cible * SERVO_ALPHA
+    servos.set_angle(0, round(angle_actuel, 1))
+
 
 tourner(CENTRE)
-robot.set_motor(1,30)
+robot.set_motor(1, 30)
 time.sleep(1)
 
 try:
     while True:
 
         s = tracker.get_status()
-        etat=(s["left"],s["middle"],s["right"])
+        etat = (s["left"], s["middle"], s["right"])
 
-        mesure=None
+        if etat == (1,1,1):
 
-        if etat==(1,1,1):
-            mesure=0
-        elif etat==(1,1,0):
-            mesure=1
-        elif etat==(1,0,0):
-            mesure=2
-        elif etat==(0,1,1):
-            mesure=-1
-        elif etat==(0,0,1):
-            mesure=-2
+            compteur_blanc = 0
+            compteur_virage = 0
+            compteur_centre += 1
 
-        if mesure is not None:
-            blancs=0
-            etat_ctrl=SUIVI
-            erreur=(1-ERR_ALPHA)*erreur+ERR_ALPHA*mesure
+            if compteur_centre >= 10:
+                dernier_sens = 0
+
+            cible = CENTRE
+            vitesse = VITESSE_LIGNE
 
         else:
-            blancs+=1
+            compteur_centre = 0
 
-            if blancs<=ABSENCE_COURTE:
-                etat_ctrl=ABSENT
+            if etat == (1,1,0):
 
-            elif blancs<=RECHERCHE:
-                etat_ctrl=PROGRESSIF
+                compteur_blanc = 0
+                compteur_virage += 1
+                dernier_sens = 1
 
-                if erreur>=0:
-                    erreur=min(erreur+0.08,2.0)
+                cible = GAUCHE_FORT if compteur_virage > 2 else GAUCHE_LEGER
+                vitesse = VITESSE_VIRAGE if compteur_virage > 2 else VITESSE_APPROCHE
+
+            elif etat == (1,0,0):
+
+                compteur_blanc = 0
+                compteur_virage += 2
+                dernier_sens = 1
+                cible = GAUCHE_FORT
+                vitesse = VITESSE_VIRAGE
+
+            elif etat == (0,1,1):
+
+                compteur_blanc = 0
+                compteur_virage += 1
+                dernier_sens = -1
+
+                cible = DROITE_FORT if compteur_virage > 2 else DROITE_LEGER
+                vitesse = VITESSE_VIRAGE if compteur_virage > 2 else VITESSE_APPROCHE
+
+            elif etat == (0,0,1):
+
+                compteur_blanc = 0
+                compteur_virage += 2
+                dernier_sens = -1
+                cible = DROITE_FORT
+                vitesse = VITESSE_VIRAGE
+
+            else:  # 000
+
+                compteur_blanc += 1
+
+                memoire = 18 if dernier_sens == 0 else 8
+
+                if compteur_blanc <= memoire:
+                    cible = dernier_angle
+                    vitesse = derniere_vitesse
+
+                elif compteur_blanc <= memoire + 12:
+
+                    if dernier_sens == 1:
+                        cible = min(dernier_angle + (compteur_blanc - memoire), GAUCHE_FORT)
+                    elif dernier_sens == -1:
+                        cible = max(dernier_angle - (compteur_blanc - memoire), DROITE_FORT)
+                    else:
+                        cible = CENTRE
+
+                    vitesse = VITESSE_RECHERCHE
+
                 else:
-                    erreur=max(erreur-0.08,-2.0)
-
-            else:
-                etat_ctrl=LARGE
-                erreur=0
-
-        cible=CENTRE+GAIN*erreur
-        cible=clamp(cible,ANGLE_D,ANGLE_G)
-
-        if etat_ctrl==SUIVI:
-            vitesse=max(VMIN,int(VMAX-abs(erreur)*5))
-
-        elif etat_ctrl==ABSENT:
-            vitesse=max(VMIN,int(VMAX-2))
-
-        elif etat_ctrl==PROGRESSIF:
-            vitesse=VSEARCH
-
-        else:
-            vitesse=VSEARCH
-            cible=CENTRE
+                    cible = CENTRE
+                    vitesse = VITESSE_RECHERCHE
 
         tourner(cible)
-        robot.set_motor(1,vitesse)
+        robot.set_motor(1, vitesse)
+
+        if etat != (0,0,0):
+            dernier_angle = angle_actuel
+            derniere_vitesse = vitesse
 
         print(etat,
-              "mode=",etat_ctrl,
-              "blancs=",blancs,
-              "err=",round(erreur,2),
-              "ang=",round(angle,1))
+              "blanc=", compteur_blanc,
+              "centre=", compteur_centre,
+              "sens=", dernier_sens,
+              "servo=", round(angle_actuel,1))
 
         time.sleep(0.025)
 
 except KeyboardInterrupt:
     robot.stopper()
-    servos.set_angle(0,CENTRE)
+    servos.set_angle(0, CENTRE)
