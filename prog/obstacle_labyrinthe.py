@@ -27,7 +27,7 @@ from arrow_detector import detect_arrow   # arrow_detector.py — OpenCV arrow a
 # ──────────────────────────────────────────────────────────────────────────────
 # Tunable constants — adjust these for your maze and robot
 # ──────────────────────────────────────────────────────────────────────────────
-DIST_MIN         = 35    # cm: stop and read arrow when distance >= DIST_MIN
+DIST_MIN         = 38    # cm: stop and read arrow when distance >= DIST_MIN
 DIST_MAX         = 40    # cm: stop and read arrow when distance <= DIST_MAX
 ARROW_TIMEOUT    = 5.0   # seconds: total time budget for arrow detection attempts
 CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detection
@@ -42,8 +42,8 @@ DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
 TURN_SPEED   = 50    # throttle % during cornering — needs more torque than straight driving
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 0.5     # seconds: how long to reverse when no arrow is found
-TURN_HOLD    = 1   # seconds: hold steering angle while clearing a corner
-TURN_HOLD_OPPOSITE = 0.6
+TURN_HOLD    = 1.2   # seconds: hold steering angle while clearing a corner
+TURN_HOLD_OPPOSITE = 0.4
 
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
