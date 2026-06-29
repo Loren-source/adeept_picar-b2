@@ -43,7 +43,7 @@ TURN_SPEED   = 50    # throttle % during cornering — needs more torque than st
 BACKUP_SPEED = 20    # throttle % for reversing
 BACKUP_TIME  = 1     # seconds: how long to reverse when no arrow is found
 TURN_HOLD    = 0.8   # seconds: hold steering angle while clearing a corner
-TURN_HOLD_OPPOSITE = 0.4
+TURN_HOLD_OPPOSITE = 0.8
 
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
