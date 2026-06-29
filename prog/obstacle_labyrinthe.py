@@ -65,6 +65,14 @@ def steer(servos, direction):
     else:
         servos.set_angle(0, ANGLE_CENTER)
 
+def opposite_direction(direction):
+    if direction == 'left':
+        direction = 'right'
+        return direction
+    if direction == 'right':
+        direction = 'left'
+    return direction
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Turn with mid-turn obstacle check
@@ -91,7 +99,7 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
         if remaining <= 0:
             break
 
-    steer(servos, -direction)
+    steer(servos, opposite_direction(direction))
     move.video_Tracking_Move(speed, -1)
 
     remaining = duration_opposite
