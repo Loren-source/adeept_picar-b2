@@ -32,13 +32,13 @@ SPEED_TURN       = 50    # Vitesse pendant les virages d'évitement
 SPEED_BACK       = 40    # Vitesse en marche arrière
 
 # Distances ultrason (cm)
-DIST_STOP        = 40    # Distance limite pour déclencher l'analyse d'obstacle
+DIST_STOP        = 50    # Distance limite pour déclencher l'analyse d'obstacle
 DIST_BACK        = 20    # Distance critique nécessitant une marche arrière immédiate
 
 # Paramètres des servos et timings
 SCAN_ANGLE       = 60    # Angle de rotation de la tête ultrason (degrés)
-TURN_TIME        = 0.6   # Temps de braquage pour contourner l'obstacle (secondes)
-BACK_TIME        = 0.3   # Temps de recul en cas d'urgence (secondes)
+TURN_TIME        = 0.2   # Temps de braquage pour contourner l'obstacle (secondes)
+BACK_TIME        = 0.2   # Temps de recul en cas d'urgence (secondes)
 
 # Seuils de détection de la couleur bleue (Espace HSV)
 BLUE_LOWER       = np.array([100, 100, 50])
