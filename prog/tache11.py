@@ -15,24 +15,22 @@ tracker = LineTracker()
 # PARAMÈTRES
 # ============================================================
 CENTRE            = 97
-GAIN_ANGLE        = 50.0
 SERVO_ALPHA       = 0.7
 
-# Angles extrêmes (ajustez selon les capacités physiques du servo)
-ANGLE_GAUCHE_MAX  = 169          # braquage max à gauche (proche de 180)
-ANGLE_DROITE_MAX  = 25           # braquage max à droite (proche de 0)
+# Angles en fonction de l'état (modulés)
+ANGLE_GAUCHE_MODERE  = 130
+ANGLE_GAUCHE_SERRE   = 160
+ANGLE_DROITE_MODERE  = 64
+ANGLE_DROITE_SERRE   = 34
 
 # VITESSES
 VITESSE_DROITE    = 34
-VITESSE_VIRAGE    = 4            # très lent pour les virages serrés
+VITESSE_VIRAGE    = 8             # un peu plus rapide que 4
 VITESSE_PERDU     = 4
 VITESSE_RECH      = 4
 
 # LISSAGE DE LA VITESSE
 VITESSE_ALPHA     = 0.3
-
-# Seuil pour considérer qu'on est en virage (erreur absolue)
-SEUIL_VIRAGE      = 0.3
 
 # Gestion des pertes
 MAX_HOLD          = 50
@@ -47,6 +45,7 @@ erreur_connue     = 0.0
 compteur_000      = 0
 dernier_sens      = 0
 vitesse_actuelle  = VITESSE_DROITE
+dernier_etat_non_nul = (1,1,1)
 
 # ============================================================
 # FONCTIONS
@@ -66,45 +65,18 @@ def tourner(cible):
     angle_actuel = angle_actuel * (1 - SERVO_ALPHA) + cible * SERVO_ALPHA
     servos.set_angle(0, round(angle_actuel, 1))
 
-def vitesse_cible(pos, etat):
-    """Calcule la vitesse cible en fonction de l'erreur et de l'état."""
-    if pos is None:
-        return VITESSE_PERDU
-    abs_pos = abs(pos)
-    # Si on est en virage (état asymétrique), on force la vitesse virage
-    if etat in [(1,1,0), (1,0,0), (0,1,1), (0,0,1)]:
-        return VITESSE_VIRAGE
-    # Sinon, variation progressive
-    if abs_pos < SEUIL_VIRAGE:
-        return VITESSE_DROITE
-    else:
-        facteur = 1.0 - (abs_pos - SEUIL_VIRAGE) / (1.0 - SEUIL_VIRAGE)
-        facteur = max(0.1, facteur)
-        return VITESSE_VIRAGE + (VITESSE_DROITE - VITESSE_VIRAGE) * facteur
-
-def angle_cible_depuis_pos(pos, etat):
-    """Détermine l'angle cible en fonction de l'erreur et de l'état."""
-    if pos is None:
-        return CENTRE  # sera remplacé en cas de perte
-    
-    # Si on est en virage serré (seul capteur extérieur), on force l'angle extrême
-    if etat == (1,0,0):
-        return ANGLE_GAUCHE_MAX
-    elif etat == (0,0,1):
-        return ANGLE_DROITE_MAX
-    elif etat == (1,1,0):
-        # virage à gauche modéré, on peut utiliser le gain
-        angle = CENTRE - GAIN_ANGLE * pos
-        # mais on limite à ANGLE_GAUCHE_MAX
-        return min(angle, ANGLE_GAUCHE_MAX)
+def angle_cible_depuis_etat(etat):
+    """Retourne l'angle cible en fonction de l'état des capteurs."""
+    if etat == (1,1,0):
+        return ANGLE_GAUCHE_MODERE
+    elif etat == (1,0,0):
+        return ANGLE_GAUCHE_SERRE
     elif etat == (0,1,1):
-        angle = CENTRE - GAIN_ANGLE * pos
-        return max(angle, ANGLE_DROITE_MAX)
+        return ANGLE_DROITE_MODERE
+    elif etat == (0,0,1):
+        return ANGLE_DROITE_SERRE
     else:
-        # cas centré ou autres
-        angle = CENTRE - GAIN_ANGLE * pos
-        # on limite aux extrêmes
-        return max(ANGLE_DROITE_MAX, min(ANGLE_GAUCHE_MAX, angle))
+        return CENTRE  # cas (1,1,1)
 
 # ============================================================
 # DÉMARRAGE
@@ -124,53 +96,51 @@ try:
             # ---- Ligne visible ----
             compteur_000 = 0
             erreur_connue = pos
+            dernier_etat_non_nul = etat
 
-            # Mémoriser la direction pour la recherche
             if etat in [(1,1,0), (1,0,0)]:
                 dernier_sens = 1
             elif etat in [(0,1,1), (0,0,1)]:
                 dernier_sens = -1
 
-            # Angle cible
-            angle_cible = angle_cible_depuis_pos(pos, etat)
+            angle_cible = angle_cible_depuis_etat(etat)
 
-            # Vitesse cible
-            vitesse_target = vitesse_cible(pos, etat)
+            # Vitesse : si en virage, on réduit mais pas trop
+            if etat in [(1,1,0), (1,0,0), (0,1,1), (0,0,1)]:
+                vitesse_target = VITESSE_VIRAGE
+            else:
+                vitesse_target = VITESSE_DROITE
 
         else:
             # ---- Ligne perdue (000) ----
             compteur_000 += 1
 
             if compteur_000 <= MAX_HOLD:
-                # Mémoire : on continue avec la dernière trajectoire
-                angle_cible = angle_cible_depuis_pos(erreur_connue, dernier_etat_non_nul)
-                vitesse_target = vitesse_cible(erreur_connue, dernier_etat_non_nul)
+                angle_cible = angle_cible_depuis_etat(dernier_etat_non_nul)
+                vitesse_target = VITESSE_VIRAGE if dernier_etat_non_nul in [(1,1,0), (1,0,0), (0,1,1), (0,0,1)] else VITESSE_DROITE
             else:
-                # Perte réelle
                 if compteur_000 - MAX_HOLD <= MAINTIEN_AVANT_BALAYAGE:
-                    # On reste braqué dans la dernière direction
                     if dernier_sens == 1:
-                        angle_cible = ANGLE_GAUCHE_MAX
+                        angle_cible = ANGLE_GAUCHE_SERRE
                     elif dernier_sens == -1:
-                        angle_cible = ANGLE_DROITE_MAX
+                        angle_cible = ANGLE_DROITE_SERRE
                     else:
                         angle_cible = CENTRE
                     vitesse_target = VITESSE_RECH
                 else:
-                    # Balayage alterné
                     phase = (compteur_000 - MAX_HOLD - MAINTIEN_AVANT_BALAYAGE) // DUREE_RECHERCHE
                     if phase % 2 == 0:
                         if dernier_sens == 1:
-                            angle_cible = ANGLE_GAUCHE_MAX
+                            angle_cible = ANGLE_GAUCHE_SERRE
                         elif dernier_sens == -1:
-                            angle_cible = ANGLE_DROITE_MAX
+                            angle_cible = ANGLE_DROITE_SERRE
                         else:
                             angle_cible = CENTRE
                     else:
                         if dernier_sens == 1:
-                            angle_cible = ANGLE_DROITE_MAX
+                            angle_cible = ANGLE_DROITE_SERRE
                         elif dernier_sens == -1:
-                            angle_cible = ANGLE_GAUCHE_MAX
+                            angle_cible = ANGLE_GAUCHE_SERRE
                         else:
                             angle_cible = CENTRE
                     vitesse_target = VITESSE_PERDU
@@ -182,10 +152,6 @@ try:
         # ---- Application ----
         tourner(angle_cible)
         robot.set_motor(1, vitesse_appliquee)
-
-        # Mémoriser le dernier état non nul pour la perte
-        if pos is not None:
-            dernier_etat_non_nul = etat
 
         if compteur_000 % 10 == 0:
             print(f"{etat}  pos={pos if pos is not None else '---'}  "
