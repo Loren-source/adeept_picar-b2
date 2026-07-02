@@ -18,8 +18,8 @@ CENTRE            = 97
 SERVO_ALPHA       = 0.7
 
 # Angles (limites physiques)
-ANGLE_GAUCHE_MAX  = 170
-ANGLE_DROITE_MAX  = 20           # valeur minimale que votre servo peut atteindre
+ANGLE_GAUCHE_MAX  = 128
+ANGLE_DROITE_MAX  = 65           # valeur minimale que votre servo peut atteindre
 
 # VITESSES
 VITESSE_DROITE    = 34
