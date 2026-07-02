@@ -12,29 +12,29 @@ servos = RobotServos()
 tracker = LineTracker()
 
 # ============================================================
-# PARAMÈTRES
+# PARAMÈTRES (vos valeurs conservées)
 # ============================================================
 CENTRE            = 97
 SERVO_ALPHA       = 0.7
 
-# Angles (limites physiques)
+# Angles extrêmes (vos limites)
 ANGLE_GAUCHE_MAX  = 128
-ANGLE_DROITE_MAX  = 65           # valeur minimale que votre servo peut atteindre
+ANGLE_DROITE_MAX  = 65
 
-# VITESSES
+# VITESSES (vos valeurs conservées)
 VITESSE_DROITE    = 34
 VITESSE_VIRAGE_GAUCHE = 20
-VITESSE_VIRAGE_DROITE = 18       # très lent
+VITESSE_VIRAGE_DROITE = 18
 VITESSE_PERDU     = 2
 VITESSE_RECH      = 2
 
 # LISSAGE
 VITESSE_ALPHA     = 0.3
 
-# Gestion des pertes
+# Gestion des pertes (vous pouvez ajuster)
 MAX_HOLD          = 60
 MAINTIEN_AVANT_BALAYAGE = 100
-DUREE_RECHERCHE   = 300
+DUREE_RECHERCHE   = 100   # réduit pour alterner plus vite si nécessaire
 
 # ============================================================
 # VARIABLES D'ÉTAT
@@ -64,14 +64,25 @@ def tourner(cible):
     angle_actuel = angle_actuel * (1 - SERVO_ALPHA) + cible * SERVO_ALPHA
     servos.set_angle(0, round(angle_actuel, 1))
 
-def angle_cible_depuis_etat(etat):
-    # Anticipation : dès qu'on voit (0,1,1) on braque à fond à droite
-    if etat == (0,1,1) or etat == (0,0,1):
-        return ANGLE_DROITE_MAX
-    elif etat == (1,1,0) or etat == (1,0,0):
-        return ANGLE_GAUCHE_MAX
-    else:
+def angle_cible_depuis_pos(pos):
+    """
+    Calcule l'angle de manière proportionnelle à l'erreur pos,
+    avec saturation aux bornes ANGLE_DROITE_MAX et ANGLE_GAUCHE_MAX.
+    """
+    if pos is None:
         return CENTRE
+    # pos est entre -1 (tout à gauche) et 1 (tout à droite)
+    # On mappe pos sur l'intervalle [ANGLE_GAUCHE_MAX, ANGLE_DROITE_MAX]
+    # ANGLE_GAUCHE_MAX > CENTRE, ANGLE_DROITE_MAX < CENTRE
+    if pos <= 0:
+        # à gauche : de CENTRE à ANGLE_GAUCHE_MAX
+        facteur = -pos  # 0 à 1
+        angle = CENTRE + (ANGLE_GAUCHE_MAX - CENTRE) * facteur
+    else:
+        # à droite : de CENTRE à ANGLE_DROITE_MAX
+        facteur = pos    # 0 à 1
+        angle = CENTRE - (CENTRE - ANGLE_DROITE_MAX) * facteur
+    return max(ANGLE_DROITE_MAX, min(ANGLE_GAUCHE_MAX, angle))
 
 # ============================================================
 # DÉMARRAGE
@@ -97,9 +108,9 @@ try:
             elif etat in [(0,1,1), (0,0,1)]:
                 dernier_sens = -1
 
-            angle_cible = angle_cible_depuis_etat(etat)
+            angle_cible = angle_cible_depuis_pos(pos)
 
-            # Vitesse : très lente pour les virages à droite
+            # Vitesse différenciée (vos valeurs)
             if etat in [(1,1,0), (1,0,0)]:
                 vitesse_target = VITESSE_VIRAGE_GAUCHE
             elif etat in [(0,1,1), (0,0,1)]:
@@ -111,7 +122,8 @@ try:
             compteur_000 += 1
 
             if compteur_000 <= MAX_HOLD:
-                angle_cible = angle_cible_depuis_etat(dernier_etat_non_nul)
+                # Mémoire : on continue avec la dernière position connue
+                angle_cible = angle_cible_depuis_pos(erreur_connue)
                 if dernier_etat_non_nul in [(1,1,0), (1,0,0)]:
                     vitesse_target = VITESSE_VIRAGE_GAUCHE
                 elif dernier_etat_non_nul in [(0,1,1), (0,0,1)]:
@@ -119,7 +131,9 @@ try:
                 else:
                     vitesse_target = VITESSE_DROITE
             else:
+                # Perte réelle
                 if compteur_000 - MAX_HOLD <= MAINTIEN_AVANT_BALAYAGE:
+                    # On reste dans la dernière direction avec l'angle extrême
                     if dernier_sens == 1:
                         angle_cible = ANGLE_GAUCHE_MAX
                     elif dernier_sens == -1:
@@ -128,6 +142,7 @@ try:
                         angle_cible = CENTRE
                     vitesse_target = VITESSE_RECH
                 else:
+                    # Balayage alterné
                     phase = (compteur_000 - MAX_HOLD - MAINTIEN_AVANT_BALAYAGE) // DUREE_RECHERCHE
                     if phase % 2 == 0:
                         if dernier_sens == 1:
