@@ -3,9 +3,11 @@
 import os
 import sys
 
-# base_camera, Kalman_filter, PID and switch live in web/ — add it to the path
-_web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web')
-if os.path.isdir(_web_dir) and _web_dir not in sys.path:
+# base_camera, Kalman_filter, PID and switch live in web/ — add it to the path.
+# normpath collapses the '..' so sys.path gets a clean absolute string, avoiding
+# both false-duplicate detection and import machinery quirks with '..' in paths.
+_web_dir = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'web'))
+if _web_dir not in sys.path:
     sys.path.insert(0, _web_dir)
 
 import cv2
