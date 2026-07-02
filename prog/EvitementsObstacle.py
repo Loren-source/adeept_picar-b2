@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Mission C Finale : Évitement d'obstacles intelligent et maintien de zone.
-Utilise l'initialisation Adafruit PCA9685 (Adresse 0x5f) pour les servomoteurs.
+Sécurité renforcée sur le canal CH01 pour stabiliser l'ultrason en ligne droite.
 """
 
 import time
@@ -27,22 +27,20 @@ if script_dir not in sys.path:
 import move
 import ultra
 
-# ==========================================
-# CONFIGURATION / PARAMÈTRES GLOBAUX
-# ==========================================
+
 PCA_ADDRESS      = 0x5f
 PWM_FREQ         = 50
 MIN_PULSE        = 500
 MAX_PULSE        = 2400
 ACTUATION        = 180
 
-CANAL_TETE_H     = 1     # Servomoteur horizontal de la tête ultrason
-CANAL_DIRECTION  = 2     # Servomoteur de direction des roues avant
+CANAL_TETE_H     = 1     # Servomoteur horizontal de la tête ultrason (CH01)
+CANAL_DIRECTION  = 2     # Servomoteur de direction des roues avant (CH02)
 
 # Angles absolus Adafruit (Base 90° au centre)
 TETE_CENTRE      = 90
-TETE_GAUCHE      = 150   
-TETE_DROITE      = 30    
+TETE_GAUCHE      = 150   # 90 + 60 degrés pour regarder à gauche
+TETE_DROITE      = 30    # 90 - 60 degrés pour regarder à droite
 
 ROUES_CENTRE     = 90
 ROUES_GAUCHE     = 128   
@@ -71,9 +69,7 @@ LINE_PIN_LEFT    = 22
 LINE_PIN_MIDDLE  = 27
 LINE_PIN_RIGHT   = 17
 
-# ==========================================
-# INITIALISATION DU MATÉRIEL
-# ==========================================
+
 print("🔧 Initialisation du matériel...")
 
 move.setup()
@@ -83,6 +79,7 @@ try:
     pca = PCA9685(i2c, address=PCA_ADDRESS)
     pca.frequency = PWM_FREQ
     
+    # Association explicite des canaux CH01 et CH02
     servo_tete = servo.Servo(pca.channels[CANAL_TETE_H], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
     servo_dir  = servo.Servo(pca.channels[CANAL_DIRECTION], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
     print("✅ Contrôleur de Servomoteurs Adafruit (0x5f) initialisé.")
@@ -102,10 +99,8 @@ except Exception as e:
     ultrasonic_sensor = None
 
 
-# ==========================================
-# FONCTIONS DE NAVIGATION ET DES SERVOS
-# ==========================================
 def positionner_servos_centre():
+    """Force CH01 et CH02 à se remettre au centre (90°)."""
     servo_dir.angle = ROUES_CENTRE
     servo_tete.angle = TETE_CENTRE
     time.sleep(0.3)
@@ -126,26 +121,26 @@ def get_distance():
 
 
 def scan_left_right():
-    """Fait pivoter physiquement la tête à gauche et à droite pour mesurer."""
+    """Fait pivoter physiquement CH01 à gauche et à droite pour mesurer les côtés."""
     move.motorStop()
     time.sleep(0.1)
 
-    # 1. Balayage à GAUCHE (150°)
-    print("🔄 Scan : La tête pivote à GAUCHE...")
+    # 1. Balayage à GAUCHE (150° sur CH01)
+    print("🔄 Scan [CH01] : La tête pivote à GAUCHE...")
     servo_tete.angle = TETE_GAUCHE
     time.sleep(0.6)  
     dist_left = get_distance()
     print(f"📊 Distance Gauche : {dist_left:.1f} cm")
 
-    # 2. Balayage à DROITE (30°)
-    print("🔄 Scan : La tête pivote à DROITE...")
+    # 2. Balayage à DROITE (30° sur CH01)
+    print("🔄 Scan [CH01] : La tête pivote à DROITE...")
     servo_tete.angle = TETE_DROITE
     time.sleep(0.8)  
     dist_right = get_distance()
     print(f"📊 Distance Droite : {dist_right:.1f} cm")
 
-    # 3. Retour au CENTRE (90°)
-    print("🔄 Scan terminé : Remise de la tête au CENTRE.")
+    # 3. Retour au CENTRE (90° sur CH01)
+    print("🔄 Scan terminé [CH01] : Remise de la tête au CENTRE.")
     servo_tete.angle = TETE_CENTRE
     time.sleep(0.4)
 
@@ -157,36 +152,36 @@ def avoid_obstacle():
     print(f"📏 Obstacle devant à : {dist:.1f} cm")
 
     if dist > DIST_STOP:
-        servo_dir.angle = ROUES_CENTRE  
+        # CORRECTION : On s'assure activement que la tête (CH01) regarde bien devant pendant qu'on roule
+        servo_tete.angle = TETE_CENTRE  
+        servo_dir.angle = ROUES_CENTRE  # CH02 droit
         move.move(SPEED_FORWARD, 1, "mid")
         return
 
     if dist < DIST_BACK:
         print("🔴 Danger : Obstacle trop près ! Marche arrière d'urgence.")
+        servo_tete.angle = TETE_CENTRE
         servo_dir.angle = ROUES_CENTRE
         move.move(SPEED_BACK, -1, "mid")
         time.sleep(BACK_TIME)
         move.motorStop()
 
-    print("🤔 Obstacle détecté. Analyse du champ libre...")
+    print("🤔 Obstacle détecté. Activation du servomoteur CH01 pour le scan...")
     direction = scan_left_right()
 
     if direction == 'left':
         print("↩️  Action : Évitement par la GAUCHE")
-        servo_dir.angle = ROUES_GAUCHE      
+        servo_dir.angle = ROUES_GAUCHE      # CH02 braque à gauche
         move.move(SPEED_TURN, 1, "left")
     else:
         print("↪️  Action : Évitement par la DROITE")
-        servo_dir.angle = ROUES_DROITE      
+        servo_dir.angle = ROUES_DROITE      # CH02 braque à droite
         move.move(SPEED_TURN, 1, "right")
 
     time.sleep(TURN_TIME)
-    servo_dir.angle = ROUES_CENTRE      
+    servo_dir.angle = ROUES_CENTRE          # CH02 se remet droit
 
 
-# ==========================================
-# FONCTIONS DE VISION (CAMÉRA)
-# ==========================================
 def init_camera():
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(main={"size": (640, 480), "format": "RGB888"})
@@ -207,33 +202,23 @@ def detect_blue(picam2):
     return blue_pixels >= BLUE_MIN_PIXELS
 
 
-# ==========================================
-# GESTION DES BORDURES (CAPTEURS IR)
-# ==========================================
+
 def read_ir_sensors():
     return track_left.value, track_middle.value, track_right.value
 
 def is_out_of_zone():
     left, middle, right = read_ir_sensors()
     print(f"🔍 DEBUG IR -> Gauche: {left} | Milieu: {middle} | Droite: {right}")
-    
-    # 🔓 MODIFICATION APPLIQUÉE : On renvoie False pour le moment afin d'empêcher 
-    # le robot de se couper direct. Tu l'arrêteras manuellement avec Ctrl+C.
-    return False
-
-def ir_correction():
-    # Desactivé temporairement pour éviter les interférences avec le sol non calibré
-    return False
+    return False # Sécurité coupée temporairement pour tes tests de mouvements
 
 
-# ==========================================
-# BOUCLE PRINCIPALE EXÉCUTABLE
-# ==========================================
+
 if __name__ == '__main__':
     print("\n=========================================")
     print("🚀 DÉMARRAGE : Mission C — PiCar-B Autonome")
     print("=========================================\n")
 
+    # Alignement initial parfait de CH01 et CH02
     positionner_servos_centre()
     picam2 = init_camera()
 
@@ -254,17 +239,14 @@ if __name__ == '__main__':
     print("\n🤖 Mode autonome activé. Le robot navigue...")
     print("🚀 Propulsion initiale pour quitter la marque bleue de départ...")
     servo_dir.angle = ROUES_CENTRE
+    servo_tete.angle = TETE_CENTRE # Fixe CH01 bien en face dès le départ
     move.move(SPEED_FORWARD, 1, "mid")
     time.sleep(0.5) 
     
     try:
         while True:
             if is_out_of_zone():
-                print("\n🏁 Mission accomplie : Sortie de zone détectée. Arrêt du robot.")
                 break
-
-            if ir_correction():
-                continue
 
             avoid_obstacle()
             time.sleep(0.02)
