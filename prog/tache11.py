@@ -15,21 +15,21 @@ tracker = LineTracker()
 # PARAMÈTRES (réglables sur le terrain)
 # ============================================================
 CENTRE        = 97
-GAIN_ANGLE    = 30.0          # braquage proportionnel
-SERVO_ALPHA   = 0.7           # lissage du servo (0.7 = réactif)
-MAX_HOLD      = 12            # cycles de mémoire en 000 (12 × 25 ms = 300 ms)
+GAIN_ANGLE    = 35.0          # augmenté pour les virages serrés
+SERVO_ALPHA   = 0.7
+MAX_HOLD      = 12            # mémoire courte en 000
 
 VITESSE_MAX   = 34
-VITESSE_MIN   = 16
-VITESSE_RECH  = 14
+VITESSE_MIN   = 12            # réduit pour les virages très serrés
+VITESSE_RECH  = 10            # vitesse de recherche (encore plus lente)
+VITESSE_PERDU = 8             # si vraiment perdu
 
-# Seuils pour la mémorisation de direction
 SEUIL_GAUCHE  = -0.3
 SEUIL_DROITE  =  0.3
 
-# Balayage après perte prolongée
-SEUIL_BALAYAGE = 50           # après 50 cycles (1,25 s) de perte, on cherche
-DUREE_PHASE    = 30           # chaque phase dure 30 cycles (0,75 s)
+# Balayage : on change de direction toutes les 50 cycles (1,25 s)
+SEUIL_BALAYAGE = 50
+DUREE_PHASE    = 50            # augmenté pour laisser le temps au servo
 
 # ============================================================
 # VARIABLES D'ÉTAT
@@ -37,7 +37,7 @@ DUREE_PHASE    = 30           # chaque phase dure 30 cycles (0,75 s)
 angle_actuel   = CENTRE
 erreur_connue  = 0.0
 compteur_000   = 0
-dernier_sens   = 0            # 1=gauche, -1=droite, 0=inconnu
+dernier_sens   = 0            # 1=gauche, -1=droite
 
 # ============================================================
 # FONCTIONS
@@ -84,11 +84,11 @@ try:
                 dernier_sens = 1
             elif pos > SEUIL_DROITE:
                 dernier_sens = -1
-            # sinon on ne change rien
+            # sinon on garde le dernier sens
 
             # Commande proportionnelle
             angle_cible = CENTRE - GAIN_ANGLE * pos
-            angle_cible = max(60, min(134, angle_cible))
+            angle_cible = max(55, min(139, angle_cible))  # plage élargie
 
             # Vitesse adaptative
             vitesse = VITESSE_MAX - abs(pos) * 18
@@ -101,7 +101,7 @@ try:
             if compteur_000 <= MAX_HOLD:
                 # Pendant la mémoire courte, on suit la dernière trajectoire connue
                 angle_cible = CENTRE - GAIN_ANGLE * erreur_connue
-                angle_cible = max(60, min(134, angle_cible))
+                angle_cible = max(55, min(139, angle_cible))
                 vitesse = VITESSE_MAX - abs(erreur_connue) * 18
                 vitesse = max(VITESSE_MIN, min(VITESSE_MAX, vitesse))
 
@@ -110,22 +110,20 @@ try:
                 if compteur_000 < SEUIL_BALAYAGE:
                     # On braque dans la dernière direction connue
                     if dernier_sens == 1:
-                        angle_cible = 128
+                        angle_cible = 135   # braquage plus fort
                     elif dernier_sens == -1:
-                        angle_cible = 65
+                        angle_cible = 59    # braquage plus fort
                     else:
                         angle_cible = CENTRE
                     vitesse = VITESSE_RECH
                 else:
-                    # Balayage alterné par phases (évite l'oscillation rapide)
+                    # Balayage alterné par phases plus longues
                     phase = (compteur_000 - SEUIL_BALAYAGE) // DUREE_PHASE
                     if phase % 2 == 0:
-                        angle_cible = 128
+                        angle_cible = 135
                     else:
-                        angle_cible = 65
-                    vitesse = VITESSE_RECH
-                    # Optionnel : si on cherche trop longtemps, on peut réinitialiser
-                    # pour recommencer le cycle (mais ce n'est pas obligatoire)
+                        angle_cible = 59
+                    vitesse = VITESSE_PERDU   # très lent pour laisser le temps
 
         # ---- Application ----
         tourner(angle_cible)
