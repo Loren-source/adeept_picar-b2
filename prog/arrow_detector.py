@@ -79,3 +79,30 @@ def detect_arrow(frame):
 
     # Only horizontal arrows are expected; vertical imbalance is ignored.
     return 'right' if right_count > left_count else 'left'
+
+
+def get_arrow_centroid_offset(frame):
+    """
+    Return the horizontal pixel offset of the detected arrow's corner centroid
+    from the frame centre.  Positive = arrow is to the right of centre.
+    Returns None if no arrow can be detected (same conditions as detect_arrow).
+    """
+    if frame is None:
+        return None
+
+    gray    = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    kernel = np.ones((3, 3), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    corners = cv2.goodFeaturesToTrack(
+        binary, maxCorners=50, qualityLevel=0.01, minDistance=10, blockSize=7
+    )
+    if corners is None or len(corners) < 4:
+        return None
+
+    pts = corners.reshape(-1, 2).astype(np.float32)
+    centroid_x     = pts[:, 0].mean()
+    frame_center_x = frame.shape[1] / 2.0
+    return centroid_x - frame_center_x

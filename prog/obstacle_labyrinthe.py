@@ -22,7 +22,7 @@ from Caméra import Camera             # Caméra.py — provides capture_frame()
                                       #       CVThread class-level statements on import.
 import move                           # move.py   — motor control
 from servo import servo_dir            # servo.py  — module-level Adafruit Servo on CANAL_DIRECTION
-from arrow_detector import detect_arrow   # arrow_detector.py — OpenCV arrow analysis
+from arrow_detector import detect_arrow, get_arrow_centroid_offset
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tunable constants — adjust these for your maze and robot
@@ -47,6 +47,11 @@ TURN_HOLD_OPPOSITE = 0.6
 
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
+
+ALIGN_THRESHOLD_PX = 40   # pixels: max acceptable centroid offset from frame centre (frame ~640 px wide)
+ALIGN_NUDGE_FWD    = 0.12 # seconds: forward arc duration per alignment nudge
+ALIGN_NUDGE_BWD    = 0.06 # seconds: backward arc duration per alignment nudge
+ALIGN_MAX_ITER     = 5    # max nudge attempts before giving up and using best reading
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -108,6 +113,53 @@ def turn_with_obstacle_check(ultrasonic, direction, duration, duration_opposite,
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Alignment: centre the robot on the arrow before committing to a turn
+# ──────────────────────────────────────────────────────────────────────────────
+def align_with_arrow():
+    """
+    Nudge the robot left or right (tiny forward-arc + backward-arc) until the
+    detected arrow centroid is within ALIGN_THRESHOLD_PX of the frame centre.
+    The camera must already be running when this is called.
+
+    Returns the arrow direction from the final centred frame, or None if the
+    arrow is lost during alignment (caller should fall back to the pre-alignment
+    reading).
+    """
+    for attempt in range(1, ALIGN_MAX_ITER + 1):
+        frame  = Camera.capture_frame()
+        offset = get_arrow_centroid_offset(frame)
+
+        if offset is None:
+            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: arrow lost — keeping pre-alignment direction.")
+            return None
+
+        print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: centroid offset {offset:+.0f} px")
+
+        if abs(offset) <= ALIGN_THRESHOLD_PX:
+            print(f"  Align: centred — taking final reading.")
+            return detect_arrow(frame)
+
+        # Arrow right of centre → robot is facing slightly left → nudge right
+        nudge = 'right' if offset > 0 else 'left'
+        steer(nudge)
+        move.video_Tracking_Move(DRIVE_SPEED, 1)
+        time.sleep(ALIGN_NUDGE_FWD)
+        move.motorStop()
+        time.sleep(0.1)
+
+        steer(opposite_direction(nudge))
+        move.video_Tracking_Move(DRIVE_SPEED, -1)
+        time.sleep(ALIGN_NUDGE_BWD)
+        move.motorStop()
+        time.sleep(0.1)
+
+    # Max iterations reached — take one last reading with whatever position we're at
+    print(f"  Align: max iterations reached — taking best-effort reading.")
+    frame = Camera.capture_frame()
+    return detect_arrow(frame)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main loop
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
@@ -164,9 +216,12 @@ def main():
                     direction = detect_arrow(frame)
 
                     if direction is not None:
-                        print(f"  Arrow detected: {direction}")
-                        # Stop the camera immediately so the internal buffer stops
-                        # filling — mid-turn frames would corrupt the next detection.
+                        print(f"  Arrow detected: {direction} — aligning...")
+                        # Camera stays running so align_with_arrow() can capture frames.
+                        aligned = align_with_arrow()
+                        if aligned is not None:
+                            direction = aligned
+                        print(f"  Final direction after alignment: {direction}")
                         Camera.stop_capture()
                         break
 
