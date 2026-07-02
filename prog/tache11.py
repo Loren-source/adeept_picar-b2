@@ -1,153 +1,172 @@
 #!/usr/bin/env python3
+
 import time
+
 from motor import RobotMotor
 from servo import RobotServos
-from line import LineTracker
+from lineTracking import LineTracker
 
-# ============================================================
-# INSTANCIATION
-# ============================================================
+
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
 
-# ============================================================
-# PARAMÈTRES (optimisés)
-# ============================================================
-CENTRE            = 97
-SERVO_ALPHA       = 0.8
 
-# Angles extrêmes
-ANGLE_GAUCHE_MAX  = 128
-ANGLE_DROITE_MAX  = 65
+# ==========================
+# REGLAGES VALIDES
+# ==========================
 
-# Vitesses (réduites pour les virages)
-VITESSE_DROITE    = 34
-VITESSE_VIRAGE_GAUCHE = 10       # réduit pour passer le virage
-VITESSE_VIRAGE_DROITE = 8        # encore plus bas pour la droite
-VITESSE_RECUL     = -15
+CENTRE = 97
 
-VITESSE_ALPHA     = 0.3
+# petites corrections
+GAUCHE_LEGER = 112
+DROITE_LEGER = 82
 
-# Seuils pour la recovery (si jamais)
-SEUIL_PERDU       = 8            # légèrement augmenté
-MAX_RECUL_TIME    = 2.5
+# vrais virages
+GAUCHE_FORT = 128
+DROITE_FORT = 55
 
-# ============================================================
-# VARIABLES D'ÉTAT
-# ============================================================
-angle_actuel      = CENTRE
-dernier_angle_cible = CENTRE
-compteur_000      = 0
-dernier_sens      = 0
-dernier_etat_non_nul = (1,1,1)
-vitesse_actuelle  = VITESSE_DROITE
+# vitesses
+VITESSE_LIGNE = 40
+VITESSE_APPROCHE = 27
+VITESSE_VIRAGE = 19
+VITESSE_PERDU = 14
+VITESSE_POINTILLE = 28          # <-- NOUVEAU : vitesse pour traverser les pointillés
 
-mode_recovery     = False
-debut_recul       = 0.0
+# seuil pour pointillés (cycles)
+SEUIL_POINTILLE = 15            # <-- NOUVEAU : 15 * 25 ms = 375 ms
 
-# ============================================================
-# FONCTIONS
-# ============================================================
-def position_depuis_etat(etat):
-    g, m, d = etat
-    actifs = []
-    if g: actifs.append(-1)
-    if m: actifs.append(0)
-    if d: actifs.append(1)
-    if not actifs:
-        return None
-    return sum(actifs) / len(actifs)
+angle_actuel = CENTRE
+dernier_sens = 0                # 1 = gauche, -1 = droite
+compteur_virage = 0
+dernier_etat = (1,1,1)
+compteur_perdu = 0
+derniere_cible = CENTRE         # <-- NOUVEAU : mémorise la dernière cible calculée
+
+
+# ==========================
+# SERVO FLUIDE
+# ==========================
 
 def tourner(cible):
     global angle_actuel
-    angle_actuel = angle_actuel * (1 - SERVO_ALPHA) + cible * SERVO_ALPHA
+    angle_actuel = angle_actuel * 0.6 + cible * 0.4
     servos.set_angle(0, round(angle_actuel, 1))
 
-def angle_cible_depuis_etat(etat):
-    # Anticipation : braquage immédiat dès (1,1,0) ou (0,1,1)
-    if etat in [(1,1,0), (1,0,0)]:
-        return ANGLE_GAUCHE_MAX
-    elif etat in [(0,1,1), (0,0,1)]:
-        return ANGLE_DROITE_MAX
-    else:
-        return CENTRE
 
-# ============================================================
-# DÉMARRAGE
-# ============================================================
+# ==========================
+# START
+# ==========================
+
 print("START")
 tourner(CENTRE)
 robot.set_motor(1, 30)
 time.sleep(1)
 
+
+# ==========================
+# BOUCLE
+# ==========================
+
 try:
     while True:
         s = tracker.get_status()
         etat = (s["left"], s["middle"], s["right"])
-        pos = position_depuis_etat(etat)
+        print(etat)
 
-        if pos is not None:
-            compteur_000 = 0
-            dernier_etat_non_nul = etat
+        # =====================
+        # LIGNE CENTREE
+        # =====================
+        if etat == (1,1,1):
+            compteur_virage = 0
+            compteur_perdu = 0
+            cible = CENTRE
+            vitesse = VITESSE_LIGNE
+            derniere_cible = cible   # <-- mémorisation
 
-            if etat in [(1,1,0), (1,0,0)]:
-                dernier_sens = 1
-            elif etat in [(0,1,1), (0,0,1)]:
-                dernier_sens = -1
+        # =====================
+        # VIRAGE GAUCHE
+        # =====================
+        elif etat == (1,1,0):
+            compteur_perdu = 0
+            compteur_virage += 1
+            dernier_sens = 1
 
-            if mode_recovery:
-                mode_recovery = False
-                print("--- Ligne retrouvée, reprise ---")
-                robot.set_motor(1, 0)
-                time.sleep(0.2)
-
-            angle_cible = angle_cible_depuis_etat(etat)
-            dernier_angle_cible = angle_cible
-
-            # Vitesse en virage très basse
-            if etat in [(1,1,0), (1,0,0)]:
-                vitesse_target = VITESSE_VIRAGE_GAUCHE
-            elif etat in [(0,1,1), (0,0,1)]:
-                vitesse_target = VITESSE_VIRAGE_DROITE
+            if compteur_virage > 2:
+                cible = GAUCHE_FORT
+                vitesse = VITESSE_VIRAGE
             else:
-                vitesse_target = VITESSE_DROITE
+                cible = GAUCHE_LEGER
+                vitesse = VITESSE_APPROCHE
+            derniere_cible = cible
 
-        else:
-            compteur_000 += 1
+        elif etat == (1,0,0):
+            compteur_perdu = 0
+            compteur_virage += 2
+            dernier_sens = 1
+            cible = GAUCHE_FORT
+            vitesse = VITESSE_VIRAGE
+            derniere_cible = cible
 
-            if not mode_recovery and compteur_000 >= SEUIL_PERDU:
-                print("--- Perte, recovery ---")
-                mode_recovery = True
-                robot.set_motor(1, 0)
-                time.sleep(0.2)
-                debut_recul = time.time()
-                angle_cible = dernier_angle_cible
+        # =====================
+        # VIRAGE DROITE
+        # =====================
+        elif etat == (0,1,1):
+            compteur_perdu = 0
+            compteur_virage += 1
+            dernier_sens = -1
 
-            if mode_recovery:
-                vitesse_target = VITESSE_RECUL
-                if time.time() - debut_recul > MAX_RECUL_TIME:
-                    print("--- Temps de recul dépassé, arrêt ---")
-                    mode_recovery = False
-                    robot.set_motor(1, 0)
-                    vitesse_target = 0
-                    angle_cible = CENTRE
+            if compteur_virage > 2:
+                cible = DROITE_FORT
+                vitesse = VITESSE_VIRAGE
+            else:
+                cible = DROITE_LEGER
+                vitesse = VITESSE_APPROCHE
+            derniere_cible = cible
 
-        vitesse_actuelle = vitesse_actuelle * (1 - VITESSE_ALPHA) + vitesse_target * VITESSE_ALPHA
-        vitesse_appliquee = int(round(vitesse_actuelle))
+        elif etat == (0,0,1):
+            compteur_perdu = 0
+            compteur_virage += 2
+            dernier_sens = -1
+            cible = DROITE_FORT
+            vitesse = VITESSE_VIRAGE
+            derniere_cible = cible
 
-        tourner(angle_cible)
-        robot.set_motor(1, vitesse_appliquee)
+        # =====================
+        # POINTILLES OU PERTE
+        # =====================
+        elif etat == (0,0,0):
+            compteur_perdu += 1
 
-        if compteur_000 % 10 == 0:
-            print(f"{etat}  pos={pos if pos is not None else '---'}  "
-                  f"perdu={compteur_000}  angle={round(angle_actuel,1)}  vit={vitesse_appliquee}  recovery={mode_recovery}")
+            # --- NOUVEAU : pointillé ---
+            if compteur_perdu < SEUIL_POINTILLE:
+                # on garde la dernière cible (même si on était en virage)
+                cible = derniere_cible
+                vitesse = VITESSE_POINTILLE
+            else:
+                # perte réelle : on cherche
+                if dernier_sens == 1:
+                    cible = GAUCHE_FORT
+                elif dernier_sens == -1:
+                    cible = DROITE_FORT
+                else:
+                    cible = CENTRE
+                vitesse = VITESSE_PERDU
+
+        # =====================
+        # ACTION
+        # =====================
+        tourner(cible)
+        robot.set_motor(1, vitesse)
+
+        # mémoire dernière ligne vue (ne pas oublier)
+        if etat != (0,0,0):
+            dernier_etat = etat
 
         time.sleep(0.025)
 
+
 except KeyboardInterrupt:
-    print("\nSTOP")
+    print("STOP")
     robot.stopper()
     servos.set_angle(0, CENTRE)
-    robot.destroy()
-    servos.fermer()
