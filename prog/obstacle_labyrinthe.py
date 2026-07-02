@@ -53,6 +53,8 @@ ALIGN_NUDGE_FWD    = 0.12 # seconds: forward arc duration per alignment nudge
 ALIGN_NUDGE_BWD    = 0.06 # seconds: backward arc duration per alignment nudge
 ALIGN_MAX_ITER     = 5    # max nudge attempts before giving up and using best reading
 
+CONFLICT_MAX_RETRY = 3    # max times to back up and realign after a corner/pixel conflict
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Steering helper
@@ -117,31 +119,27 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
 # ──────────────────────────────────────────────────────────────────────────────
 # Alignment: centre the robot on the arrow before committing to a turn
 # ──────────────────────────────────────────────────────────────────────────────
-def align_with_arrow(servos):
+def _reposition_to_arrow(servos):
     """
-    Nudge the robot left or right (tiny forward-arc + backward-arc) until the
-    detected arrow centroid is within ALIGN_THRESHOLD_PX of the frame centre.
-    The camera must already be running when this is called.
-
-    Returns the arrow direction from the final centred frame, or None if the
-    arrow is lost during alignment (caller should fall back to the pre-alignment
-    reading).
+    Nudge the robot left or right until the arrow centroid is within
+    ALIGN_THRESHOLD_PX of the frame centre.  Does NOT read or return a
+    direction — call detect_arrow() separately after this.
+    Camera must already be running.
     """
     for attempt in range(1, ALIGN_MAX_ITER + 1):
         frame  = Camera.capture_frame()
         offset = get_arrow_centroid_offset(frame)
 
         if offset is None:
-            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: arrow lost — keeping pre-alignment direction.")
-            return None
+            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: arrow lost.")
+            return
 
         print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: centroid offset {offset:+.0f} px")
 
         if abs(offset) <= ALIGN_THRESHOLD_PX:
-            print(f"  Align: centred — taking final reading.")
-            return detect_arrow(frame)
+            print(f"  Align: centred.")
+            return
 
-        # Arrow right of centre → robot is facing slightly left → nudge right
         nudge = 'right' if offset > 0 else 'left'
         steer(servos, nudge)
         move.video_Tracking_Move(DRIVE_SPEED, 1)
@@ -155,10 +153,19 @@ def align_with_arrow(servos):
         move.motorStop()
         time.sleep(0.1)
 
-    # Max iterations reached — take one last reading with whatever position we're at
-    print(f"  Align: max iterations reached — taking best-effort reading.")
-    frame = Camera.capture_frame()
-    return detect_arrow(frame)
+    print(f"  Align: max iterations reached.")
+
+
+def align_with_arrow(servos):
+    """
+    Centre the robot on the arrow, then return the detected direction.
+    Never returns 'conflict' — if the dual-check still disagrees after
+    repositioning, returns None so the caller falls back gracefully.
+    """
+    _reposition_to_arrow(servos)
+    frame  = Camera.capture_frame()
+    result = detect_arrow(frame)
+    return result if result in ('left', 'right') else None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -211,14 +218,28 @@ def main():
                 # ── Step 3: capture frames at intervals until arrow is found ──
                 # Camera.capture_frame() returns one BGR numpy array on demand —
                 # the camera does NOT stream between calls.
-                direction = None
-                deadline  = time.time() + ARROW_TIMEOUT
+                direction      = None
+                deadline       = time.time() + ARROW_TIMEOUT
+                conflict_count = 0
 
                 while time.time() < deadline:
                     frame     = Camera.capture_frame()
                     direction = detect_arrow(frame)
 
-                    if direction is not None:
+                    if direction == 'conflict':
+                        conflict_count += 1
+                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — backing up and realigning...")
+                        direction = None
+                        steer(servos, 'forward')
+                        move.video_Tracking_Move(BACKUP_SPEED, -1)
+                        time.sleep(BACKUP_TIME)
+                        move.motorStop()
+                        _reposition_to_arrow(servos)
+                        if conflict_count >= CONFLICT_MAX_RETRY:
+                            break   # give up; fall through to the "no arrow" handler
+                        continue
+
+                    if direction in ('left', 'right'):
                         print(f"  Arrow detected: {direction} — aligning...")
                         # Camera stays running so align_with_arrow() can capture frames.
                         aligned = align_with_arrow(servos)
@@ -228,7 +249,7 @@ def main():
                         Camera.stop_capture()
                         break
 
-                    # Wait before the next capture attempt
+                    # direction is None — wait and try again
                     time.sleep(CAPTURE_INTERVAL)
 
                 if direction is None:
