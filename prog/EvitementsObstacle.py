@@ -27,13 +27,13 @@ import ultra
 
 
 # Vitesses (0 à 100)
-SPEED_FORWARD    = 50    # Vitesse en ligne droite
-SPEED_TURN       = 50    # Vitesse pendant les virages d'évitement
-SPEED_BACK       = 40    # Vitesse en marche arrière
+SPEED_FORWARD    = 30    # Vitesse en ligne droite
+SPEED_TURN       = 20    # Vitesse pendant les virages d'évitement
+SPEED_BACK       = 30    # Vitesse en marche arrière
 
 # Distances ultrason (cm)
 DIST_STOP        = 50    # Distance limite pour déclencher l'analyse d'obstacle
-DIST_BACK        = 20    # Distance critique nécessitant une marche arrière immédiate
+DIST_BACK        = 30    # Distance critique nécessitant une marche arrière immédiate
 
 # Paramètres des servos et timings
 SCAN_ANGLE       = 60    # Angle de rotation de la tête ultrason (degrés)
