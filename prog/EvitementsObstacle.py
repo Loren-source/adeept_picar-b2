@@ -28,12 +28,12 @@ import ultra
 # CONFIGURATION / PARAMÈTRES GLOBAUX CORRIGÉS
 # ==========================================
 # Vitesses (0 à 100)
-SPEED_FORWARD    = 35    # Vitesse en ligne droite (ajustée pour anticiper les obstacles)
-SPEED_TURN       = 45    # CORRIGÉ : Augmenté pour donner la puissance nécessaire au pivotement
+SPEED_FORWARD    = 30    # Vitesse en ligne droite (ajustée pour anticiper les obstacles)
+SPEED_TURN       = 60    # CORRIGÉ : Augmenté pour donner la puissance nécessaire au pivotement
 SPEED_BACK       = 35    # Vitesse en marche arrière
 
 # Distances ultrason (cm)
-DIST_STOP        = 45    # Distance limite pour déclencher l'analyse d'obstacle
+DIST_STOP        = 50   # Distance limite pour déclencher l'analyse d'obstacle
 DIST_BACK        = 25    # Distance critique nécessitant une marche arrière immédiate
 
 # Paramètres des servos et timings
