@@ -228,13 +228,27 @@ def main():
 
                     if direction == 'conflict':
                         conflict_count += 1
-                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — backing up and realigning...")
+                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — backing up...")
                         direction = None
+
+                        # 1. Back up straight
                         steer(servos, 'forward')
                         move.video_Tracking_Move(BACKUP_SPEED, -1)
                         time.sleep(BACKUP_TIME)
                         move.motorStop()
+
+                        # 2. Re-approach until back in the detection range
+                        print(f"  Re-approaching wall to {DIST_MIN}–{DIST_MAX} cm...")
+                        steer(servos, 'forward')
+                        move.video_Tracking_Move(DRIVE_SPEED, 1)
+                        while ultrasonic.get_distance() / 10.0 > DIST_MAX:
+                            time.sleep(0.05)
+                        move.motorStop()
+
+                        # 3. Lateral alignment now that the distance is correct
+                        print(f"  Realigning laterally...")
                         _reposition_to_arrow(servos)
+
                         if conflict_count >= CONFLICT_MAX_RETRY:
                             break   # give up; fall through to the "no arrow" handler
                         continue
