@@ -94,6 +94,7 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
 
     for _ in range(repetitions):
         steer(servos, direction)
+        time.sleep(0.3)          # let servo reach target angle before driving
         move.video_Tracking_Move(speed, 1)
         remaining = fwd_slice
         while remaining > 0:
@@ -102,9 +103,10 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
             remaining -= time.time() - t0
 
         move.motorStop()
-        time.sleep(0.2)
+        time.sleep(0.3)          # let robot settle before reversing direction
 
         steer(servos, opposite_direction(direction))
+        time.sleep(0.3)          # let servo reach opposite angle before driving
         move.video_Tracking_Move(speed, -1)
         remaining = bwd_slice
         while remaining > 0:

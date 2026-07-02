@@ -85,24 +85,37 @@ def detect_arrow(frame):
     return corner_dir
 
 
+ARROW_MIN_AREA = 500   # minimum contour area (px²) to be considered the arrow
+
+
 def get_arrow_centroid_offset(frame):
     """
-    Return the horizontal pixel offset of the detected arrow's corner centroid
-    from the frame centre.  Positive = arrow is to the right of centre.
-    Returns None if no arrow can be detected (fewer than 4 corners found).
+    Return the horizontal pixel offset of the arrow's visual centroid from the
+    frame centre.  Positive = arrow is to the right of centre.
+
+    Uses the centroid of the largest contour in the thresholded image rather
+    than the corner centroid.  This is robust to background features that would
+    pull a corner-based centroid off-centre.
+
+    Returns None if no contour large enough to be the arrow is found.
     """
     if frame is None:
         return None
 
     binary = _preprocess(frame)
 
-    corners = cv2.goodFeaturesToTrack(
-        binary, maxCorners=50, qualityLevel=0.01, minDistance=10, blockSize=7
-    )
-    if corners is None or len(corners) < 4:
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
         return None
 
-    pts = corners.reshape(-1, 2).astype(np.float32)
-    centroid_x     = pts[:, 0].mean()
+    largest = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(largest) < ARROW_MIN_AREA:
+        return None
+
+    M = cv2.moments(largest)
+    if M['m00'] == 0:
+        return None
+
+    centroid_x     = M['m10'] / M['m00']
     frame_center_x = frame.shape[1] / 2.0
     return centroid_x - frame_center_x
