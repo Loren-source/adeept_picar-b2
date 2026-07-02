@@ -21,7 +21,7 @@ from Caméra import Camera             # Caméra.py — provides capture_frame()
                                       # Note: importing Caméra also calls move.setup() via
                                       #       CVThread class-level statements on import.
 import move                           # move.py   — motor control
-from servo import servo_dir            # servo.py  — module-level Adafruit Servo on CANAL_DIRECTION
+from servo import RobotServos          # servo.py  — RobotServos class, set_angle(canal, angle)
 from arrow_detector import detect_arrow, get_arrow_centroid_offset
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -57,14 +57,16 @@ ALIGN_MAX_ITER     = 5    # max nudge attempts before giving up and using best r
 # ──────────────────────────────────────────────────────────────────────────────
 # Steering helper
 # ──────────────────────────────────────────────────────────────────────────────
-def steer(direction):
-    """Set the steering servo angle via the module-level servo_dir from servo.py."""
+STEERING_CANAL = 0  # PCA9685 channel wired to the front steering servo
+
+def steer(servos, direction):
+    """Set the steering servo to the angle for direction via RobotServos.set_angle."""
     if direction == 'left':
-        servo_dir.angle = ANGLE_LEFT
+        servos.set_angle(STEERING_CANAL, ANGLE_LEFT)
     elif direction == 'right':
-        servo_dir.angle = ANGLE_RIGHT
+        servos.set_angle(STEERING_CANAL, ANGLE_RIGHT)
     else:
-        servo_dir.angle = ANGLE_CENTER
+        servos.set_angle(STEERING_CANAL, ANGLE_CENTER)
 
 def opposite_direction(direction):
     if direction == 'left':
@@ -78,7 +80,7 @@ def opposite_direction(direction):
 # ──────────────────────────────────────────────────────────────────────────────
 # Turn with mid-turn obstacle check
 # ──────────────────────────────────────────────────────────────────────────────
-def turn_with_obstacle_check(ultrasonic, direction, duration, duration_opposite, speed, repetitions=2):
+def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_opposite, speed, repetitions=2):
     """
     Perform `repetitions` alternating forward/backward arcs to complete a turn.
     Each forward arc lasts duration/repetitions seconds steered toward `direction`;
@@ -89,7 +91,7 @@ def turn_with_obstacle_check(ultrasonic, direction, duration, duration_opposite,
     bwd_slice = duration_opposite / repetitions
 
     for _ in range(repetitions):
-        steer(direction)
+        steer(servos, direction)
         move.video_Tracking_Move(speed, 1)
         remaining = fwd_slice
         while remaining > 0:
@@ -100,7 +102,7 @@ def turn_with_obstacle_check(ultrasonic, direction, duration, duration_opposite,
         move.motorStop()
         time.sleep(0.2)
 
-        steer(opposite_direction(direction))
+        steer(servos, opposite_direction(direction))
         move.video_Tracking_Move(speed, -1)
         remaining = bwd_slice
         while remaining > 0:
@@ -115,7 +117,7 @@ def turn_with_obstacle_check(ultrasonic, direction, duration, duration_opposite,
 # ──────────────────────────────────────────────────────────────────────────────
 # Alignment: centre the robot on the arrow before committing to a turn
 # ──────────────────────────────────────────────────────────────────────────────
-def align_with_arrow():
+def align_with_arrow(servos):
     """
     Nudge the robot left or right (tiny forward-arc + backward-arc) until the
     detected arrow centroid is within ALIGN_THRESHOLD_PX of the frame centre.
@@ -141,13 +143,13 @@ def align_with_arrow():
 
         # Arrow right of centre → robot is facing slightly left → nudge right
         nudge = 'right' if offset > 0 else 'left'
-        steer(nudge)
+        steer(servos, nudge)
         move.video_Tracking_Move(DRIVE_SPEED, 1)
         time.sleep(ALIGN_NUDGE_FWD)
         move.motorStop()
         time.sleep(0.1)
 
-        steer(opposite_direction(nudge))
+        steer(servos, opposite_direction(nudge))
         move.video_Tracking_Move(DRIVE_SPEED, -1)
         time.sleep(ALIGN_NUDGE_BWD)
         move.motorStop()
@@ -168,7 +170,8 @@ def main():
     # Ultrasonic sensor (GPIO 23 = trigger, 24 = echo — ultra.py defaults)
     ultrasonic = Ultrasonic()
 
-    steer('forward')  # ensure steering is straight before we start
+    servos = RobotServos()
+    steer(servos, 'forward')  # ensure steering is straight before we start
 
     # Trigger the first camera capture now so Picamera2 initialises (2 s warm-up
     # is handled inside Camera.capture_frame() on its first call).
@@ -183,7 +186,7 @@ def main():
             # ── Step 1: drive forward ─────────────────────────────────────────
             # video_Tracking_Move controls both motor banks (M1 + M2).
             # direction=1 → forward,  direction=-1 → backward.
-            steer('forward')
+            steer(servos, 'forward')
             move.video_Tracking_Move(DRIVE_SPEED, 1)
 
             # ── Step 2: check distance ────────────────────────────────────────
@@ -218,7 +221,7 @@ def main():
                     if direction is not None:
                         print(f"  Arrow detected: {direction} — aligning...")
                         # Camera stays running so align_with_arrow() can capture frames.
-                        aligned = align_with_arrow()
+                        aligned = align_with_arrow(servos)
                         if aligned is not None:
                             direction = aligned
                         print(f"  Final direction after alignment: {direction}")
@@ -231,7 +234,7 @@ def main():
                 if direction is None:
                     # ── Step 5: no arrow found — reverse slightly and retry ────
                     print(f"  No arrow found after {ARROW_TIMEOUT:.0f} s — reversing to retry...")
-                    steer('forward')
+                    steer(servos, 'forward')
                     move.video_Tracking_Move(BACKUP_SPEED, -1)   # reverse
                     time.sleep(BACKUP_TIME)
                     move.motorStop()
@@ -239,8 +242,8 @@ def main():
 
                 # ── Step 4: steer and drive through the junction ─────────────
                 print(f"  Turning {direction} and advancing through corner...")
-                turn_with_obstacle_check(ultrasonic, direction, TURN_HOLD, TURN_HOLD_OPPOSITE, TURN_SPEED)
-                steer('forward')    # straighten up once through
+                turn_with_obstacle_check(ultrasonic, servos, direction, TURN_HOLD, TURN_HOLD_OPPOSITE, TURN_SPEED)
+                steer(servos, 'forward')
 
                 # Restart the camera now that the robot is aligned in the new
                 # corridor — 0.5 s settle time is handled inside start_capture().
@@ -254,7 +257,7 @@ def main():
     finally:
         # Always release hardware on exit
         move.motorStop()
-        servo_dir.angle = ANGLE_CENTER
+        servos.set_angle(STEERING_CANAL, ANGLE_CENTER)
         move.destroy()    # deinitialises the PCA9685 motor driver
         print("Shutdown complete.")
 
