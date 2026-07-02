@@ -77,46 +77,38 @@ def opposite_direction(direction):
 # ──────────────────────────────────────────────────────────────────────────────
 # Turn with mid-turn obstacle check
 # ──────────────────────────────────────────────────────────────────────────────
-def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_opposite, speed):
+def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_opposite, speed, repetitions=2):
     """
-    Steer and drive forward for `duration` seconds while polling the ultrasonic sensor.
-    If an obstacle is detected closer than TURN_OBSTACLE_DIST cm the robot:
-      1. Stops.
-      2. Reverses straight for TURN_OBSTACLE_BACKUP_TIME seconds.
-      3. Resumes the turn for however many seconds were still remaining.
+    Perform `repetitions` alternating forward/backward arcs to complete a turn.
+    Each forward arc lasts duration/repetitions seconds steered toward `direction`;
+    each backward arc lasts duration_opposite/repetitions seconds steered opposite.
     """
-    poll_interval = 0.05  # seconds between distance checks
+    poll_interval = 0.05
+    fwd_slice = duration / repetitions
+    bwd_slice = duration_opposite / repetitions
 
-    steer(servos, direction)
-    move.video_Tracking_Move(speed, 1)
+    for _ in range(repetitions):
+        steer(servos, direction)
+        move.video_Tracking_Move(speed, 1)
+        remaining = fwd_slice
+        while remaining > 0:
+            t0 = time.time()
+            time.sleep(min(poll_interval, remaining))
+            remaining -= time.time() - t0
 
-    remaining = duration
-    while remaining > 0:
-        t0 = time.time()
-        time.sleep(min(poll_interval, remaining))
-        remaining -= time.time() - t0
+        move.motorStop()
+        time.sleep(0.2)
 
-        if remaining <= 0:
-            break
+        steer(servos, opposite_direction(direction))
+        move.video_Tracking_Move(speed, -1)
+        remaining = bwd_slice
+        while remaining > 0:
+            t0 = time.time()
+            time.sleep(min(poll_interval, remaining))
+            remaining -= time.time() - t0
 
-    move.motorStop()
-    time.sleep(0.5)
-
-    steer(servos, opposite_direction(direction))
-    time.sleep(0.5)
-
-    move.video_Tracking_Move(speed, -1)
-
-    remaining = duration_opposite
-    while remaining > 0:
-        t0 = time.time()
-        time.sleep(min(poll_interval, remaining))
-        remaining -= time.time() - t0
-
-        if remaining <= 0:
-            break
-
-    move.motorStop()
+        move.motorStop()
+        time.sleep(0.2)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -197,17 +189,8 @@ def main():
                     move.motorStop()
                     continue   # restart the main loop
 
-                # ── Step 4: back up briefly before turning ───────────────────
-                # Camera is already stopped — no frames accumulate during this.
-                print(f"  Backing up before turn...")
-                steer(servos, 'forward')
-                move.video_Tracking_Move(BACKUP_SPEED, -1)
-                time.sleep(BACKUP_TIME)
-                move.motorStop()
-
-                # ── Step 5: steer and drive through the junction ──────────────
+                # ── Step 4: steer and drive through the junction ─────────────
                 print(f"  Turning {direction} and advancing through corner...")
-                time.sleep(0.5)     # let wheels reach their angle before driving
                 turn_with_obstacle_check(ultrasonic, servos, direction, TURN_HOLD, TURN_HOLD_OPPOSITE, TURN_SPEED)
                 steer(servos, 'forward')    # straighten up once through
 
