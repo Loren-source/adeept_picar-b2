@@ -23,8 +23,8 @@ ANGLE_DROITE_MAX  = 65           # valeur minimale que votre servo peut atteindr
 
 # VITESSES
 VITESSE_DROITE    = 34
-VITESSE_VIRAGE_GAUCHE = 18
-VITESSE_VIRAGE_DROITE = 16       # très lent
+VITESSE_VIRAGE_GAUCHE = 20
+VITESSE_VIRAGE_DROITE = 18       # très lent
 VITESSE_PERDU     = 2
 VITESSE_RECH      = 2
 
