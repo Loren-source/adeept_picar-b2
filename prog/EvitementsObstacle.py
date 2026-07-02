@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -25,20 +24,22 @@ import move
 import RPIservo
 import ultra
 
-
+# ==========================================
+# CONFIGURATION / PARAMÈTRES GLOBAUX CORRIGÉS
+# ==========================================
 # Vitesses (0 à 100)
-SPEED_FORWARD    = 30    # Vitesse en ligne droite
-SPEED_TURN       = 20    # Vitesse pendant les virages d'évitement
-SPEED_BACK       = 30    # Vitesse en marche arrière
+SPEED_FORWARD    = 35    # Vitesse en ligne droite (ajustée pour anticiper les obstacles)
+SPEED_TURN       = 45    # CORRIGÉ : Augmenté pour donner la puissance nécessaire au pivotement
+SPEED_BACK       = 35    # Vitesse en marche arrière
 
 # Distances ultrason (cm)
-DIST_STOP        = 50    # Distance limite pour déclencher l'analyse d'obstacle
-DIST_BACK        = 30    # Distance critique nécessitant une marche arrière immédiate
+DIST_STOP        = 45    # Distance limite pour déclencher l'analyse d'obstacle
+DIST_BACK        = 25    # Distance critique nécessitant une marche arrière immédiate
 
 # Paramètres des servos et timings
 SCAN_ANGLE       = 60    # Angle de rotation de la tête ultrason (degrés)
-TURN_TIME        = 0.2   # Temps de braquage pour contourner l'obstacle (secondes)
-BACK_TIME        = 0.2   # Temps de recul en cas d'urgence (secondes)
+TURN_TIME        = 0.8   # CORRIGÉ : Augmenté pour laisser le temps physique au robot de braquer !
+BACK_TIME        = 0.4   # CORRIGÉ : Augmenté pour reculer efficacement si besoin
 
 # Seuils de détection de la couleur bleue (Espace HSV)
 BLUE_LOWER       = np.array([100, 100, 50])
@@ -50,7 +51,9 @@ LINE_PIN_LEFT    = 22
 LINE_PIN_MIDDLE  = 27
 LINE_PIN_RIGHT   = 17
 
-
+# ==========================================
+# INITIALISATION DU MATÉRIEL
+# ==========================================
 print("🔧 Initialisation du matériel...")
 scGear = RPIservo.ServoCtrl()
 scGear.moveInit()  # Initialise les servos sur leurs positions de départ
@@ -82,6 +85,7 @@ def init_camera():
     print("✅ Caméra démarrée avec succès.")
     return picam2
 
+
 def detect_blue(picam2):
     """Capture une image et renvoie True si le papier bleu est détecté."""
     img = picam2.capture_array()
@@ -101,16 +105,17 @@ def read_ir_sensors():
     """Renvoie l'état des 3 capteurs de sol (1 = Sol valide, 0 = Ligne/Vide)."""
     return track_left.value, track_middle.value, track_right.value
 
+
 def is_out_of_zone():
     """Vérifie si les 3 capteurs sont hors-sol, signifiant la fin du parcours."""
     left, middle, right = read_ir_sensors()
-    
     print(f"🔍 DEBUG IR -> Gauche: {left} | Milieu: {middle} | Droite: {right}")
     
     # Si les trois capteurs lisent 0 en même temps, le robot a quitté la zone de jeu
     if left == 0 and middle == 0 and right == 0:
         return True
     return False
+
 
 def ir_correction():
     """
@@ -157,7 +162,6 @@ def get_distance():
     readings = []
     for _ in range(3):
         try:
-            # CORRECTION EFFECTUÉE ICI : Utilisation de la méthode interne .distance()
             d = ultrasonic_sensor.distance()
             if 0 < d < 200:
                 readings.append(d)
@@ -168,6 +172,7 @@ def get_distance():
     if not readings:
         return 200
     return round(sum(readings) / len(readings), 2)
+
 
 def scan_left_right():
     """Tourne le capteur ultrason à gauche et à droite pour évaluer le meilleur côté."""
@@ -191,6 +196,7 @@ def scan_left_right():
 
     return 'left' if dist_left >= dist_right else 'right'
 
+
 def avoid_obstacle():
     """Gère la marche avant continue et le contournement en cas d'obstacle."""
     dist = get_distance()
@@ -213,17 +219,20 @@ def avoid_obstacle():
 
     if direction == 'left':
         print("↩️  Action : Évitement par la GAUCHE")
-        scGear.moveAngle(0, 40)
-        move.move(SPEED_TURN, 1, "left")
+        scGear.moveAngle(0, 40)              # Braquage des roues
+        move.move(SPEED_TURN, 1, "left")    # Propulsion adaptée
     else:
         print("↪️  Action : Évitement par la DROITE")
-        scGear.moveAngle(0, -40)
-        move.move(SPEED_TURN, 1, "right")
+        scGear.moveAngle(0, -40)             # Braquage des roues
+        move.move(SPEED_TURN, 1, "right")   # Propulsion adaptée
 
-    time.sleep(TURN_TIME)
-    scGear.moveAngle(0, 0)
+    time.sleep(TURN_TIME)                    # Temps nécessaire pour que le véhicule pivote
+    scGear.moveAngle(0, 0)                   # Redressage des roues après la manœuvre
 
 
+# ==========================================
+# BOUCLE PRINCIPALE EXÉCUTABLE
+# ==========================================
 if __name__ == '__main__':
     print("\n=========================================")
     print("🚀 DÉMARRAGE : Mission C — PiCar-B Autonome")
