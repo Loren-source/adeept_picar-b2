@@ -12,7 +12,7 @@ servos = RobotServos()
 tracker = LineTracker()
 
 # ============================================================
-# PARAMÈTRES OPTIMAUX
+# PARAMÈTRES (optimisés pour votre robot)
 # ============================================================
 CENTRE            = 97
 SERVO_ALPHA       = 0.8
@@ -23,14 +23,14 @@ ANGLE_DROITE_MAX  = 65
 VITESSE_DROITE    = 34
 VITESSE_VIRAGE_GAUCHE = 14
 VITESSE_VIRAGE_DROITE = 10
-VITESSE_PERDU     = 2
-VITESSE_RECH      = 2
+VITESSE_RECUL     = -12          # vitesse de marche arrière (négative)
+VITESSE_ARRET     = 0
 
 VITESSE_ALPHA     = 0.3
 
-MAX_HOLD          = 80
-MAINTIEN_AVANT_BALAYAGE = 150
-DUREE_RECHERCHE   = 150
+# Seuils pour la recovery
+SEUIL_PERDU       = 5            # cycles de 000 avant de déclencher la recovery
+MAX_RECUL_TIME    = 2.0          # temps max de recul en secondes
 
 # ============================================================
 # VARIABLES D'ÉTAT
@@ -39,8 +39,12 @@ angle_actuel      = CENTRE
 erreur_connue     = 0.0
 compteur_000      = 0
 dernier_sens      = 0
-vitesse_actuelle  = VITESSE_DROITE
 dernier_etat_non_nul = (1,1,1)
+vitesse_actuelle  = VITESSE_DROITE
+
+# Mode recovery
+mode_recovery     = False
+debut_recul       = 0.0
 
 # ============================================================
 # FONCTIONS
@@ -82,6 +86,7 @@ try:
         etat = (s["left"], s["middle"], s["right"])
         pos = position_depuis_etat(etat)
 
+        # ---- Si ligne visible ----
         if pos is not None:
             compteur_000 = 0
             erreur_connue = pos
@@ -92,6 +97,13 @@ try:
             elif etat in [(0,1,1), (0,0,1)]:
                 dernier_sens = -1
 
+            # Si on était en recovery, on en sort et on repart en avant
+            if mode_recovery:
+                mode_recovery = False
+                print("--- Ligne retrouvée, reprise en avant ---")
+                robot.set_motor(1, 0)
+                time.sleep(0.2)
+
             angle_cible = angle_cible_depuis_etat(etat)
 
             if etat in [(1,1,0), (1,0,0)]:
@@ -101,44 +113,36 @@ try:
             else:
                 vitesse_target = VITESSE_DROITE
 
+        # ---- Ligne perdue (000) ----
         else:
             compteur_000 += 1
 
-            if compteur_000 <= MAX_HOLD:
+            # Si on n'est pas encore en recovery, on vérifie le seuil
+            if not mode_recovery and compteur_000 >= SEUIL_PERDU:
+                print("--- Ligne perdue, déclenchement recovery ---")
+                mode_recovery = True
+                robot.set_motor(1, 0)          # arrêt
+                time.sleep(0.2)
+                debut_recul = time.time()
+                # On garde le dernier angle connu
                 angle_cible = angle_cible_depuis_etat(dernier_etat_non_nul)
-                if dernier_etat_non_nul in [(1,1,0), (1,0,0)]:
-                    vitesse_target = VITESSE_VIRAGE_GAUCHE
-                elif dernier_etat_non_nul in [(0,1,1), (0,0,1)]:
-                    vitesse_target = VITESSE_VIRAGE_DROITE
-                else:
-                    vitesse_target = VITESSE_DROITE
-            else:
-                if compteur_000 - MAX_HOLD <= MAINTIEN_AVANT_BALAYAGE:
-                    if dernier_sens == 1:
-                        angle_cible = ANGLE_GAUCHE_MAX
-                    elif dernier_sens == -1:
-                        angle_cible = ANGLE_DROITE_MAX
-                    else:
-                        angle_cible = CENTRE
-                    vitesse_target = VITESSE_RECH
-                else:
-                    phase = (compteur_000 - MAX_HOLD - MAINTIEN_AVANT_BALAYAGE) // DUREE_RECHERCHE
-                    if phase % 2 == 0:
-                        if dernier_sens == 1:
-                            angle_cible = ANGLE_GAUCHE_MAX
-                        elif dernier_sens == -1:
-                            angle_cible = ANGLE_DROITE_MAX
-                        else:
-                            angle_cible = CENTRE
-                    else:
-                        if dernier_sens == 1:
-                            angle_cible = ANGLE_DROITE_MAX
-                        elif dernier_sens == -1:
-                            angle_cible = ANGLE_GAUCHE_MAX
-                        else:
-                            angle_cible = CENTRE
-                    vitesse_target = VITESSE_PERDU
 
+            # Si on est en recovery
+            if mode_recovery:
+                # On recule avec l'angle mémorisé
+                vitesse_target = VITESSE_RECUL
+                # On garde l'angle (on ne le change pas pendant le recul)
+                # On limite le temps de recul
+                if time.time() - debut_recul > MAX_RECUL_TIME:
+                    print("--- Temps de recul maximal atteint, arrêt ---")
+                    mode_recovery = False
+                    robot.set_motor(1, 0)
+                    vitesse_target = 0
+                    angle_cible = CENTRE
+                # Sinon on continue de reculer
+
+        # ---- Application ----
+        # Lissage de la vitesse
         vitesse_actuelle = vitesse_actuelle * (1 - VITESSE_ALPHA) + vitesse_target * VITESSE_ALPHA
         vitesse_appliquee = int(round(vitesse_actuelle))
 
@@ -147,7 +151,7 @@ try:
 
         if compteur_000 % 10 == 0:
             print(f"{etat}  pos={pos if pos is not None else '---'}  "
-                  f"perdu={compteur_000}  angle={round(angle_actuel,1)}  vit={vitesse_appliquee}")
+                  f"perdu={compteur_000}  angle={round(angle_actuel,1)}  vit={vitesse_appliquee}  recovery={mode_recovery}")
 
         time.sleep(0.025)
 
