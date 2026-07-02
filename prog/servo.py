@@ -1,325 +1,399 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Mission C Finale : Évitement d'obstacles intelligent et maintien de zone.
-Utilise l'initialisation Adafruit PCA9685 (Adresse 0x5f) pour les servomoteurs.
-"""
+
+
 
 import time
-import sys
-import os
-import cv2
-import numpy as np
-from gpiozero import InputDevice
-from picamera2 import Picamera2
 
-# Matériel Adafruit pour les Servomoteurs
 from board import SCL, SDA
+
 import busio
+
 from adafruit_motor import servo
+
 from adafruit_pca9685 import PCA9685
 
-# Forcer Python à chercher les modules locaux pour les moteurs de traction
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
 
-import move
-import ultra
 
-# ==========================================
-# CONFIGURATION / PARAMÈTRES GLOBAUX
-# ==========================================
-# Configuration de la carte Servo PCA9685 Adafruit
-PCA_ADDRESS      = 0x5f
-PWM_FREQ         = 50
-MIN_PULSE        = 500
-MAX_PULSE        = 2400
-ACTUATION        = 180
 
-# Canaux associés sur le PiCar-B
-CANAL_TETE_H     = 1     # Servomoteur horizontal de la tête ultrason
-CANAL_DIRECTION  = 2     # Servomoteur de direction des roues avant
 
-# Angles absolus Adafruit (Base 90° au centre)
-TETE_CENTRE      = 90
-TETE_GAUCHE      = 150   # 90 + 60 degrés
-TETE_DROITE      = 30    # 90 - 60 degrés
+class RobotServos:
 
-ROUES_CENTRE     = 90
-ROUES_GAUCHE     = 128   # Braquage gauche serré
-ROUES_DROITE     = 52    # Braquage droit serré
 
-# Vitesses moteurs (0 à 100)
-SPEED_FORWARD    = 35    
-SPEED_TURN       = 45    
-SPEED_BACK       = 35    
 
-# Distances ultrason (cm)
-DIST_STOP        = 45    
-DIST_BACK        = 25    
+    PCA_ADDRESS  = 0x5f
 
-# Timings de mouvement (secondes)
-TURN_TIME        = 0.85  # Temps suffisant pour pivoter et contourner
-BACK_TIME        = 0.4   
+    PWM_FREQ     = 50
 
-# Seuils de détection de la couleur bleue (Espace HSV)
-BLUE_LOWER       = np.array([100, 100, 50])
-BLUE_UPPER       = np.array([130, 255, 255])
-BLUE_MIN_PIXELS  = 500   
+    MIN_PULSE    = 500
 
-# Assignation des broches GPIO pour les capteurs infrarouges (IR) de sol
-LINE_PIN_LEFT    = 22
-LINE_PIN_MIDDLE  = 27
-LINE_PIN_RIGHT   = 17
+    MAX_PULSE    = 2400
 
-# ==========================================
-# INITIALISATION DU MATÉRIEL
-# ==========================================
-print("🔧 Initialisation du matériel...")
+    ACTUATION    = 180
 
-# 1. Initialisation de la traction (Moteurs arrière)
-move.setup()
+    ANGLE_MIN    = 0
 
-# 2. Initialisation des Servomoteurs via Adafruit
-try:
-    i2c = busio.I2C(SCL, SDA)
-    pca = PCA9685(i2c, address=PCA_ADDRESS)
-    pca.frequency = PWM_FREQ
+    ANGLE_MAX    = 180
+
+    CANAL_TEST   = 15
+
+    CANAUX_ROBOT = [0, 1, 2]
+
+
+
+    def __init__(self):
+
+        i2c = busio.I2C(SCL, SDA)
+
+        self.pca = PCA9685(i2c, address=self.PCA_ADDRESS)
+
+        self.pca.frequency = self.PWM_FREQ
+
+        self._servos: dict[int, servo.Servo] = {}
+
+        self._angles: dict[int, float] = {}
+
+
+
+    # ── Accès aux objets servo 
+
+
+
+    def get_servo(self, canal: int) -> servo.Servo:
+
+        """Retourne l'objet Servo du canal, en le créant si besoin."""
+
+        if canal not in self._servos:
+
+            self._servos[canal] = servo.Servo(
+
+                self.pca.channels[canal],
+
+                min_pulse=self.MIN_PULSE,
+
+                max_pulse=self.MAX_PULSE,
+
+                actuation_range=self.ACTUATION
+
+            )
+
+        return self._servos[canal]
+
+
+
+    # ── Commandes de base 
+
+
+
+    def set_angle(self, canal: int, angle: float):
+
+        """Positionne le servo du canal à l'angle demandé (clampé à [0°, 180°])."""
+
+        angle_safe = max(self.ANGLE_MIN, min(self.ANGLE_MAX, angle))
+
+        if angle_safe != angle:
+
+            print(f"[SECURITE] Angle {angle}° corrigé → {angle_safe}°")
+
+        self.get_servo(canal).angle = angle_safe
+
+        self._angles[canal] = angle_safe
+
+        print(f"[CH{canal:02d}] → {angle_safe}°")
+
+
+
+    def test_servo_libre(self, canal: int = None):
+
+        """Aller-retour 0°→179°→0° sur le canal donné (défaut : CH15)."""
+
+        if canal is None:
+
+            canal = self.CANAL_TEST
+
+        print(f"[TEST] Canal {canal} – aller-retour 0°→179°→0°")
+
+        s = self.get_servo(canal)
+
+        for i in range(180):
+
+            s.angle = i
+
+            time.sleep(0.01)
+
+        time.sleep(0.5)
+
+        for i in range(180):
+
+            s.angle = 180 - i
+
+            time.sleep(0.01)
+
+        time.sleep(0.5)
+
+        print("[TEST] Terminé.")
+
+
+
+    # ── Commandes composées 
+
+
+
+    def centrer_servos(self):
+
+        """Ramène progressivement CH0, CH1, CH2 à 90°."""
+
+        print("[INFO] Centrage progressif CH0, CH1, CH2 → 90°...")
+
+        for canal in self.CANAUX_ROBOT:
+
+            angle_actuel = self._angles.get(canal, 90)
+
+            cible = 90
+
+            pas = 1 if cible > angle_actuel else -1
+
+            for a in range(int(angle_actuel), cible + pas, pas):
+
+                self.get_servo(canal).angle = a
+
+                self._angles[canal] = a
+
+                time.sleep(0.02)
+
+        print("[INFO] Servos centrés.")
+
+
+
+    def reset_canal(self, cible):
+
+        """Remet un canal à 90°, ou tous les canaux robot si cible='all'."""
+
+        if str(cible).lower() == 'all':
+
+            self.centrer_servos()
+
+        elif isinstance(cible, int) and cible in range(16):
+
+            print(f"[RESET] Canal {cible} → 90°")
+
+            self.set_angle(cible, 90)
+
+        else:
+
+            print("[ERREUR] Canal invalide. Usage : reset <0-15> ou reset all")
+
+
+
+    def afficher_info(self):
+
+        """Affiche l'angle actuel de chaque servo commandé."""
+
+        if not self._angles:
+
+            print("[INFO] Aucun servo commandé depuis le démarrage.")
+
+            return
+
+        print("[INFO] État des servos :")
+
+        for canal in sorted(self._angles):
+
+            tag = "(robot)" if canal in self.CANAUX_ROBOT else "(test) " if canal == self.CANAL_TEST else "       "
+
+            print(f"  CH{canal:02d} {tag}  {self._angles[canal]:6.1f}°")
+
+
+
+    def scan_canaux(self):
+
+        """Liste les canaux ayant un objet Servo initialisé."""
+
+        if not self._servos:
+
+            print("[SCAN] Aucun canal initialisé.")
+
+            return
+
+        print(f"[SCAN] Canaux initialisés : {sorted(self._servos.keys())}")
+
+
+
+    def demo_robot(self):
+
+        """Séquence de mouvements 45°→90°→135°→90° sur CH0, CH1, CH2."""
+
+        print("[DEMO] Début de la démonstration sur CH0, CH1, CH2...")
+
+        positions = [45, 90, 135, 90]
+
+        for canal in self.CANAUX_ROBOT:
+
+            print(f"  [DEMO] Canal {canal}")
+
+            for angle in positions:
+
+                self.set_angle(canal, angle)
+
+                time.sleep(0.4)
+
+            time.sleep(0.3)
+
+        print("[DEMO] Terminée. Servos repositionnés à 90°.")
+
+
+
+    def fermer(self):
+
+        """Centrage de sécurité et libération de la carte."""
+
+        self.centrer_servos()
+
+        self.pca.deinit()
+
+        print("\nAu revoir.")
+
+
+
     
-    # Création des objets servo
-    servo_tete = servo.Servo(pca.channels[CANAL_TETE_H], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
-    servo_dir  = servo.Servo(pca.channels[CANAL_DIRECTION], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
-    print("✅ Contrôleur de Servomoteurs Adafruit (0x5f) initialisé.")
-except Exception as e:
-    print(f"❌ Erreur critique d'initialisation des servos : {e}")
-    sys.exit(1)
-
-# 3. Initialisation des capteurs infrarouges de sol
-track_left   = InputDevice(pin=LINE_PIN_LEFT)
-track_middle = InputDevice(pin=LINE_PIN_MIDDLE)
-track_right  = InputDevice(pin=LINE_PIN_RIGHT)
-
-# 4. Initialisation du capteur ultrason
-try:
-    ultrasonic_sensor = ultra.Ultrasonic(ultra.Tr, ultra.Ec)
-    print("✅ Capteur Ultrason prêt.")
-except Exception as e:
-    print(f"⚠️ Erreur ultrason : {e}")
-    ultrasonic_sensor = None
 
 
-# ==========================================
-# FONCTIONS DE NAVIGATION ET DES SERVOS
-# ==========================================
-def positionner_servos_centre():
-    """Remet la direction et la tête bien droites au centre (90°)."""
-    servo_dir.angle = ROUES_CENTRE
-    servo_tete.angle = TETE_CENTRE
-    time.sleep(0.3)
 
-def get_distance():
-    """Effectue des mesures via le capteur ultrason."""
-    if ultrasonic_sensor is None:
-        return 200
-    readings = []
-    for _ in range(3):
+    def run(self):
+
+        """Lance la boucle de commandes interactive."""
+
+        self.centrer_servos()
+
         try:
-            d = ultrasonic_sensor.distance()
-            if 0 < d < 200:
-                readings.append(d)
-        except Exception:
-            pass
-        time.sleep(0.02)
-    return round(sum(readings) / len(readings), 2) if readings else 200
+
+            while True:
+
+                try:
+
+                    commande = input("\ncommande> ").strip()
+
+                except EOFError:
+
+                    break
 
 
-def scan_left_right():
-    """Fait pivoter physiquement la tête à gauche et à droite pour mesurer."""
-    move.motorStop()
-    time.sleep(0.1)
 
-    # 1. Balayage à GAUCHE (150°)
-    print("🔄 Scan : La tête pivote à GAUCHE...")
-    servo_tete.angle = TETE_GAUCHE
-    time.sleep(0.6)  # Temps de déplacement physique du servo
-    dist_left = get_distance()
-    print(f"📊 Distance Gauche : {dist_left:.1f} cm")
+                if not commande:
 
-    # 2. Balayage à DROITE (30°)
-    print("🔄 Scan : La tête pivote à DROITE...")
-    servo_tete.angle = TETE_DROITE
-    time.sleep(0.8)  # Plus de chemin à parcourir (de gauche à droite)
-    dist_right = get_distance()
-    print(f"📊 Distance Droite : {dist_right:.1f} cm")
-
-    # 3. Retour au CENTRE (90°)
-    print("🔄 Scan terminé : Remise de la tête au CENTRE.")
-    servo_tete.angle = TETE_CENTRE
-    time.sleep(0.4)
-
-    return 'left' if dist_left >= dist_right else 'right'
+                    continue
 
 
-def avoid_obstacle():
-    """Gère la marche avant continue et l'évitement intelligent."""
-    dist = get_distance()
-    print(f"📏 Obstacle devant à : {dist:.1f} cm")
 
-    if dist > DIST_STOP:
-        servo_dir.angle = ROUES_CENTRE  # Roues droites
-        move.move(SPEED_FORWARD, 1, "mid")
-        return
+                tokens = commande.lower().split()
 
-    if dist < DIST_BACK:
-        print("🔴 Danger : Obstacle trop près ! Marche arrière d'urgence.")
-        servo_dir.angle = ROUES_CENTRE
-        move.move(SPEED_BACK, -1, "mid")
-        time.sleep(BACK_TIME)
-        move.motorStop()
-
-    print("🤔 Obstacle détecté. Analyse du champ libre...")
-    direction = scan_left_right()
-
-    if direction == 'left':
-        print("↩️  Action : Évitement par la GAUCHE")
-        servo_dir.angle = ROUES_GAUCHE      # Tourne les roues à fond à gauche
-        move.move(SPEED_TURN, 1, "left")
-    else:
-        print("↪️  Action : Évitement par la DROITE")
-        servo_dir.angle = ROUES_DROITE      # Tourne les roues à fond à droite
-        move.move(SPEED_TURN, 1, "right")
-
-    time.sleep(TURN_TIME)
-    servo_dir.angle = ROUES_CENTRE      # Redresse les roues après le virage
+                cmd = tokens[0]
 
 
-# ==========================================
-# FONCTIONS DE VISION (CAMÉRA)
-# ==========================================
-def init_camera():
-    picam2 = Picamera2()
-    config = picam2.create_preview_configuration(main={"size": (640, 480), "format": "RGB888"})
-    picam2.configure(config)
-    picam2.start()
-    time.sleep(1)
-    print("✅ Caméra démarrée avec succès.")
-    return picam2
 
-def detect_blue(picam2):
-    img = picam2.capture_array()
-    if img is None:
-        return False
-    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-    mask = cv2.inRange(hsv, BLUE_LOWER, BLUE_UPPER)
-    blue_pixels = np.sum(mask == 255)
-    print(f"🔵 Vision -> Pixels bleus : {blue_pixels}/{BLUE_MIN_PIXELS}")
-    return blue_pixels >= BLUE_MIN_PIXELS
+                try:
+
+                    if cmd in ('q', 'quit', 'exit'):
+
+                        break
 
 
-# ==========================================
-# GESTION DES BORDURES (CAPTEURS IR)
-# ==========================================
-def read_ir_sensors():
-    return track_left.value, track_middle.value, track_right.value
 
-def is_out_of_zone():
-    left, middle, right = read_ir_sensors()
-    print(f"🔍 DEBUG IR -> Gauche: {left} | Milieu: {middle} | Droite: {right}")
-    if left == 0 and middle == 0 and right == 0:
-        return True
-    return False
+                    elif cmd == 'test':
 
-def ir_correction():
-    left, middle, right = read_ir_sensors()
-
-    if middle == 0:
-        print("⚠️  Alerte IR : Bordure devant ! Recul.")
-        servo_dir.angle = ROUES_CENTRE
-        move.move(SPEED_BACK, -1, "mid")
-        time.sleep(BACK_TIME)
-        move.motorStop()
-        return True
-
-    if left == 0 and right == 1:
-        print("⚠️  Alerte IR : Bordure à gauche -> Redressement droite.")
-        servo_dir.angle = ROUES_DROITE
-        move.move(SPEED_TURN, 1, "right")
-        time.sleep(0.4)
-        servo_dir.angle = ROUES_CENTRE
-        return True
-
-    if right == 0 and left == 1:
-        print("⚠️  Alerte IR : Bordure à droite -> Redressement gauche.")
-        servo_dir.angle = ROUES_GAUCHE
-        move.move(SPEED_TURN, 1, "left")
-        time.sleep(0.4)
-        servo_dir.angle = ROUES_CENTRE
-        return True
-
-    return False
+                        self.test_servo_libre()
 
 
-# ==========================================
-# BOUCLE PRINCIPALE EXÉCUTABLE
-# ==========================================
-if __name__ == '__main__':
-    print("\n=========================================")
-    print("🚀 DÉMARRAGE : Mission C — PiCar-B Autonome")
-    print("=========================================\n")
 
-    # Centrage initial matériel
-    positionner_servos_centre()
-    picam2 = init_camera()
+                    elif cmd == 'centre':
 
-    print("\n👀 Phase d'attente active : Présentez le papier bleu face à la caméra...")
-    try:
-        while True:
-            if detect_blue(picam2):
-                print("\n🔵 SIGNAL REÇU ! Le papier bleu a été validé.")
-                break
-            time.sleep(0.1)
-    except KeyboardInterrupt:
-        picam2.stop()
-        pca.deinit()
-        sys.exit(0)
+                        self.centrer_servos()
 
-    time.sleep(0.2)
 
-    print("\n🤖 Mode autonome activé. Le robot navigue...")
-    print("🚀 Propulsion initiale pour quitter la marque bleue de départ...")
-    servo_dir.angle = ROUES_CENTRE
-    move.move(SPEED_FORWARD, 1, "mid")
-    time.sleep(0.5) 
-    
-    try:
-        while True:
-            if is_out_of_zone():
-                print("\n🏁 Mission accomplie : Sortie de zone détectée. Arrêt du robot.")
-                break
 
-            if ir_correction():
-                continue
+                    elif cmd == 'set':
 
-            avoid_obstacle()
-            time.sleep(0.02)
+                        if len(tokens) < 3:
 
-    except KeyboardInterrupt:
-        print("\n🛑 Navigation interrompue.")
+                            print("[ERREUR] Usage : set <canal> <angle>")
 
-    finally:
-        print("\n⚙️  Fermeture propre des périphériques...")
-        try:
-            picam2.stop()
-        except Exception:
-            pass
-        
-        move.motorStop()
-        positionner_servos_centre()
-        
-        try:
-            pca.deinit()
-        except Exception:
-            pass
-            
-        print("✅ Système réinitialisé. Arrêt complet.")
+                            print("         Exemple : set 0 90")
+
+                            continue
+
+                        canal = int(tokens[1])
+
+                        angle = float(tokens[2])
+
+                        if canal not in range(16):
+
+                            print("[ERREUR] Canal invalide (0 à 15).")
+
+                            continue
+
+                        self.set_angle(canal, angle)
+
+
+
+                    elif cmd == 'info':
+
+                        self.afficher_info()
+
+
+
+                    elif cmd == 'scan':
+
+                        self.scan_canaux()
+
+
+
+                    elif cmd == 'reset':
+
+                        if len(tokens) < 2:
+
+                            print("[ERREUR] Usage : reset <canal> ou reset all")
+
+                            continue
+
+                        arg = tokens[1]
+
+                        cible = arg if arg == 'all' else int(arg)
+
+                        self.reset_canal(cible)
+
+
+
+                    elif cmd == 'demo':
+
+                        self.demo_robot()
+
+
+
+                    else:
+
+                        print(f"[ERREUR] Commande inconnue : '{cmd}'")
+
+
+
+                except (ValueError, IndexError) as e:
+
+                    print(f"[ERREUR] Paramètre invalide : {e}")
+
+
+
+        finally:
+
+            self.fermer()
+
+
+
+
+
+if __name__ == "__main__":
+
+    robot = RobotServos()
+
+    for channel in robot.CANAUX_ROBOT:
+
+        robot.test_servo_libre(channel)
+
+    robot.run()
