@@ -13,45 +13,59 @@ tracker = LineTracker()
 
 
 # ==========================
-# REGLAGES VALIDES
+# REGLAGES
 # ==========================
 
 CENTRE = 97
+
 
 # petites corrections
 GAUCHE_LEGER = 112
 DROITE_LEGER = 82
 
+
 # vrais virages
 GAUCHE_FORT = 128
-DROITE_FORT = 55
+DROITE_FORT = 65
 
-# vitesses
-VITESSE_LIGNE = 40
-VITESSE_APPROCHE = 27
-VITESSE_VIRAGE = 19
-VITESSE_PERDU = 14
-VITESSE_POINTILLE = 28          # <-- NOUVEAU : vitesse pour traverser les pointillés
 
-# seuil pour pointillés (cycles)
-SEUIL_POINTILLE = 15            # <-- NOUVEAU : 15 * 25 ms = 375 ms
+VITESSE_LIGNE = 34
+VITESSE_VIRAGE = 22
+VITESSE_PERDU = 18
+
 
 angle_actuel = CENTRE
-dernier_sens = 0                # 1 = gauche, -1 = droite
+
+
+dernier_sens = 0
+# 1 = gauche
+# -1 = droite
+
+
 compteur_virage = 0
+
 dernier_etat = (1,1,1)
 compteur_perdu = 0
-derniere_cible = CENTRE         # <-- NOUVEAU : mémorise la dernière cible calculée
+
 
 
 # ==========================
-# SERVO FLUIDE
+# SERVO
 # ==========================
 
 def tourner(cible):
+
     global angle_actuel
-    angle_actuel = angle_actuel * 0.6 + cible * 0.4
-    servos.set_angle(0, round(angle_actuel, 1))
+
+    # réglage validé sur ton parcours
+    angle_actuel = angle_actuel*0.6 + cible*0.4
+
+
+    servos.set_angle(
+        0,
+        round(angle_actuel,1)
+    )
+
 
 
 # ==========================
@@ -59,114 +73,234 @@ def tourner(cible):
 # ==========================
 
 print("START")
+
 tourner(CENTRE)
-robot.set_motor(1, 30)
+
+robot.set_motor(1,30)
+
 time.sleep(1)
 
 
+
 # ==========================
-# BOUCLE
+# BOUCLE PRINCIPALE
 # ==========================
 
 try:
+
     while True:
+
+
         s = tracker.get_status()
-        etat = (s["left"], s["middle"], s["right"])
+
+
+        etat = (
+            s["left"],
+            s["middle"],
+            s["right"]
+        )
+
+
         print(etat)
 
+
+
         # =====================
-        # LIGNE CENTREE
+        # CENTRE
         # =====================
+
         if etat == (1,1,1):
+
             compteur_virage = 0
             compteur_perdu = 0
+
+
             cible = CENTRE
             vitesse = VITESSE_LIGNE
-            derniere_cible = cible   # <-- mémorisation
+
+
 
         # =====================
         # VIRAGE GAUCHE
         # =====================
+
         elif etat == (1,1,0):
+
             compteur_perdu = 0
+
             compteur_virage += 1
+
             dernier_sens = 1
 
-            if compteur_virage > 2:
-                cible = GAUCHE_FORT
-                vitesse = VITESSE_VIRAGE
-            else:
-                cible = GAUCHE_LEGER
-                vitesse = VITESSE_APPROCHE
-            derniere_cible = cible
+
+            cible = GAUCHE_LEGER
+
+            vitesse = 28
+
+
 
         elif etat == (1,0,0):
+
             compteur_perdu = 0
-            compteur_virage += 2
+
+            compteur_virage += 1
+
             dernier_sens = 1
-            cible = GAUCHE_FORT
+
+
+            if compteur_virage > 3:
+
+                cible = GAUCHE_FORT
+
+            else:
+
+                cible = 120
+
+
+
             vitesse = VITESSE_VIRAGE
-            derniere_cible = cible
+
+
+
 
         # =====================
         # VIRAGE DROITE
         # =====================
+
         elif etat == (0,1,1):
+
             compteur_perdu = 0
+
             compteur_virage += 1
+
             dernier_sens = -1
 
-            if compteur_virage > 2:
-                cible = DROITE_FORT
-                vitesse = VITESSE_VIRAGE
-            else:
-                cible = DROITE_LEGER
-                vitesse = VITESSE_APPROCHE
-            derniere_cible = cible
+
+            cible = DROITE_LEGER
+
+            vitesse = 28
+
+
 
         elif etat == (0,0,1):
+
             compteur_perdu = 0
-            compteur_virage += 2
+
+            compteur_virage += 1
+
             dernier_sens = -1
-            cible = DROITE_FORT
+
+
+
+            if compteur_virage > 3:
+
+                cible = DROITE_FORT
+
+
+            else:
+
+                cible = 75
+
+
+
             vitesse = VITESSE_VIRAGE
-            derniere_cible = cible
+
+
+
 
         # =====================
-        # POINTILLES OU PERTE
+        # 000 : POINTILLÉS OU PERDU
         # =====================
+
         elif etat == (0,0,0):
+
+
             compteur_perdu += 1
 
-            # --- NOUVEAU : pointillé ---
-            if compteur_perdu < SEUIL_POINTILLE:
-                # on garde la dernière cible (même si on était en virage)
-                cible = derniere_cible
-                vitesse = VITESSE_POINTILLE
+
+
+            # ======================
+            # CAS POINTILLÉS
+            # ======================
+
+            if dernier_etat == (1,1,1) and compteur_perdu < 25:
+
+
+                # garder trajectoire
+
+                cible = CENTRE
+
+                vitesse = VITESSE_LIGNE
+
+
+
+            # ======================
+            # VRAIE PERTE
+            # ======================
+
             else:
-                # perte réelle : on cherche
+
+
                 if dernier_sens == 1:
+
+
                     cible = GAUCHE_FORT
+
+
+
                 elif dernier_sens == -1:
+
+
                     cible = DROITE_FORT
+
+
+
                 else:
+
+
                     cible = CENTRE
+
+
+
                 vitesse = VITESSE_PERDU
 
-        # =====================
-        # ACTION
-        # =====================
-        tourner(cible)
-        robot.set_motor(1, vitesse)
 
-        # mémoire dernière ligne vue (ne pas oublier)
+
+
+        tourner(cible)
+
+
+
+        robot.set_motor(
+            1,
+            vitesse
+        )
+
+
+
+        # =====================
+        # MEMOIRE
+        # =====================
+
         if etat != (0,0,0):
+
             dernier_etat = etat
+
+
 
         time.sleep(0.025)
 
 
+
+
+
 except KeyboardInterrupt:
+
+
     print("STOP")
+
+
     robot.stopper()
-    servos.set_angle(0, CENTRE)
+
+
+    servos.set_angle(0,CENTRE)
