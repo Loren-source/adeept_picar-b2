@@ -1,51 +1,99 @@
 """
 arrow_detector.py
-Detect the direction of an arrow in a camera frame using two independent
-methods that must agree before a direction is returned.
+Detect the direction of an arrow using two independent geometric checks.
 """
 
 import cv2
 import numpy as np
 
-MIN_IMBALANCE = 2   # minimum corner-count difference to consider a direction reliable
+MIN_IMBALANCE       = 2     # minimum corner-count asymmetry to be confident
+ARROW_MIN_AREA      = 800   # px²: smallest contour accepted as the arrow
+ARROW_MAX_AREA_FRAC = 0.45  # fraction of frame area: largest contour accepted
 
 
 def _preprocess(frame):
     """
-    Shared pipeline: BGR → gray → Gaussian blur → Otsu threshold (inverted) → morphological close.
-    Returns a binary uint8 image where the arrow silhouette is white (255).
+    BGR frame → binary image where the arrow silhouette is white (255).
+
+    Larger blur and a close+open sequence give a cleaner, gap-free silhouette
+    while removing isolated noise specks.
     """
     gray    = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
+
+    # THRESH_BINARY_INV: dark arrow on light background → arrow becomes white
     _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    kernel = np.ones((3, 3), np.uint8)
-    return cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    # Close: fill small gaps inside the arrow silhouette
+    close_k = np.ones((5, 5), np.uint8)
+    binary  = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, close_k, iterations=2)
+
+    # Open: remove isolated noise blobs smaller than the open kernel
+    open_k = np.ones((3, 3), np.uint8)
+    binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, open_k, iterations=1)
+
+    return binary
+
+
+def _find_arrow_contour(binary):
+    """
+    Return the contour most likely to be the arrow, or None.
+
+    Filters candidates by:
+      - area: between ARROW_MIN_AREA and ARROW_MAX_AREA_FRAC × frame area
+      - aspect ratio: bounding-box width/height between 0.3 and 6.0
+        (excludes thin vertical lines and near-square blobs)
+
+    Among candidates, returns the one with the largest area.
+    """
+    h, w    = binary.shape
+    max_area = ARROW_MAX_AREA_FRAC * h * w
+
+    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    candidates = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if not (ARROW_MIN_AREA <= area <= max_area):
+            continue
+        _, _, cw, ch = cv2.boundingRect(cnt)
+        aspect = cw / max(ch, 1)
+        if 0.3 <= aspect <= 6.0:
+            candidates.append(cnt)
+
+    return max(candidates, key=cv2.contourArea) if candidates else None
 
 
 def detect_arrow(frame):
     """
-    Analyse a camera frame using two independent checks and return the arrow direction.
+    Analyse a camera frame and return the arrow direction.
 
-    Method 1 — corner count:
-        goodFeaturesToTrack finds corners; the arrowhead (triangle) produces more
-        corners than the body (rectangle) on its side of the centroid.
+    Two independent methods must agree:
 
-    Method 2 — pixel count:
-        White pixels are split at the same centroid X.  The arrowhead side has
-        more pixels because the triangle spreads wider than the body.
+    Method 1 — corner count (Shi-Tomasi):
+        goodFeaturesToTrack finds corners; the arrowhead (triangle) produces
+        more detectable corners on its side of the corner centroid than the
+        body (rectangle) does on its side.  The half with more corners is the
+        arrowhead direction.
+
+    Method 2 — mass offset:
+        The arrowhead (a wider triangle) shifts the contour's centre of mass
+        toward itself relative to the geometric centre of its bounding box.
+        If  centroid_x > bbox_centre_x  the arrowhead is on the right.
 
     Returns:
-        'left'     — both methods agree the arrowhead is on the left.
-        'right'    — both methods agree the arrowhead is on the right.
-        'conflict' — an arrow was detected but the two methods disagree.
-                     The caller should back up, realign, and try again.
-        None       — no arrow detected (too few corners or insufficient imbalance).
+        'left'     — both methods agree the arrowhead faces left.
+        'right'    — both methods agree the arrowhead faces right.
+        'conflict' — arrow detected but methods disagree; caller should
+                     back up, realign, and retry.
+        None       — no arrow found (too few corners or no qualifying contour).
     """
     if frame is None:
         return None
 
     binary = _preprocess(frame)
 
+    # ── Method 1: corner count ────────────────────────────────────────────────
     corners = cv2.goodFeaturesToTrack(
         binary,
         maxCorners=50,
@@ -53,39 +101,41 @@ def detect_arrow(frame):
         minDistance=10,
         blockSize=7
     )
-
     if corners is None or len(corners) < 4:
         return None
 
     pts = corners.reshape(-1, 2).astype(np.float32)
-    cx  = pts[:, 0].mean()
+    cx  = pts[:, 0].mean()   # corner centroid: sits between head and body clusters
 
-    # ── Method 1: corner count ────────────────────────────────────────────────
     right_corners = int(np.sum(pts[:, 0] > cx))
     left_corners  = int(np.sum(pts[:, 0] < cx))
 
     if abs(right_corners - left_corners) < MIN_IMBALANCE:
-        return None   # corner distribution too symmetric — no confident reading
+        return None   # distribution too symmetric — no confident reading
 
     corner_dir = 'right' if right_corners > left_corners else 'left'
 
-    # ── Method 2: pixel count ─────────────────────────────────────────────────
-    # Split the binary image at the corner centroid column.
-    # The arrowhead (wider triangle) produces more white pixels on its side.
-    col          = int(round(cx))
-    left_pixels  = int(np.count_nonzero(binary[:, :col]))
-    right_pixels = int(np.count_nonzero(binary[:, col:]))
+    # ── Method 2: mass offset vs bounding-box centre ─────────────────────────
+    contour = _find_arrow_contour(binary)
+    if contour is None:
+        return None
 
-    pixel_dir = 'right' if right_pixels > left_pixels else 'left'
+    M = cv2.moments(contour)
+    if M['m00'] == 0:
+        return None
+
+    centroid_x    = M['m10'] / M['m00']
+    rx, _, rw, _  = cv2.boundingRect(contour)
+    bbox_centre_x = rx + rw / 2.0
+
+    # The arrowhead (wider) pulls the centre of mass toward itself.
+    mass_dir = 'right' if centroid_x > bbox_centre_x else 'left'
 
     # ── Cross-check ───────────────────────────────────────────────────────────
-    if corner_dir != pixel_dir:
+    if corner_dir != mass_dir:
         return 'conflict'
 
     return corner_dir
-
-
-ARROW_MIN_AREA = 500   # minimum contour area (px²) to be considered the arrow
 
 
 def get_arrow_centroid_offset(frame):
@@ -93,26 +143,20 @@ def get_arrow_centroid_offset(frame):
     Return the horizontal pixel offset of the arrow's visual centroid from the
     frame centre.  Positive = arrow is to the right of centre.
 
-    Uses the centroid of the largest contour in the thresholded image rather
-    than the corner centroid.  This is robust to background features that would
-    pull a corner-based centroid off-centre.
+    Uses the largest qualifying contour (not corner positions) so that
+    background features cannot pull the centroid off-centre.
 
-    Returns None if no contour large enough to be the arrow is found.
+    Returns None if no plausible arrow contour is found.
     """
     if frame is None:
         return None
 
-    binary = _preprocess(frame)
-
-    contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not contours:
+    binary  = _preprocess(frame)
+    contour = _find_arrow_contour(binary)
+    if contour is None:
         return None
 
-    largest = max(contours, key=cv2.contourArea)
-    if cv2.contourArea(largest) < ARROW_MIN_AREA:
-        return None
-
-    M = cv2.moments(largest)
+    M = cv2.moments(contour)
     if M['m00'] == 0:
         return None
 
