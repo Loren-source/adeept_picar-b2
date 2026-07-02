@@ -2,7 +2,7 @@
 import time
 from motor import RobotMotor
 from servo import RobotServos
-from line import LineTracker
+from lineTracking import LineTracker
 
 # ============================================================
 # INSTANCIATION
@@ -23,8 +23,8 @@ ANGLE_DROITE_MAX  = 65
 
 # Vitesses (réduites pour les virages)
 VITESSE_DROITE    = 34
-VITESSE_VIRAGE_GAUCHE = 10       # réduit pour passer le virage
-VITESSE_VIRAGE_DROITE = 8        # encore plus bas pour la droite
+VITESSE_VIRAGE_GAUCHE = 18      # réduit pour passer le virage
+VITESSE_VIRAGE_DROITE = 16        # encore plus bas pour la droite
 VITESSE_RECUL     = -15
 
 VITESSE_ALPHA     = 0.3
