@@ -25,7 +25,7 @@ ANGLE_DROITE_SERRE   = 34
 
 # VITESSES
 VITESSE_DROITE    = 34
-VITESSE_VIRAGE    = 8             # un peu plus rapide que 4
+VITESSE_VIRAGE    = 18            # un peu plus rapide que 4
 VITESSE_PERDU     = 4
 VITESSE_RECH      = 4
 
