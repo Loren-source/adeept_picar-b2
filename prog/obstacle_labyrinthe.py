@@ -261,12 +261,20 @@ def main():
                         continue
 
                     if direction in ('left', 'right'):
-                        print(f"  Arrow detected: {direction} — aligning...")
-                        # Camera stays running so align_with_arrow() can capture frames.
-                        aligned = align_with_arrow(servos)
-                        if aligned is not None:
-                            direction = aligned
-                        print(f"  Final direction after alignment: {direction}")
+                        # Only run the physical realignment wiggle if the arrow's
+                        # centroid is actually off-centre — a confident direction
+                        # reading doesn't imply the robot is poorly aligned.
+                        offset = get_arrow_centroid_offset(frame)
+                        if offset is not None and abs(offset) <= ALIGN_THRESHOLD_PX:
+                            print(f"  Arrow detected: {direction} — already aligned "
+                                  f"(offset {offset:+.0f} px), skipping realignment.")
+                        else:
+                            print(f"  Arrow detected: {direction} — aligning...")
+                            # Camera stays running so align_with_arrow() can capture frames.
+                            aligned = align_with_arrow(servos)
+                            if aligned is not None:
+                                direction = aligned
+                            print(f"  Final direction after alignment: {direction}")
                         Camera.stop_capture()
                         break
 
