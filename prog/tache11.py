@@ -18,40 +18,31 @@ tracker = LineTracker()
 
 CENTRE = 97
 
-
 # petites corrections
 GAUCHE_LEGER = 115
 DROITE_LEGER = 82
-
 
 # vrais virages
 GAUCHE_FORT = 128
 DROITE_FORT = 65
 
-
 VITESSE_LIGNE = 45
-VITESSE_VIRAGE = 24
+VITESSE_VIRAGE = 26
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 30          # vitesse réduite pour les pointillés
+VITESSE_POINTILLE = 34          # plus rapide pour réduire le temps sans capteurs
 
 # Seuils
-SEUIL_POINTILLE = 50            # 50 cycles = 1.25s (augmenté)
+SEUIL_POINTILLE = 50            # 50 cycles = 1.25s (à ajuster selon la longueur des pointillés)
 SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
 
-
-dernier_sens = 0
-# 1 = gauche
-# -1 = droite
-
-
+dernier_sens = 0                # 1=gauche, -1=droite
 compteur_virage = 0
-
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# Mémorisation de la dernière trajectoire
+# Mémorisation de la dernière trajectoire "modérée" (uniquement pour 111, 110, 011)
 derniere_cible = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
@@ -61,18 +52,9 @@ derniere_vitesse = VITESSE_LIGNE
 # ==========================
 
 def tourner(cible):
-
     global angle_actuel
-
-    # réglage validé sur ton parcours
-    angle_actuel = angle_actuel*0.6 + cible*0.4
-
-
-    servos.set_angle(
-        0,
-        round(angle_actuel,1)
-    )
-
+    angle_actuel = angle_actuel * 0.6 + cible * 0.4
+    servos.set_angle(0, round(angle_actuel, 1))
 
 
 # ==========================
@@ -80,13 +62,9 @@ def tourner(cible):
 # ==========================
 
 print("START")
-
 tourner(CENTRE)
-
-robot.set_motor(1,30)
-
+robot.set_motor(1, 30)
 time.sleep(1)
-
 
 
 # ==========================
@@ -94,230 +72,133 @@ time.sleep(1)
 # ==========================
 
 try:
-
     while True:
-
-
         s = tracker.get_status()
+        etat = (s["left"], s["middle"], s["right"])
 
-
-        etat = (
-            s["left"],
-            s["middle"],
-            s["right"]
-        )
-
-
-        print(etat)
-        print(
-            f"etat={etat} angle={round(angle_actuel,1)} cible={cible if 'cible' in locals() else '-'} compteur_perdu={compteur_perdu}"
-        )
-
-
+        # Debug
+        print(f"etat={etat} angle={round(angle_actuel,1)} cible={cible if 'cible' in locals() else '-'} perdu={compteur_perdu}")
 
         # =====================
-        # CENTRE
+        # CENTRE (1,1,1)
         # =====================
-
         if etat == (1,1,1):
-
             compteur_virage = 0
             compteur_perdu = 0
-
-
             cible = CENTRE
             vitesse = VITESSE_LIGNE
+            # Mémorisation car état modéré
             derniere_cible = cible
             derniere_vitesse = vitesse
 
-
-
         # =====================
-        # VIRAGE GAUCHE
+        # VIRAGE GAUCHE MODÉRÉ (1,1,0)
         # =====================
-
         elif etat == (1,1,0):
-
             compteur_perdu = 0
-
-            compteur_virage += 1
-
+            compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = 1
-
-
             cible = GAUCHE_LEGER
-
             vitesse = 28
-
+            # Mémorisation
             derniere_cible = cible
             derniere_vitesse = vitesse
 
-
-
+        # =====================
+        # VIRAGE GAUCHE SERRÉ (1,0,0) – on NE mémorise PAS
+        # =====================
         elif etat == (1,0,0):
-
             compteur_perdu = 0
-
-            compteur_virage += 1
-
+            compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = 1
-
-
             if compteur_virage > 3:
-
                 cible = GAUCHE_FORT
-
             else:
-
                 cible = 120
-
-
-
             vitesse = VITESSE_VIRAGE
-
-            derniere_cible = cible
-            derniere_vitesse = vitesse
-
-
-
+            # PAS de mémorisation ici
 
         # =====================
-        # VIRAGE DROITE
+        # VIRAGE DROITE MODÉRÉ (0,1,1)
         # =====================
-
         elif etat == (0,1,1):
-
             compteur_perdu = 0
-
-            compteur_virage += 1
-
+            compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = -1
-
-
             cible = DROITE_LEGER
-
             vitesse = 28
-
+            # Mémorisation
             derniere_cible = cible
             derniere_vitesse = vitesse
 
-
-
+        # =====================
+        # VIRAGE DROITE SERRÉ (0,0,1) – on NE mémorise PAS
+        # =====================
         elif etat == (0,0,1):
-
             compteur_perdu = 0
-
-            compteur_virage += 1
-
+            compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = -1
-
-
-
             if compteur_virage > 3:
-
                 cible = DROITE_FORT
-
-
             else:
-
                 cible = 75
-
-
-
             vitesse = VITESSE_VIRAGE
-
-            derniere_cible = cible
-            derniere_vitesse = vitesse
-
-
-
+            # PAS de mémorisation
 
         # =====================
         # 000 : POINTILLÉS OU PERDU
         # =====================
-
         elif etat == (0,0,0):
-
-
             compteur_perdu += 1
 
-
-
             # ======================
-            # CAS POINTILLÉS (on garde la trajectoire)
+            # CAS POINTILLÉS (on garde la dernière trajectoire modérée, avec retour progressif vers CENTRE)
             # ======================
-
             if compteur_perdu <= SEUIL_POINTILLE:
-
-
-                # on continue sur la dernière trajectoire connue
-                cible = derniere_cible
+                # Retour progressif vers le centre (pas de -2/+2 pour une douceur optimale)
+                if derniere_cible > CENTRE:
+                    cible = max(CENTRE, derniere_cible - 2)
+                elif derniere_cible < CENTRE:
+                    cible = min(CENTRE, derniere_cible + 2)
+                else:
+                    cible = CENTRE
+                # On met à jour pour la prochaine itération
+                derniere_cible = cible
                 vitesse = VITESSE_POINTILLE
-
-
 
             # ======================
             # VRAIE PERTE (on cherche)
             # ======================
-
             else:
-
-                # Si la perte dure très longtemps, on arrête
                 if compteur_perdu > SEUIL_PERDU_MAX:
                     print("--- Fin de parcours ou perte définitive ---")
                     cible = CENTRE
                     vitesse = 0
                     tourner(cible)
                     robot.set_motor(1, 0)
-                    break   # sortie de la boucle
-
-                # Sinon, on alterne les directions pour chercher la ligne
-                # Phase alternée toutes les 30 cycles (0.75s)
+                    break
+                # Alternance gauche/droite toutes les 30 cycles
                 phase = (compteur_perdu - SEUIL_POINTILLE) // 30
                 if phase % 2 == 0:
                     cible = GAUCHE_FORT
                 else:
                     cible = DROITE_FORT
-
                 vitesse = VITESSE_PERDU
 
-
-
-
+        # =====================
+        # APPLICATION
+        # =====================
         tourner(cible)
+        robot.set_motor(1, vitesse)
 
-
-
-        robot.set_motor(
-            1,
-            vitesse
-        )
-
-
-
-        # =====================
-        # MEMOIRE
-        # =====================
-
-        # On met à jour dernier_etat UNIQUEMENT si on voit la ligne
+        # Mise à jour de dernier_etat uniquement si ligne vue
         if etat != (0,0,0):
             dernier_etat = etat
-
-
 
         time.sleep(0.025)
 
 
-
-
-
 except KeyboardInterrupt:
-
-
     print("STOP")
-
-
     robot.stopper()
-
-
-    servos.set_angle(0,CENTRE)
+    servos.set_angle(0, CENTRE)
