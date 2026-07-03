@@ -32,7 +32,7 @@ VITESSE_EVITEMENT = 10
 VITESSE_RECUL = 12
 VITESSE_RECHERCHE = 15
 
-SEUIL_OBSTACLE = 400            # mm (70 cm – s'arrête plus tôt)
+SEUIL_OBSTACLE = 800            # mm (70 cm – s'arrête plus tôt)
 SEUIL_COLLISION = 300           # mm (30 cm)
 SEUIL_RECUL_FORT = 180          # mm (18 cm)
 SEUIL_PASSAGE_LIBRE = 600       # mm (60 cm)
