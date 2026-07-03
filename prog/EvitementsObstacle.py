@@ -47,9 +47,9 @@ VITESSE_EVITEMENT  = 25
 VITESSE_RECUL      = 14
 
 # Seuils en CM (ultra.py renvoie des cm)
-SEUIL_OBSTACLE        = 40
-SEUIL_COLLISION       = 18
-SEUIL_PASSAGE_LIBRE   = 40
+SEUIL_OBSTACLE        = 25
+SEUIL_COLLISION       = 12
+SEUIL_PASSAGE_LIBRE   = 30
 DISTANCE_MAX_FAUSSE   = 200   # valeur "pas de mesure fiable"
 
 PERIODE_ULTRASON  = 0.08
