@@ -22,7 +22,7 @@ from Caméra import Camera             # Caméra.py — provides capture_frame()
                                       #       CVThread class-level statements on import.
 import move                           # move.py   — motor control
 from servo import RobotServos          # servo.py  — RobotServos class, set_angle(canal, angle)
-from arrow_detector import detect_arrow, get_arrow_centroid_offset
+from arrow_detector import detect_arrow
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Tunable constants — adjust these for your maze and robot
@@ -48,11 +48,10 @@ TURN_HOLD_OPPOSITE = 0.6
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
-ALIGN_THRESHOLD_PX = 100   # pixels: max acceptable centroid offset from frame centre (frame ~640 px wide)
 ALIGN_SPEED        = 25   # throttle % for alignment nudges — slower than DRIVE_SPEED for finer correction
 ALIGN_NUDGE_FWD    = 0.15 # seconds: forward arc per nudge — short, small correction step
 ALIGN_NUDGE_BWD    = 0.15 # seconds: backward arc per nudge — equal to FWD so there is no net translation
-ALIGN_MAX_ITER     = 5    # max nudge attempts before giving up and using best reading
+ALIGN_MAX_ITER     = 6    # max nudge attempts in the sweep before giving up
 
 CONFLICT_MAX_RETRY = 3    # max times to back up and realign after a corner/pixel conflict
 
@@ -120,57 +119,37 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Alignment: centre the robot on the arrow before committing to a turn
+# Alignment: sweep left/right until detect_arrow() gives a confident reading
 # ──────────────────────────────────────────────────────────────────────────────
-def _reposition_to_arrow(servos):
+def _search_for_arrow_direction(servos):
     """
-    Nudge the robot left or right until the arrow centroid is within
-    ALIGN_THRESHOLD_PX of the frame centre.  Does NOT read or return a
-    direction — call detect_arrow() separately after this.
-    Camera must already be running.
+    Nudge the robot through a bounded right-then-left sweep, re-running
+    detect_arrow() after each nudge, until it returns a confident 'left'/
+    'right' or the sweep is exhausted. Camera must already be running.
 
-    Which physical steer direction actually reduces a positive offset
-    depends on camera/servo/motor polarity that can vary per robot.
-    `sign` starts assuming offset>0 -> steer right; if a nudge makes
-    the offset worse instead of better, it flips for later nudges.
+    Deliberately does not use a pixel centroid offset: that measurement can
+    lock onto the wrong contour (background clutter with a similar area/
+    aspect ratio) and report a position with no relation to the real arrow,
+    which made offset-driven correction actively diverge in practice.
+    detect_arrow() already requires two independent methods (corner
+    distribution and mass-vs-bbox) to agree before returning a non-conflict
+    result, so that agreement is used as the sole trust signal here instead.
     """
-    sign = 1
-    prev_abs_offset  = None
-    prev_centroid_x  = None   # absolute pixel x — keeps _find_arrow_contour locked onto
-                               # the same blob across attempts instead of re-picking by area
-    worse_streak     = 0
+    half = ALIGN_MAX_ITER // 2
 
     for attempt in range(1, ALIGN_MAX_ITER + 1):
-        frame  = Camera.capture_frame()
-        offset = get_arrow_centroid_offset(frame, prev_centroid_x=prev_centroid_x)
+        frame     = Camera.capture_frame()
+        direction = detect_arrow(frame)
 
-        if offset is None:
-            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: arrow lost.")
-            return
+        if direction in ('left', 'right'):
+            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: confident reading '{direction}'.")
+            return direction
 
-        prev_centroid_x = offset + frame.shape[1] / 2.0
+        print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: {direction or 'no arrow'} — nudging.")
 
-        print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: centroid offset {offset:+.0f} px")
-
-        if abs(offset) <= ALIGN_THRESHOLD_PX:
-            print(f"  Align: centred.")
-            return
-
-        # If the last two nudges both made things worse (beyond noise), our
-        # offset-to-steer mapping is backwards for this robot — flip it.
-        # Requiring two in a row avoids flipping on a single noisy reading.
-        if prev_abs_offset is not None and abs(offset) > prev_abs_offset + 5:
-            worse_streak += 1
-            if worse_streak >= 2:
-                sign = -sign
-                worse_streak = 0
-                print(f"  Align: nudges keep increasing offset, flipping correction direction.")
-        else:
-            worse_streak = 0
-        prev_abs_offset = abs(offset)
-
-        steer_right = (offset > 0) if sign > 0 else (offset < 0)
-        nudge = 'right' if steer_right else 'left'
+        # First half of the sweep tries right, second half tries left —
+        # covers both directions without needing to know which way is correct.
+        nudge = 'right' if attempt <= half else 'left'
         steer(servos, nudge)
         time.sleep(0.2)                              # servo settle before driving
         move.video_Tracking_Move(ALIGN_SPEED, 1)
@@ -184,19 +163,8 @@ def _reposition_to_arrow(servos):
         move.motorStop()
         time.sleep(0.1)                              # brief settle before next measurement
 
-    print(f"  Align: max iterations reached.")
-
-
-def align_with_arrow(servos):
-    """
-    Centre the robot on the arrow, then return the detected direction.
-    Never returns 'conflict' — if the dual-check still disagrees after
-    repositioning, returns None so the caller falls back gracefully.
-    """
-    _reposition_to_arrow(servos)
-    frame  = Camera.capture_frame()
-    result = detect_arrow(frame)
-    return result if result in ('left', 'right') else None
+    print(f"  Align: sweep exhausted without a confident reading.")
+    return None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -259,33 +227,29 @@ def main():
 
                     if direction == 'conflict':
                         conflict_count += 1
-                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — realigning...")
-                        direction = None
+                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — searching for a clean reading...")
 
-                        # Realign laterally without backing up — robot is already
+                        # Sweep laterally without backing up — robot is already
                         # at the right distance; backing up is handled separately
                         # by the "no arrow found" path after CONFLICT_MAX_RETRY.
-                        _reposition_to_arrow(servos)
+                        resolved = _search_for_arrow_direction(servos)
+                        if resolved in ('left', 'right'):
+                            direction = resolved
+                            print(f"  Arrow resolved after search: {direction}")
+                            Camera.stop_capture()
+                            break
 
+                        direction = None
                         if conflict_count >= CONFLICT_MAX_RETRY:
                             break   # give up; fall through to the "no arrow" handler
                         continue
 
                     if direction in ('left', 'right'):
-                        # Only run the physical realignment wiggle if the arrow's
-                        # centroid is actually off-centre — a confident direction
-                        # reading doesn't imply the robot is poorly aligned.
-                        offset = get_arrow_centroid_offset(frame)
-                        if offset is not None and abs(offset) <= ALIGN_THRESHOLD_PX:
-                            print(f"  Arrow detected: {direction} — already aligned "
-                                  f"(offset {offset:+.0f} px), skipping realignment.")
-                        else:
-                            print(f"  Arrow detected: {direction} — aligning...")
-                            # Camera stays running so align_with_arrow() can capture frames.
-                            aligned = align_with_arrow(servos)
-                            if aligned is not None:
-                                direction = aligned
-                            print(f"  Final direction after alignment: {direction}")
+                        # detect_arrow() only returns a non-conflict direction when
+                        # its two independent checks (corner distribution and
+                        # mass-vs-bbox) already agree, so no further realignment
+                        # or verification is needed.
+                        print(f"  Arrow detected: {direction}")
                         Camera.stop_capture()
                         break
 

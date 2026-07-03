@@ -35,7 +35,7 @@ def _preprocess(frame):
     return binary
 
 
-def _find_arrow_contour(binary, prefer_near_x=None):
+def _find_arrow_contour(binary):
     """
     Return the contour most likely to be the arrow, or None.
 
@@ -44,12 +44,7 @@ def _find_arrow_contour(binary, prefer_near_x=None):
       - aspect ratio: bounding-box width/height between 0.3 and 6.0
         (excludes thin vertical lines and near-square blobs)
 
-    Among candidates, if `prefer_near_x` is given, returns the one whose
-    centroid is closest to it — temporal continuity. Consecutive frames a
-    small nudge apart can't have the real arrow teleport across the image,
-    but background clutter (shadows, wall seams) that also passes the area/
-    aspect filter can outrank the real arrow by area alone and hijack the
-    reading. Without `prefer_near_x`, falls back to the largest candidate.
+    Among candidates, returns the one with the largest area.
     """
     h, w    = binary.shape
     max_area = ARROW_MAX_AREA_FRAC * h * w
@@ -66,22 +61,7 @@ def _find_arrow_contour(binary, prefer_near_x=None):
         if 0.3 <= aspect <= 6.0:
             candidates.append(cnt)
 
-    if not candidates:
-        return None
-
-    if prefer_near_x is None:
-        return max(candidates, key=cv2.contourArea)
-
-    def centroid_x(cnt):
-        m = cv2.moments(cnt)
-        return m['m10'] / m['m00'] if m['m00'] else None
-
-    scored = [(cnt, centroid_x(cnt)) for cnt in candidates]
-    scored = [(cnt, cx) for cnt, cx in scored if cx is not None]
-    if not scored:
-        return None
-
-    return min(scored, key=lambda item: abs(item[1] - prefer_near_x))[0]
+    return max(candidates, key=cv2.contourArea) if candidates else None
 
 
 def detect_arrow(frame):
@@ -156,34 +136,3 @@ def detect_arrow(frame):
         return 'conflict'
 
     return corner_dir
-
-
-def get_arrow_centroid_offset(frame, prev_centroid_x=None):
-    """
-    Return the horizontal pixel offset of the arrow's visual centroid from the
-    frame centre.  Positive = arrow is to the right of centre.
-
-    Uses a qualifying contour (not corner positions) so that background
-    features cannot pull the centroid off-centre. Pass `prev_centroid_x`
-    (an absolute pixel x returned by a previous call, i.e. this call's
-    return value plus frame width / 2) to keep tracking the same contour
-    across a sequence of nearby frames instead of re-picking by area alone —
-    see `_find_arrow_contour`.
-
-    Returns None if no plausible arrow contour is found.
-    """
-    if frame is None:
-        return None
-
-    binary  = _preprocess(frame)
-    contour = _find_arrow_contour(binary, prefer_near_x=prev_centroid_x)
-    if contour is None:
-        return None
-
-    M = cv2.moments(contour)
-    if M['m00'] == 0:
-        return None
-
-    centroid_x     = M['m10'] / M['m00']
-    frame_center_x = frame.shape[1] / 2.0
-    return centroid_x - frame_center_x
