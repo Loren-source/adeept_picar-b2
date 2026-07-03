@@ -135,15 +135,20 @@ def _reposition_to_arrow(servos):
     the offset worse instead of better, it flips for later nudges.
     """
     sign = 1
-    prev_abs_offset = None
+    prev_abs_offset  = None
+    prev_centroid_x  = None   # absolute pixel x — keeps _find_arrow_contour locked onto
+                               # the same blob across attempts instead of re-picking by area
+    worse_streak     = 0
 
     for attempt in range(1, ALIGN_MAX_ITER + 1):
         frame  = Camera.capture_frame()
-        offset = get_arrow_centroid_offset(frame)
+        offset = get_arrow_centroid_offset(frame, prev_centroid_x=prev_centroid_x)
 
         if offset is None:
             print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: arrow lost.")
             return
+
+        prev_centroid_x = offset + frame.shape[1] / 2.0
 
         print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: centroid offset {offset:+.0f} px")
 
@@ -151,11 +156,17 @@ def _reposition_to_arrow(servos):
             print(f"  Align: centred.")
             return
 
-        # If the previous nudge made things worse (beyond noise), our
+        # If the last two nudges both made things worse (beyond noise), our
         # offset-to-steer mapping is backwards for this robot — flip it.
+        # Requiring two in a row avoids flipping on a single noisy reading.
         if prev_abs_offset is not None and abs(offset) > prev_abs_offset + 5:
-            sign = -sign
-            print(f"  Align: previous nudge increased offset, flipping correction direction.")
+            worse_streak += 1
+            if worse_streak >= 2:
+                sign = -sign
+                worse_streak = 0
+                print(f"  Align: nudges keep increasing offset, flipping correction direction.")
+        else:
+            worse_streak = 0
         prev_abs_offset = abs(offset)
 
         steer_right = (offset > 0) if sign > 0 else (offset < 0)
