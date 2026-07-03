@@ -29,13 +29,13 @@ GAUCHE_FORT = 128
 DROITE_FORT = 65
 
 
-VITESSE_LIGNE = 40
+VITESSE_LIGNE = 45
 VITESSE_VIRAGE = 24
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 30         # vitesse réduite pour les pointillés
+VITESSE_POINTILLE = 36         # vitesse réduite pour les pointillés
 
 # Seuils
-SEUIL_POINTILLE = 50            # 50 cycles = 1.25s
+SEUIL_POINTILLE = 70            
 SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
@@ -51,7 +51,7 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# Mémorisation de la dernière trajectoire (seulement pour les états modérés)
+# Mémorisation de la dernière trajectoire
 derniere_cible = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
@@ -124,14 +124,13 @@ try:
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
-            # Mémorisation uniquement pour les états modérés
             derniere_cible = cible
             derniere_vitesse = vitesse
 
 
 
         # =====================
-        # VIRAGE GAUCHE (modéré)
+        # VIRAGE GAUCHE
         # =====================
 
         elif etat == (1,1,0):
@@ -151,10 +150,6 @@ try:
             derniere_vitesse = vitesse
 
 
-
-        # =====================
-        # VIRAGE GAUCHE (serré) – on NE mémorise PAS
-        # =====================
 
         elif etat == (1,0,0):
 
@@ -177,12 +172,14 @@ try:
 
             vitesse = VITESSE_VIRAGE
 
-            # ⚠️ On ne mémorise pas cette cible (ne pas écraser derniere_cible)
+            derniere_cible = cible
+            derniere_vitesse = vitesse
+
 
 
 
         # =====================
-        # VIRAGE DROITE (modéré)
+        # VIRAGE DROITE
         # =====================
 
         elif etat == (0,1,1):
@@ -202,10 +199,6 @@ try:
             derniere_vitesse = vitesse
 
 
-
-        # =====================
-        # VIRAGE DROITE (serré) – on NE mémorise PAS
-        # =====================
 
         elif etat == (0,0,1):
 
@@ -230,7 +223,8 @@ try:
 
             vitesse = VITESSE_VIRAGE
 
-            # ⚠️ On ne mémorise pas cette cible (ne pas écraser derniere_cible)
+            derniere_cible = cible
+            derniere_vitesse = vitesse
 
 
 
@@ -247,15 +241,15 @@ try:
 
 
             # ======================
-            # CAS POINTILLÉS (on garde la trajectoire modérée)
+            # CAS POINTILLÉS (on garde la trajectoire)
             # ======================
 
             if compteur_perdu <= SEUIL_POINTILLE:
 
 
-                # on continue avec la dernière trajectoire modérée (pas de virage serré)
+                # on continue sur la dernière trajectoire connue
                 cible = derniere_cible
-                vitesse = VITESSE_POINTILLE   # ou on peut utiliser derniere_vitesse si on préfère
+                vitesse = VITESSE_POINTILLE
 
 
 
@@ -265,7 +259,7 @@ try:
 
             else:
 
-                # Si la perte dure trop longtemps, on arrête
+                # Si la perte dure très longtemps, on arrête
                 if compteur_perdu > SEUIL_PERDU_MAX:
                     print("--- Fin de parcours ou perte définitive ---")
                     cible = CENTRE
@@ -275,7 +269,8 @@ try:
                     break   # sortie de la boucle
 
                 # Sinon, on alterne les directions pour chercher la ligne
-                phase = (compteur_perdu - SEUIL_POINTILLE) // 30   # alternance toutes les 30 cycles
+                # Phase alternée toutes les 30 cycles (0.75s)
+                phase = (compteur_perdu - SEUIL_POINTILLE) // 30
                 if phase % 2 == 0:
                     cible = GAUCHE_FORT
                 else:
