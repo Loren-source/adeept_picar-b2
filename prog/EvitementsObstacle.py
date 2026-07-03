@@ -45,7 +45,7 @@ VITESSE_EVITEMENT  = 25
 VITESSE_RECUL      = 14
 
 # =========================================================================
-# 🛠️ NOUVEAUX SEUILS AJUSTÉS (Évite les détections fantômes à 36 cm)
+# SEUILS DE DISTANCE AJUSTÉS
 # =========================================================================
 SEUIL_OBSTACLE        = 25    # S'arrête si un obstacle est à moins de 25 cm
 SEUIL_COLLISION       = 12    # Recul d'urgence si l'obstacle est à moins de 12 cm
@@ -56,7 +56,6 @@ PERIODE_ULTRASON  = 0.08
 PERIODE_IR        = 0.03
 PERIODE_DECISION  = 0.05
 
-# Offsets de scan (bornés à [-60, +60])
 ANGLES_SCAN = list(range(-60, 61, 20))
 
 DUREE_RECUL_URGENCE  = 0.8
@@ -96,7 +95,6 @@ track_middle = InputDevice(pin=LINE_PIN_MIDDLE)
 track_right  = InputDevice(pin=LINE_PIN_RIGHT)
 
 try:
-    high_precision_sensor = True
     ultrasonic_sensor = ultra.Ultrasonic(ultra.Tr, ultra.Ec)
     print("✅ Capteur Ultrason prêt.")
 except Exception as e:
@@ -220,12 +218,19 @@ def avancer_tout_droit():
     move.move(VITESSE_MARCHE, 1, "mid")
 
 
+# =========================================================================
+# ⚙️ APPLICATION DE LA SOLUTION 1 (GESTION INTÉLLIGENTE DES VALEURS NONE)
+# =========================================================================
 def obstacle_detecte(distance):
-    return distance is None or distance < SEUIL_OBSTACLE
+    if distance is None: 
+        return False  # Ignore l'erreur Echo et évite le faux blocage
+    return distance < SEUIL_OBSTACLE
 
 
 def collision_imminente(distance):
-    return distance is None or distance < SEUIL_COLLISION
+    if distance is None: 
+        return False  # Ignore l'erreur Echo pour stopper le recul infini
+    return distance < SEUIL_COLLISION
 
 
 def bordure_detectee(pattern):
@@ -312,7 +317,7 @@ def eviter_bordure(pattern):
 
 def scanner_environnement():
     mesures = []
-    print("[SCAN] Début scan")
+    print("[SCAN] Début scan mécanique")
 
     stop_robot()
     time.sleep(0.1)
@@ -329,7 +334,7 @@ def scanner_environnement():
 
         d = get_distance_cm()
         if d is None:
-            d = 0
+            d = 999  # Si le scan échoue sur un angle, on considère arbitrairement la voie libre pour ne pas figer
 
         libre = d >= SEUIL_PASSAGE_LIBRE
         mesures.append({"angle": offset, "distance": d, "libre": libre})
@@ -443,7 +448,7 @@ def recentrer_sur_voie(offset_precedent, duree_max=DUREE_RECENTRAGE):
             eviter_bordure(pattern)
             return False
 
-        if distance is None or distance > SEUIL_OBSTACLE:
+        if distance is not None and distance > SEUIL_OBSTACLE:
             break
 
         time.sleep(PERIODE_DECISION)
@@ -523,9 +528,6 @@ def detect_blue(picam2):
     return blue_pixels >= BLUE_MIN_PIXELS
 
 
-# ==========================================
-# BOUCLE PRINCIPALE MODIFIÉE AVEC SUPER-DEBUG
-# ==========================================
 def main():
     print("============================================")
     print("MISSION C — RADAR + THREADS + BORDURE IR")
@@ -566,21 +568,19 @@ def main():
         while True:
             distance, pattern = lire_etat()
 
-            # -------------------------------------------------------------------------
-            # 🔍 ZONE DU SUPER-DEBUG DANS LE CODE PRINCIPAL
-            # -------------------------------------------------------------------------
+            # Affichage du Super-Debug permanent en console
             print(f"🔍 [MONITOR] Distance: {distance} cm | Sol IR: {pattern}")
 
             if collision_imminente(distance):
-                print(f"🚨 RECUL DE SÉCURITÉ -> Déclenché par COLLISION (Distance lue = {distance})")
+                print(f"🚨 RECUL -> Évitement collision matériel (Distance active = {distance})")
                 recul_urgence()
 
             elif bordure_detectee(pattern):
-                print(f"🚨 RECUL DE SÉCURITÉ -> Déclenché par BORDURE IR (Pattern détecté = {pattern})")
+                print(f"🚨 RECUL -> Évitement bordure active (Pattern détecté = {pattern})")
                 eviter_bordure(pattern)
 
             elif obstacle_detecte(distance):
-                print(f"🤔 OBSTACLE DÉTECTÉ à {distance} cm -> Lancement du scan...")
+                print(f"🤔 Obstacle chiffré détecté à {distance} cm -> Calcul de trajectoire...")
                 contourner_obstacle_gap()
 
             else:
