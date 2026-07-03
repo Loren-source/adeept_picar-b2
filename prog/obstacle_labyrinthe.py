@@ -48,13 +48,6 @@ TURN_HOLD_OPPOSITE = 0.6
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
-ALIGN_SPEED        = 25   # throttle % for alignment nudges — slower than DRIVE_SPEED for finer correction
-ALIGN_NUDGE_FWD    = 0.15 # seconds: forward arc per nudge — short, small correction step
-ALIGN_NUDGE_BWD    = 0.15 # seconds: backward arc per nudge — equal to FWD so there is no net translation
-ALIGN_MAX_ITER     = 6    # max nudge attempts in the sweep before giving up
-
-CONFLICT_MAX_RETRY = 3    # max times to back up and realign after a corner/pixel conflict
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Steering helper
@@ -119,55 +112,6 @@ def turn_with_obstacle_check(ultrasonic, servos, direction, duration, duration_o
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Alignment: sweep left/right until detect_arrow() gives a confident reading
-# ──────────────────────────────────────────────────────────────────────────────
-def _search_for_arrow_direction(servos):
-    """
-    Nudge the robot through a bounded right-then-left sweep, re-running
-    detect_arrow() after each nudge, until it returns a confident 'left'/
-    'right' or the sweep is exhausted. Camera must already be running.
-
-    Deliberately does not use a pixel centroid offset: that measurement can
-    lock onto the wrong contour (background clutter with a similar area/
-    aspect ratio) and report a position with no relation to the real arrow,
-    which made offset-driven correction actively diverge in practice.
-    detect_arrow() already requires two independent methods (corner
-    distribution and mass-vs-bbox) to agree before returning a non-conflict
-    result, so that agreement is used as the sole trust signal here instead.
-    """
-    half = ALIGN_MAX_ITER // 2
-
-    for attempt in range(1, ALIGN_MAX_ITER + 1):
-        frame     = Camera.capture_frame()
-        direction = detect_arrow(frame)
-
-        if direction in ('left', 'right'):
-            print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: confident reading '{direction}'.")
-            return direction
-
-        print(f"  Align [{attempt}/{ALIGN_MAX_ITER}]: {direction or 'no arrow'} — nudging.")
-
-        # First half of the sweep tries right, second half tries left —
-        # covers both directions without needing to know which way is correct.
-        nudge = 'right' if attempt <= half else 'left'
-        steer(servos, nudge)
-        time.sleep(0.2)                              # servo settle before driving
-        move.video_Tracking_Move(ALIGN_SPEED, 1)
-        time.sleep(ALIGN_NUDGE_FWD)
-        move.motorStop()
-
-        steer(servos, opposite_direction(nudge))
-        time.sleep(0.2)                              # servo settle before reversing
-        move.video_Tracking_Move(ALIGN_SPEED, -1)
-        time.sleep(ALIGN_NUDGE_BWD)
-        move.motorStop()
-        time.sleep(0.1)                              # brief settle before next measurement
-
-    print(f"  Align: sweep exhausted without a confident reading.")
-    return None
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Main loop
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
@@ -216,44 +160,27 @@ def main():
 
                 # ── Step 3: capture frames at intervals until arrow is found ──
                 # Camera.capture_frame() returns one BGR numpy array on demand —
-                # the camera does NOT stream between calls.
-                direction      = None
-                deadline       = time.time() + ARROW_TIMEOUT
-                conflict_count = 0
+                # the camera does NOT stream between calls. No realignment is
+                # attempted here: turn_with_obstacle_check()'s timing is tuned
+                # so the robot already ends up facing the next arrow reasonably
+                # squarely after a turn, without any active correction step.
+                direction = None
+                deadline  = time.time() + ARROW_TIMEOUT
 
                 while time.time() < deadline:
                     frame     = Camera.capture_frame()
                     direction = detect_arrow(frame)
 
-                    if direction == 'conflict':
-                        conflict_count += 1
-                        print(f"  Corner/pixel conflict [{conflict_count}/{CONFLICT_MAX_RETRY}] — searching for a clean reading...")
-
-                        # Sweep laterally without backing up — robot is already
-                        # at the right distance; backing up is handled separately
-                        # by the "no arrow found" path after CONFLICT_MAX_RETRY.
-                        resolved = _search_for_arrow_direction(servos)
-                        if resolved in ('left', 'right'):
-                            direction = resolved
-                            print(f"  Arrow resolved after search: {direction}")
-                            Camera.stop_capture()
-                            break
-
-                        direction = None
-                        if conflict_count >= CONFLICT_MAX_RETRY:
-                            break   # give up; fall through to the "no arrow" handler
-                        continue
-
                     if direction in ('left', 'right'):
                         # detect_arrow() only returns a non-conflict direction when
                         # its two independent checks (corner distribution and
-                        # mass-vs-bbox) already agree, so no further realignment
-                        # or verification is needed.
+                        # mass-vs-bbox) already agree.
                         print(f"  Arrow detected: {direction}")
                         Camera.stop_capture()
                         break
 
-                    # direction is None — wait and try again
+                    # direction is None or 'conflict' — wait and try again
+                    direction = None
                     time.sleep(CAPTURE_INTERVAL)
 
                 if direction is None:
