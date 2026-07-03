@@ -5,8 +5,8 @@ import time
 import threading
 from motor import RobotMotor
 from servo import RobotServos
-from Ultra import Ultrasonic
-from line import LineTracker
+from ultra import Ultrasonic
+from lineTracking import LineTracker
 
 # ============================
 # INITIALISATION
