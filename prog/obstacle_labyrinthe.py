@@ -128,7 +128,15 @@ def _reposition_to_arrow(servos):
     ALIGN_THRESHOLD_PX of the frame centre.  Does NOT read or return a
     direction — call detect_arrow() separately after this.
     Camera must already be running.
+
+    Which physical steer direction actually reduces a positive offset
+    depends on camera/servo/motor polarity that can vary per robot.
+    `sign` starts assuming offset>0 -> steer right; if a nudge makes
+    the offset worse instead of better, it flips for later nudges.
     """
+    sign = 1
+    prev_abs_offset = None
+
     for attempt in range(1, ALIGN_MAX_ITER + 1):
         frame  = Camera.capture_frame()
         offset = get_arrow_centroid_offset(frame)
@@ -143,7 +151,15 @@ def _reposition_to_arrow(servos):
             print(f"  Align: centred.")
             return
 
-        nudge = 'right' if offset > 0 else 'left'
+        # If the previous nudge made things worse (beyond noise), our
+        # offset-to-steer mapping is backwards for this robot — flip it.
+        if prev_abs_offset is not None and abs(offset) > prev_abs_offset + 5:
+            sign = -sign
+            print(f"  Align: previous nudge increased offset, flipping correction direction.")
+        prev_abs_offset = abs(offset)
+
+        steer_right = (offset > 0) if sign > 0 else (offset < 0)
+        nudge = 'right' if steer_right else 'left'
         steer(servos, nudge)
         time.sleep(0.2)                              # servo settle before driving
         move.video_Tracking_Move(ALIGN_SPEED, 1)
