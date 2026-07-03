@@ -75,7 +75,6 @@ LINE_PIN_MIDDLE = 27
 LINE_PIN_RIGHT  = 17
 
 
-
 print("🔧 Initialisation du matériel...")
 
 move.setup()
@@ -105,7 +104,9 @@ except Exception as e:
     ultrasonic_sensor = None
 
 
-
+# ==========================================
+# ÉTAT PARTAGÉ + THREADS CAPTEURS
+# ==========================================
 etat_lock = threading.Lock()
 etat = {
     "distance": None,
@@ -116,6 +117,8 @@ etat = {
 dernier_angle_direction = 0  # >0 = dernier virage GAUCHE, <0 = dernier virage DROITE
 
 
+RANGE_CAPTEUR_MAX_CM = 220  # max_distance=2m configuré dans ultra.py, + marge
+
 def get_distance_cm():
     """Moyenne de 3 mesures ultrason, en CM. Renvoie None si rien de fiable."""
     if ultrasonic_sensor is None:
@@ -123,9 +126,10 @@ def get_distance_cm():
     readings = []
     for _ in range(3):
         try:
-            d = ultrasonic_sensor.distance()
-            if 0 < d < DISTANCE_MAX_FAUSSE:
-                readings.append(d)
+            d_mm = ultrasonic_sensor.get_distance()  # ultra.py renvoie des MM
+            d_cm = d_mm / 10.0
+            if 0 < d_cm <= RANGE_CAPTEUR_MAX_CM:
+                readings.append(d_cm)
         except Exception:
             pass
         time.sleep(0.01)
@@ -211,11 +215,12 @@ def avancer_tout_droit():
 
 
 def obstacle_detecte(distance):
-    return distance is not None and distance < SEUIL_OBSTACLE
+    
+    return distance is None or distance < SEUIL_OBSTACLE
 
 
 def collision_imminente(distance):
-    return distance is not None and distance < SEUIL_COLLISION
+    return distance is None or distance < SEUIL_COLLISION
 
 
 def bordure_detectee(pattern):
@@ -308,9 +313,7 @@ def eviter_bordure(pattern):
     servo_dir.angle = ROUES_CENTRE
 
 
-# ==========================================
-# SCAN RADAR (yeux CH00+CH01)
-# ==========================================
+
 def scanner_environnement():
     mesures = []
     print("[SCAN] Début scan")
@@ -329,7 +332,9 @@ def scanner_environnement():
 
         d = get_distance_cm()
         if d is None:
-            d = DISTANCE_MAX_FAUSSE
+            # Fail-safe : une lecture invalide pendant le scan est traitée
+            # comme un obstacle potentiel, pas comme un passage libre.
+            d = 0
 
         libre = d >= SEUIL_PASSAGE_LIBRE
 
@@ -412,9 +417,6 @@ def choisir_direction_par_radar():
     return choisir_meilleur_gap(gaps)
 
 
-# ==========================================
-# MOUVEMENTS SURVEILLÉS
-# ==========================================
 def avancer_surveille(duree, vitesse, offset_direction):
     debut = time.time()
 
@@ -477,9 +479,6 @@ def recentrer_sur_voie(offset_precedent, duree_max=DUREE_RECENTRAGE):
     return True
 
 
-# ==========================================
-# CONTOURNEMENT MULTI-OBSTACLES
-# ==========================================
 def contourner_obstacle_gap():
     global dernier_angle_direction
     print("[OBSTACLE] Contournement dynamique")
@@ -535,9 +534,6 @@ def contourner_obstacle_gap():
     recentrer_sur_voie(offset_actuel)
 
 
-# ==========================================
-# VISION (déclenchement papier bleu)
-# ==========================================
 def init_camera():
     picam2 = Picamera2()
     config = picam2.create_preview_configuration(main={"size": (640, 480), "format": "RGB888"})
@@ -559,9 +555,6 @@ def detect_blue(picam2):
     return blue_pixels >= BLUE_MIN_PIXELS
 
 
-# ==========================================
-# BOUCLE PRINCIPALE
-# ==========================================
 def main():
     print("============================================")
     print("MISSION C — RADAR + THREADS + BORDURE IR")
