@@ -1,94 +1,111 @@
 #!/usr/bin/env python3
 """
-EvitementObstacle_v2.py
+EvitementObstacle_v3.py
 
-Structure améliorée :
-- Machine à états (AVANCER, SCAN, CONTOURNER)
-- Aucun long sleep pendant les manœuvres
-- Lecture continue de l'ultrason
-- Direction corrigée en continu
+Architecture à états :
+- AVANCER
+- SCAN
+- TOURNER
+- LONGER
+- REPRISE
+
+Compatible avec les modules Adeept :
+motor.py, servo.py, Ultra.py, line.py
 """
 
 import time
 from motor import RobotMotor
 from servo import RobotServos
 from ultra import Ultrasonic
-from lineTracking import LineTracker
 
 robot = RobotMotor()
 servos = RobotServos()
 ultra = Ultrasonic()
-tracker = LineTracker()
 
 CENTRE = 97
 GAUCHE = 125
 DROITE = 70
 
 VITESSE = 30
-DISTANCE_STOP = 250
+VITESSE_CONTOUR = 22
+STOP = 220
 
 etat = "AVANCER"
 direction = CENTRE
+t0 = 0
 
-def tourner(angle):
-    servos.set_angle(0, angle)
+def dir_angle(a):
+    servos.set_angle(0, a)
 
-def distance():
+def tete(a):
+    servos.set_angle(1, a)
+
+def dist():
     try:
         return ultra.get_distance()
     except Exception:
         return 9999
 
-try:
-    tourner(CENTRE)
-    robot.set_motor(1, VITESSE)
+dir_angle(CENTRE)
+tete(97)
+robot.set_motor(1, VITESSE)
 
+try:
     while True:
-        d = distance()
-        print(f"Etat={etat} Distance={d:.0f} mm")
+        d = dist()
+        print(etat, d)
 
         if etat == "AVANCER":
-            tourner(CENTRE)
+            dir_angle(CENTRE)
             robot.set_motor(1, VITESSE)
-
-            if d < DISTANCE_STOP:
+            if d < STOP:
                 robot.set_motor(1, 0)
                 etat = "SCAN"
 
         elif etat == "SCAN":
             mesures = {}
-
-            for nom, angle in [("gauche",150),("centre",97),("droite",40)]:
-                servos.set_angle(1, angle)
+            for nom, ang in [("gauche",150),("centre",97),("droite",40)]:
+                tete(ang)
                 time.sleep(0.25)
-                mesures[nom] = distance()
+                mesures[nom] = dist()
+            tete(97)
 
-            servos.set_angle(1,97)
+            meilleur = max(mesures, key=mesures.get)
+            direction = GAUCHE if meilleur=="gauche" else DROITE if meilleur=="droite" else CENTRE
 
-            choix = max(mesures, key=mesures.get)
+            dir_angle(direction)
+            robot.set_motor(1, VITESSE_CONTOUR)
+            t0 = time.time()
+            etat = "TOURNER"
 
-            if choix == "gauche":
-                direction = GAUCHE
-            elif choix == "droite":
-                direction = DROITE
-            else:
-                direction = CENTRE
+        elif etat == "TOURNER":
+            dir_angle(direction)
+            robot.set_motor(1, VITESSE_CONTOUR)
 
-            etat = "CONTOURNER"
+            # garde le braquage pendant 0.8 s
+            if time.time()-t0 > 0.8:
+                t0 = time.time()
+                etat = "LONGER"
 
-        elif etat == "CONTOURNER":
-            tourner(direction)
-            robot.set_motor(1, 24)
+        elif etat == "LONGER":
+            dir_angle(direction)
+            robot.set_motor(1, VITESSE_CONTOUR)
 
-            # boucle continue sans sleep long
-            if distance() > DISTANCE_STOP + 120:
-                tourner(CENTRE)
-                robot.set_motor(1, VITESSE)
+            # obstacle dépassé
+            if dist() > 450 and time.time()-t0 > 0.6:
+                t0 = time.time()
+                etat = "REPRISE"
+
+        elif etat == "REPRISE":
+            dir_angle(CENTRE)
+            robot.set_motor(1, VITESSE)
+
+            if time.time()-t0 > 0.6:
                 etat = "AVANCER"
 
         time.sleep(0.05)
 
 except KeyboardInterrupt:
     robot.stopper()
-    tourner(CENTRE)
-    servos.set_angle(1,97)
+    dir_angle(CENTRE)
+    tete(97)
