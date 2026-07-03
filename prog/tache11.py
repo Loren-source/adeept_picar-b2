@@ -32,7 +32,7 @@ DROITE_FORT = 65
 VITESSE_LIGNE = 45
 VITESSE_VIRAGE = 26
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 33          # vitesse réduite pour les pointillés
+VITESSE_POINTILLE = 36         # vitesse réduite pour les pointillés
 
 # Seuils
 SEUIL_POINTILLE = 60            # 50 cycles = 1.25s (augmenté)
