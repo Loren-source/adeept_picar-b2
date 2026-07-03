@@ -30,13 +30,13 @@ DROITE_FORT = 65
 
 
 VITESSE_LIGNE = 45
-VITESSE_VIRAGE = 22
+VITESSE_VIRAGE = 24
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 34          # un peu plus rapide pour réduire le temps sans capteurs
+VITESSE_POINTILLE = 30          # vitesse réduite pour les pointillés
 
 # Seuils
-SEUIL_POINTILLE = 50            # à ajuster selon la longueur des pointillés
-SEUIL_PERDU_MAX = 150           # 3.75s avant arrêt total
+SEUIL_POINTILLE = 50            # 50 cycles = 1.25s (augmenté)
+SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
 
@@ -51,7 +51,7 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# Mémorisation de la dernière trajectoire (pour tous les états non-nuls)
+# Mémorisation de la dernière trajectoire
 derniere_cible = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
@@ -109,6 +109,9 @@ try:
 
 
         print(etat)
+        print(
+            f"etat={etat} angle={round(angle_actuel,1)} cible={cible if 'cible' in locals() else '-'} compteur_perdu={compteur_perdu}"
+        )
 
 
 
@@ -130,14 +133,14 @@ try:
 
 
         # =====================
-        # VIRAGE GAUCHE (modéré)
+        # VIRAGE GAUCHE
         # =====================
 
         elif etat == (1,1,0):
 
             compteur_perdu = 0
 
-            compteur_virage = min(compteur_virage + 1, 5)   # limité à 5
+            compteur_virage += 1
 
             dernier_sens = 1
 
@@ -151,15 +154,11 @@ try:
 
 
 
-        # =====================
-        # VIRAGE GAUCHE (serré)
-        # =====================
-
         elif etat == (1,0,0):
 
             compteur_perdu = 0
 
-            compteur_virage = min(compteur_virage + 1, 5)
+            compteur_virage += 1
 
             dernier_sens = 1
 
@@ -181,15 +180,16 @@ try:
 
 
 
+
         # =====================
-        # VIRAGE DROITE (modéré)
+        # VIRAGE DROITE
         # =====================
 
         elif etat == (0,1,1):
 
             compteur_perdu = 0
 
-            compteur_virage = min(compteur_virage + 1, 5)
+            compteur_virage += 1
 
             dernier_sens = -1
 
@@ -203,15 +203,11 @@ try:
 
 
 
-        # =====================
-        # VIRAGE DROITE (serré)
-        # =====================
-
         elif etat == (0,0,1):
 
             compteur_perdu = 0
 
-            compteur_virage = min(compteur_virage + 1, 5)
+            compteur_virage += 1
 
             dernier_sens = -1
 
@@ -248,24 +244,14 @@ try:
 
 
             # ======================
-            # CAS POINTILLÉS : on garde la trajectoire, mais avec retour progressif vers CENTRE
+            # CAS POINTILLÉS (on garde la trajectoire)
             # ======================
 
             if compteur_perdu <= SEUIL_POINTILLE:
 
-                # On calcule une cible qui se rapproche progressivement du centre
-                if derniere_cible > CENTRE:
-                    # On diminue progressivement (ex: 115 → 113 → 111 ...)
-                    cible = max(CENTRE, derniere_cible - 2)
-                elif derniere_cible < CENTRE:
-                    # On augmente progressivement (ex: 82 → 84 → 86 ...)
-                    cible = min(CENTRE, derniere_cible + 2)
-                else:
-                    cible = CENTRE
 
-                # On met à jour derniere_cible pour la prochaine itération
-                derniere_cible = cible
-
+                # on continue sur la dernière trajectoire connue
+                cible = derniere_cible
                 vitesse = VITESSE_POINTILLE
 
 
@@ -276,7 +262,7 @@ try:
 
             else:
 
-                # Si la perte dure trop longtemps, on arrête
+                # Si la perte dure très longtemps, on arrête
                 if compteur_perdu > SEUIL_PERDU_MAX:
                     print("--- Fin de parcours ou perte définitive ---")
                     cible = CENTRE
@@ -286,7 +272,8 @@ try:
                     break   # sortie de la boucle
 
                 # Sinon, on alterne les directions pour chercher la ligne
-                phase = (compteur_perdu - SEUIL_POINTILLE) // 30   # alternance toutes les 30 cycles
+                # Phase alternée toutes les 30 cycles (0.75s)
+                phase = (compteur_perdu - SEUIL_POINTILLE) // 30
                 if phase % 2 == 0:
                     cible = GAUCHE_FORT
                 else:
