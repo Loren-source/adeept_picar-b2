@@ -32,8 +32,11 @@ DROITE_FORT = 65
 VITESSE_LIGNE = 45
 VITESSE_VIRAGE = 24
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 30          # vitesse légèrement réduite pour les pointillés
+VITESSE_POINTILLE = 30          # vitesse réduite pour les pointillés
 
+# Seuils
+SEUIL_POINTILLE = 50            # 50 cycles = 1.25s (augmenté)
+SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
 
@@ -48,7 +51,7 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# --- NOUVEAU : mémorisation de la dernière trajectoire ---
+# Mémorisation de la dernière trajectoire
 derniere_cible = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
@@ -238,55 +241,40 @@ try:
 
 
             # ======================
-            # CAS POINTILLÉS
+            # CAS POINTILLÉS (on garde la trajectoire)
             # ======================
 
-            if compteur_perdu < 25:   # seuil pour pointillés (25 cycles = 625 ms)
+            if compteur_perdu <= SEUIL_POINTILLE:
 
 
                 # on continue sur la dernière trajectoire connue
                 cible = derniere_cible
-                vitesse = VITESSE_POINTILLE   # on peut garder la même vitesse ou une vitesse réduite
+                vitesse = VITESSE_POINTILLE
 
 
 
             # ======================
-            # VRAIE PERTE (ou fin de piste)
+            # VRAIE PERTE (on cherche)
             # ======================
 
             else:
 
-
-                # Si la perte dure très longtemps (> 100 cycles), on considère que c'est la fin du parcours
-                if compteur_perdu > 100:
-                    print("--- Fin de parcours détectée, arrêt ---")
+                # Si la perte dure très longtemps, on arrête
+                if compteur_perdu > SEUIL_PERDU_MAX:
+                    print("--- Fin de parcours ou perte définitive ---")
                     cible = CENTRE
                     vitesse = 0
                     tourner(cible)
                     robot.set_motor(1, 0)
                     break   # sortie de la boucle
 
-                # Sinon, on cherche dans la dernière direction
-                if dernier_sens == 1:
-
-
+                # Sinon, on alterne les directions pour chercher la ligne
+                # Phase alternée toutes les 30 cycles (0.75s)
+                phase = (compteur_perdu - SEUIL_POINTILLE) // 30
+                if phase % 2 == 0:
                     cible = GAUCHE_FORT
-
-
-
-                elif dernier_sens == -1:
-
-
-                    cible = DROITE_FORT
-
-
-
                 else:
-
-
-                    cible = CENTRE
-
-
+                    cible = DROITE_FORT
 
                 vitesse = VITESSE_PERDU
 
