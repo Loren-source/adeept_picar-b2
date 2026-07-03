@@ -17,7 +17,7 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ============================
-# CONSTANTES
+# CONSTANTES (ajustées pour une approche lente et progressive)
 # ============================
 CENTRE = 97
 ANGLE_VIRAGE = 35
@@ -26,26 +26,27 @@ ANGLE_TETE_CENTRE = 90
 ANGLE_TETE_GAUCHE = 0
 ANGLE_TETE_DROITE = 180
 
-VITESSE_LIGNE = 20
-VITESSE_VIRAGE = 20
-VITESSE_EVITEMENT = 20
-VITESSE_RECUL = 15
-VITESSE_RECHERCHE = 18
+VITESSE_LIGNE = 15
+VITESSE_VIRAGE = 15
+VITESSE_EVITEMENT = 10          # plus lent pour contourner
+VITESSE_RECUL = 12
+VITESSE_RECHERCHE = 15
 
-SEUIL_OBSTACLE = 350       # mm
-SEUIL_COLLISION = 180      # mm
-SEUIL_PASSAGE_LIBRE = 400  # mm
+SEUIL_OBSTACLE = 500            # mm (détection plus précoce)
+SEUIL_COLLISION = 250           # mm (seuil pour recul d'urgence, plus généreux)
+SEUIL_RECUL_FORT = 150          # mm (recule vraiment seulement en dessous)
+SEUIL_PASSAGE_LIBRE = 500       # mm (pour le scan)
 DISTANCE_MAX_FAUSSE = 2000
 
-DUREE_RECUL_URGENCE = 0.6
+DUREE_RECUL_URGENCE = 0.4       # recul court
 DUREE_RECUL_BORDURE = 0.5
-DUREE_PAS_EVITEMENT = 1.2
-MAX_PAS_EVITEMENT = 8
+DUREE_PAS_EVITEMENT = 1.0       # pas plus court pour re-scanner souvent
+MAX_PAS_EVITEMENT = 10          # plus de tentatives
 DUREE_RECENTRAGE = 1.5
 
-PERIODE_BOUCLE = 0.03
-PERIODE_ULTRASON = 0.08
-PERIODE_IR = 0.03
+PERIODE_BOUCLE = 0.04
+PERIODE_ULTRASON = 0.1
+PERIODE_IR = 0.04
 
 ANGLES_SCAN = list(range(-60, 61, 10))
 
@@ -124,16 +125,15 @@ def obstacle_detecte(distance):
 def collision_imminente(distance):
     return distance is not None and distance < SEUIL_COLLISION
 
-def est_sur_ligne(pattern):
-    # Retourne True si au moins un capteur voit la ligne (0 = noir ?)
-    # Vos capteurs retournent 1 pour noir, 0 pour blanc.
-    return pattern[0] == 1 or pattern[1] == 1 or pattern[2] == 1
+def recul_fort_necessaire(distance):
+    return distance is not None and distance < SEUIL_RECUL_FORT
 
 # ============================
-# RÉACTIONS D'URGENCE
+# RÉACTIONS D'URGENCE (modérées)
 # ============================
 def recul_urgence():
-    print("[URGENCE] Collision imminente -> recul")
+    """Recule uniquement si vraiment trop proche."""
+    print("[URGENCE] Recule léger")
     stop_robot()
     time.sleep(0.1)
     roues_droites()
@@ -174,14 +174,14 @@ def scanner_environnement():
     mesures = []
     print("[SCAN] Debut scan")
     stop_robot()
-    time.sleep(0.1)
+    time.sleep(0.2)                     # pause avant scan
     tourner_tete(ANGLE_TETE_CENTRE)
-    time.sleep(0.1)
+    time.sleep(0.2)
 
     for angle_rel in ANGLES_SCAN:
         angle_abs = ANGLE_TETE_CENTRE + angle_rel
         tourner_tete(angle_abs)
-        time.sleep(0.15)
+        time.sleep(0.2)                 # laisser le temps au servo et à l'ultrason
         d = ultrasonic.get_distance()
         if d is None or d > DISTANCE_MAX_FAUSSE:
             d = DISTANCE_MAX_FAUSSE
@@ -190,7 +190,7 @@ def scanner_environnement():
         print(f"[SCAN] angle={angle_rel:>4} | distance={d:>5.0f} | libre={libre}")
 
     tourner_tete(ANGLE_TETE_CENTRE)
-    time.sleep(0.1)
+    time.sleep(0.2)
     return mesures
 
 def detecter_gaps(mesures):
@@ -237,7 +237,7 @@ def choisir_direction_par_radar():
     return choisir_meilleur_gap(gaps)
 
 # ============================
-# MOUVEMENT SURVEILLÉ
+# MOUVEMENT SURVEILLÉ (modéré)
 # ============================
 def avancer_surveille(duree, vitesse, angle_roues, surveiller_bords=True):
     debut = time.time()
@@ -245,12 +245,20 @@ def avancer_surveille(duree, vitesse, angle_roues, surveiller_bords=True):
     avancer(vitesse)
     while time.time() - debut < duree:
         dist, pat = lire_etat()
-        if collision_imminente(dist):
+        # Si vraiment trop proche (< 150 mm) : on recule
+        if recul_fort_necessaire(dist):
             stop_robot()
             recul_urgence()
             return False
+        # Si collision imminente mais pas critique : on s'arrête et on attend (le prochain scan fera le choix)
+        if collision_imminente(dist):
+            stop_robot()
+            print("[ARRET] Trop près, je m'arrête et je vais re-scanner")
+            time.sleep(0.3)
+            # On ne recule pas, on laisse le scan suivant choisir une meilleure direction
+            return False
+        # Surveillance des bords (si actif)
         if surveiller_bords and pat[0] == 1 and pat[2] == 0:
-            # bord gauche
             stop_robot()
             eviter_bordure(pat)
             return False
@@ -258,7 +266,6 @@ def avancer_surveille(duree, vitesse, angle_roues, surveiller_bords=True):
             stop_robot()
             eviter_bordure(pat)
             return False
-        # On ne gère pas les motifs de ligne ici, car on est en mode évitement
         time.sleep(PERIODE_BOUCLE)
     return True
 
@@ -280,15 +287,21 @@ def recentrer_apres_evitement(angle_precedent):
 def contourner_obstacle_gap():
     print("[OBSTACLE] Contournement dynamique")
     stop_robot()
-    time.sleep(0.1)
+    time.sleep(0.2)
     dernier_angle_roues = CENTRE
 
     for pas in range(MAX_PAS_EVITEMENT):
         dist, pat = lire_etat()
 
-        if collision_imminente(dist):
+        if recul_fort_necessaire(dist):
             recul_urgence()
             continue
+        if collision_imminente(dist):
+            # On s'arrête et on re-scanne immédiatement
+            stop_robot()
+            print("[PAUSE] Proche de l'obstacle, re-scan...")
+            time.sleep(0.3)
+            # On continue pour re-scan
         if not obstacle_detecte(dist):
             print("[OBSTACLE] Plus d'obstacle -> recentrage")
             recentrer_apres_evitement(dernier_angle_roues)
@@ -313,6 +326,7 @@ def contourner_obstacle_gap():
 
         ok = avancer_surveille(DUREE_PAS_EVITEMENT, VITESSE_EVITEMENT, angle_roues, surveiller_bords=True)
         if not ok:
+            # Si avancer_surveille a échoué (collision ou bord), on continue la boucle pour re-scan
             continue
 
     print("[SECURITE] Trop de tentatives -> recul long")
@@ -354,7 +368,7 @@ def suivre_ligne():
 # BOUCLE PRINCIPALE
 # ============================
 def main():
-    print("=== Mission : Suivi de ligne + Évitement d'obstacle ===")
+    print("=== Mission : Suivi de ligne + Évitement d'obstacle (version lente et progressive) ===")
     print("Appuyez sur Ctrl+C pour arrêter.")
 
     roues_droites()
@@ -372,8 +386,8 @@ def main():
             dist, pattern = lire_etat()
             print(f"[INFO] dist={dist if dist is not None else 'None'} mm, pattern={pattern}")
 
-            # 1. Collision imminente (urgence)
-            if collision_imminente(dist):
+            # 1. Urgence (seulement si vraiment très proche)
+            if recul_fort_necessaire(dist):
                 recul_urgence()
                 continue
 
@@ -383,7 +397,6 @@ def main():
                 continue
 
             # 3. Sinon, suivi de ligne normal
-            # On ne gère les bordures qu'en mode évitement, pas en suivi
             suivre_ligne()
 
             time.sleep(PERIODE_BOUCLE)
