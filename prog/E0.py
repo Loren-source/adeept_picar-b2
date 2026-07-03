@@ -17,7 +17,7 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ============================
-# CONSTANTES (ajustées pour une détection précoce)
+# CONSTANTES
 # ============================
 CENTRE = 97
 ANGLE_VIRAGE = 35
@@ -26,21 +26,21 @@ ANGLE_TETE_CENTRE = 90
 ANGLE_TETE_GAUCHE = 0
 ANGLE_TETE_DROITE = 180
 
-VITESSE_LIGNE = 12              # ralenti pour aborder plus lentement
+VITESSE_LIGNE = 12
 VITESSE_VIRAGE = 12
 VITESSE_EVITEMENT = 10
 VITESSE_RECUL = 12
 VITESSE_RECHERCHE = 15
 
-SEUIL_OBSTACLE = 300           # mm (70 cm – s'arrête plus tôt)
-SEUIL_COLLISION = 300           # mm (30 cm)
-SEUIL_RECUL_FORT = 180          # mm (18 cm)
-SEUIL_PASSAGE_LIBRE = 600       # mm (60 cm)
+SEUIL_OBSTACLE = 700            # mm
+SEUIL_COLLISION = 300           # mm
+SEUIL_RECUL_FORT = 180          # mm
+SEUIL_PASSAGE_LIBRE = 600       # mm
 DISTANCE_MAX_FAUSSE = 2000
 
 DUREE_RECUL_URGENCE = 0.4
 DUREE_RECUL_BORDURE = 0.5
-DUREE_PAS_EVITEMENT = 1.0
+DUREE_PAS_EVITEMENT = 1.2
 MAX_PAS_EVITEMENT = 10
 DUREE_RECENTRAGE = 1.5
 
@@ -129,7 +129,6 @@ def recul_fort_necessaire(distance):
     return distance is not None and distance < SEUIL_RECUL_FORT
 
 def approche_lente_necessaire(distance):
-    """Ralentir si on est entre le seuil d'obstacle et le seuil de collision."""
     return distance is not None and SEUIL_COLLISION <= distance < SEUIL_OBSTACLE
 
 # ============================
@@ -239,23 +238,25 @@ def choisir_direction_par_radar():
     return choisir_meilleur_gap(gaps)
 
 # ============================
-# MOUVEMENT SURVEILLÉ
+# MOUVEMENT SURVEILLÉ (modifié)
 # ============================
-def avancer_surveille(duree, vitesse, angle_roues, surveiller_bords=True):
+def avancer_surveille(duree, vitesse, angle_roues, surveiller_bords=True, verifier_collision=True):
     debut = time.time()
     tourner_roues(angle_roues)
     avancer(vitesse)
     while time.time() - debut < duree:
         dist, pat = lire_etat()
-        if recul_fort_necessaire(dist):
+        # Vérification de collision (désactivable)
+        if verifier_collision and recul_fort_necessaire(dist):
             stop_robot()
             recul_urgence()
             return False
-        if collision_imminente(dist):
+        if verifier_collision and collision_imminente(dist):
             stop_robot()
             print("[ARRET] Trop près, re-scan...")
             time.sleep(0.3)
             return False
+        # Surveillance des bords (toujours active)
         if surveiller_bords and pat[0] == 1 and pat[2] == 0:
             stop_robot()
             eviter_bordure(pat)
@@ -294,10 +295,7 @@ def contourner_obstacle_gap():
         if recul_fort_necessaire(dist):
             recul_urgence()
             continue
-        if collision_imminente(dist):
-            stop_robot()
-            print("[PAUSE] Proche, re-scan...")
-            time.sleep(0.3)
+
         if not obstacle_detecte(dist):
             print("[OBSTACLE] Plus d'obstacle -> recentrage")
             recentrer_apres_evitement(dernier_angle_roues)
@@ -319,7 +317,9 @@ def contourner_obstacle_gap():
         dernier_angle_roues = angle_roues
         print(f"[ACTION] Pas {pas+1}/{MAX_PAS_EVITEMENT}: scan={angle_scan} -> roues={angle_roues}")
 
-        ok = avancer_surveille(DUREE_PAS_EVITEMENT, VITESSE_EVITEMENT, angle_roues, surveiller_bords=True)
+        # On désactive la vérification de collision pendant l'avancée pour contourner
+        ok = avancer_surveille(DUREE_PAS_EVITEMENT, VITESSE_EVITEMENT, angle_roues,
+                               surveiller_bords=True, verifier_collision=False)
         if not ok:
             continue
 
@@ -386,12 +386,12 @@ def main():
 
             # 2. Ralentissement progressif quand on approche
             if approche_lente_necessaire(dist):
-                # On ralentit mais on continue d'avancer pour approcher doucement
-                avancer(VITESSE_RECHERCHE)  # au lieu de la vitesse normale
-                # On reste en suivi de ligne mais avec ralentissement
-                suivre_ligne()   # mais on pourrait aussi appeler juste une version lente
-                # Ici on ne déclenche pas l'évitement tout de suite pour laisser le temps
+                # On ralentit mais on continue d'avancer
+                avancer(VITESSE_RECHERCHE)
+                # On ne déclenche pas encore l'évitement, on continue le suivi
+                suivre_ligne()
                 # Mais on va quand même vérifier si on doit s'arrêter définitivement
+                # (le prochain cycle gèrera l'obstacle si distance < SEUIL_OBSTACLE)
 
             # 3. Obstacle détecté -> on s'arrête et on contourne
             if obstacle_detecte(dist):
