@@ -93,9 +93,21 @@ def detect_arrow(frame):
 
     binary = _preprocess(frame)
 
+    # Both methods must look at the same object. Find the arrow's contour
+    # first and mask everything else out, so corner detection (Method 1)
+    # can't be thrown off by unrelated white regions elsewhere in the frame
+    # (shadows, floor texture, wall seams) the way it would on the raw
+    # binary image.
+    contour = _find_arrow_contour(binary)
+    if contour is None:
+        return None
+
+    arrow_mask = np.zeros_like(binary)
+    cv2.drawContours(arrow_mask, [contour], -1, 255, thickness=cv2.FILLED)
+
     # ── Method 1: corner count ────────────────────────────────────────────────
     corners = cv2.goodFeaturesToTrack(
-        binary,
+        arrow_mask,
         maxCorners=50,
         qualityLevel=0.01,
         minDistance=10,
@@ -116,10 +128,6 @@ def detect_arrow(frame):
     corner_dir = 'right' if right_corners > left_corners else 'left'
 
     # ── Method 2: mass offset vs bounding-box centre ─────────────────────────
-    contour = _find_arrow_contour(binary)
-    if contour is None:
-        return None
-
     M = cv2.moments(contour)
     if M['m00'] == 0:
         return None
