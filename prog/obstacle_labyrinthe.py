@@ -49,8 +49,9 @@ TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a tu
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
 ALIGN_THRESHOLD_PX = 40   # pixels: max acceptable centroid offset from frame centre (frame ~640 px wide)
-ALIGN_NUDGE_FWD    = 0.35 # seconds: forward arc per nudge — long enough to produce visible rotation
-ALIGN_NUDGE_BWD    = 0.35 # seconds: backward arc per nudge — equal to FWD so there is no net translation
+ALIGN_SPEED        = 15   # throttle % for alignment nudges — slower than DRIVE_SPEED for finer correction
+ALIGN_NUDGE_FWD    = 0.15 # seconds: forward arc per nudge — short, small correction step
+ALIGN_NUDGE_BWD    = 0.15 # seconds: backward arc per nudge — equal to FWD so there is no net translation
 ALIGN_MAX_ITER     = 5    # max nudge attempts before giving up and using best reading
 
 CONFLICT_MAX_RETRY = 3    # max times to back up and realign after a corner/pixel conflict
@@ -145,13 +146,13 @@ def _reposition_to_arrow(servos):
         nudge = 'right' if offset > 0 else 'left'
         steer(servos, nudge)
         time.sleep(0.2)                              # servo settle before driving
-        move.video_Tracking_Move(DRIVE_SPEED, 1)
+        move.video_Tracking_Move(ALIGN_SPEED, 1)
         time.sleep(ALIGN_NUDGE_FWD)
         move.motorStop()
 
         steer(servos, opposite_direction(nudge))
         time.sleep(0.2)                              # servo settle before reversing
-        move.video_Tracking_Move(DRIVE_SPEED, -1)
+        move.video_Tracking_Move(ALIGN_SPEED, -1)
         time.sleep(ALIGN_NUDGE_BWD)
         move.motorStop()
         time.sleep(0.1)                              # brief settle before next measurement
