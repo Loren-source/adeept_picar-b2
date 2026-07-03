@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Mission C Finale : Évitement d'obstacles intelligent et maintien de zone.
-Sécurité renforcée sur le canal CH01 pour stabiliser l'ultrason en ligne droite.
+Mission C Finale : Évitement d'obstacles intelligent.
+Sécurité double canal (CH00 + CH01) pour forcer le balayage horizontal des yeux.
 """
 
 import time
@@ -34,13 +34,15 @@ MIN_PULSE        = 500
 MAX_PULSE        = 2400
 ACTUATION        = 180
 
-CANAL_TETE_H     = 1     # Servomoteur horizontal de la tête ultrason (CH01)
+# Canaux associés aux yeux et à la direction
+CANAL_YEUX_0     = 0     # Premier axe des yeux (CH00)
+CANAL_YEUX_1     = 1     # Deuxième axe des yeux (CH01)
 CANAL_DIRECTION  = 2     # Servomoteur de direction des roues avant (CH02)
 
 # Angles absolus Adafruit (Base 90° au centre)
 TETE_CENTRE      = 90
-TETE_GAUCHE      = 150   # 90 + 60 degrés pour regarder à gauche
-TETE_DROITE      = 30    # 90 - 60 degrés pour regarder à droite
+TETE_GAUCHE      = 150   # 90 + 60 degrés
+TETE_DROITE      = 30    # 90 - 60 degrés
 
 ROUES_CENTRE     = 90
 ROUES_GAUCHE     = 128   
@@ -79,9 +81,10 @@ try:
     pca = PCA9685(i2c, address=PCA_ADDRESS)
     pca.frequency = PWM_FREQ
     
-    # Association explicite des canaux CH01 et CH02
-    servo_tete = servo.Servo(pca.channels[CANAL_TETE_H], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
-    servo_dir  = servo.Servo(pca.channels[CANAL_DIRECTION], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
+    # On initialise CH00, CH01 et CH02
+    servo_yeux_0 = servo.Servo(pca.channels[CANAL_YEUX_0], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
+    servo_yeux_1 = servo.Servo(pca.channels[CANAL_YEUX_1], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
+    servo_dir    = servo.Servo(pca.channels[CANAL_DIRECTION], min_pulse=MIN_PULSE, max_pulse=MAX_PULSE, actuation_range=ACTUATION)
     print("✅ Contrôleur de Servomoteurs Adafruit (0x5f) initialisé.")
 except Exception as e:
     print(f"❌ Erreur critique d'initialisation des servos : {e}")
@@ -99,10 +102,12 @@ except Exception as e:
     ultrasonic_sensor = None
 
 
+
 def positionner_servos_centre():
-    """Force CH01 et CH02 à se remettre au centre (90°)."""
+    """Remet la direction et les deux axes des yeux au centre."""
     servo_dir.angle = ROUES_CENTRE
-    servo_tete.angle = TETE_CENTRE
+    servo_yeux_0.angle = TETE_CENTRE
+    servo_yeux_1.angle = TETE_CENTRE
     time.sleep(0.3)
 
 def get_distance():
@@ -121,27 +126,30 @@ def get_distance():
 
 
 def scan_left_right():
-    """Fait pivoter physiquement CH01 à gauche et à droite pour mesurer les côtés."""
+    """Fait pivoter CH00 et CH01 simultanément pour garantir le balayage horizontal des yeux."""
     move.motorStop()
     time.sleep(0.1)
 
-    # 1. Balayage à GAUCHE (150° sur CH01)
-    print("🔄 Scan [CH01] : La tête pivote à GAUCHE...")
-    servo_tete.angle = TETE_GAUCHE
+    # 1. Balayage à GAUCHE (On envoie 150° sur les deux canaux des yeux)
+    print("🔄 Scan : Les yeux pivotent à GAUCHE (CH00 + CH01)...")
+    servo_yeux_0.angle = TETE_GAUCHE
+    servo_yeux_1.angle = TETE_GAUCHE
     time.sleep(0.6)  
     dist_left = get_distance()
     print(f"📊 Distance Gauche : {dist_left:.1f} cm")
 
-    # 2. Balayage à DROITE (30° sur CH01)
-    print("🔄 Scan [CH01] : La tête pivote à DROITE...")
-    servo_tete.angle = TETE_DROITE
+    # 2. Balayage à DROITE (On envoie 30° sur les deux canaux des yeux)
+    print("🔄 Scan : Les yeux pivotent à DROITE (CH00 + CH01)...")
+    servo_yeux_0.angle = TETE_DROITE
+    servo_yeux_1.angle = TETE_DROITE
     time.sleep(0.8)  
     dist_right = get_distance()
     print(f"📊 Distance Droite : {dist_right:.1f} cm")
 
-    # 3. Retour au CENTRE (90° sur CH01)
-    print("🔄 Scan terminé [CH01] : Remise de la tête au CENTRE.")
-    servo_tete.angle = TETE_CENTRE
+    # 3. Retour au CENTRE (90°)
+    print("🔄 Scan terminé : Remise des yeux au CENTRE.")
+    servo_yeux_0.angle = TETE_CENTRE
+    servo_yeux_1.angle = TETE_CENTRE
     time.sleep(0.4)
 
     return 'left' if dist_left >= dist_right else 'right'
@@ -152,34 +160,37 @@ def avoid_obstacle():
     print(f"📏 Obstacle devant à : {dist:.1f} cm")
 
     if dist > DIST_STOP:
-        # CORRECTION : On s'assure activement que la tête (CH01) regarde bien devant pendant qu'on roule
-        servo_tete.angle = TETE_CENTRE  
-        servo_dir.angle = ROUES_CENTRE  # CH02 droit
+        # Maintien des yeux bien droits face à la route pendant la marche avant
+        servo_yeux_0.angle = TETE_CENTRE
+        servo_yeux_1.angle = TETE_CENTRE
+        servo_dir.angle = ROUES_CENTRE  
         move.move(SPEED_FORWARD, 1, "mid")
         return
 
     if dist < DIST_BACK:
         print("🔴 Danger : Obstacle trop près ! Marche arrière d'urgence.")
-        servo_tete.angle = TETE_CENTRE
+        servo_yeux_0.angle = TETE_CENTRE
+        servo_yeux_1.angle = TETE_CENTRE
         servo_dir.angle = ROUES_CENTRE
         move.move(SPEED_BACK, -1, "mid")
         time.sleep(BACK_TIME)
         move.motorStop()
 
-    print("🤔 Obstacle détecté. Activation du servomoteur CH01 pour le scan...")
+    print("🤔 Obstacle détecté. Balayage du champ de vision...")
     direction = scan_left_right()
 
     if direction == 'left':
         print("↩️  Action : Évitement par la GAUCHE")
-        servo_dir.angle = ROUES_GAUCHE      # CH02 braque à gauche
+        servo_dir.angle = ROUES_GAUCHE      
         move.move(SPEED_TURN, 1, "left")
     else:
         print("↪️  Action : Évitement par la DROITE")
-        servo_dir.angle = ROUES_DROITE      # CH02 braque à droite
+        servo_dir.angle = ROUES_DROITE      
         move.move(SPEED_TURN, 1, "right")
 
     time.sleep(TURN_TIME)
-    servo_dir.angle = ROUES_CENTRE          # CH02 se remet droit
+    servo_dir.angle = ROUES_CENTRE      
+
 
 
 def init_camera():
@@ -207,9 +218,7 @@ def read_ir_sensors():
     return track_left.value, track_middle.value, track_right.value
 
 def is_out_of_zone():
-    left, middle, right = read_ir_sensors()
-    print(f"🔍 DEBUG IR -> Gauche: {left} | Milieu: {middle} | Droite: {right}")
-    return False # Sécurité coupée temporairement pour tes tests de mouvements
+    return False # Forcé à False pour tes tests de navigation continue
 
 
 
@@ -218,7 +227,6 @@ if __name__ == '__main__':
     print("🚀 DÉMARRAGE : Mission C — PiCar-B Autonome")
     print("=========================================\n")
 
-    # Alignement initial parfait de CH01 et CH02
     positionner_servos_centre()
     picam2 = init_camera()
 
@@ -239,7 +247,8 @@ if __name__ == '__main__':
     print("\n🤖 Mode autonome activé. Le robot navigue...")
     print("🚀 Propulsion initiale pour quitter la marque bleue de départ...")
     servo_dir.angle = ROUES_CENTRE
-    servo_tete.angle = TETE_CENTRE # Fixe CH01 bien en face dès le départ
+    servo_yeux_0.angle = TETE_CENTRE
+    servo_yeux_1.angle = TETE_CENTRE
     move.move(SPEED_FORWARD, 1, "mid")
     time.sleep(0.5) 
     
