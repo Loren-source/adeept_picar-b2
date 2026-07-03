@@ -3,7 +3,7 @@ import time
 from motor import RobotMotor
 from servo import RobotServos
 from ultra import Ultrasonic
-from lineTracker import LineTracker
+from lineTracking import LineTracker
 
 # ==========================
 # INSTANCIATION
