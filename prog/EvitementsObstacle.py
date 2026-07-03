@@ -48,7 +48,7 @@ VITESSE_RECUL      = 14
 # SEUILS DE DISTANCE AJUSTÉS
 # =========================================================================
 SEUIL_OBSTACLE        = 30    # S'arrête si un obstacle est à moins de 25 cm
-SEUIL_COLLISION       = 15    # Recul d'urgence si l'obstacle est à moins de 12 cm
+SEUIL_COLLISION       = 35    # Recul d'urgence si l'obstacle est à moins de 12 cm
 SEUIL_PASSAGE_LIBRE   = 40    # Voie considérée libre si + de 30 cm de vide au scan
 DISTANCE_MAX_FAUSSE   = 150
 
