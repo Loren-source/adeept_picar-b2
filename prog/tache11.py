@@ -35,7 +35,7 @@ VITESSE_PERDU = 19
 VITESSE_POINTILLE = 36         # vitesse réduite pour les pointillés
 
 # Seuils
-SEUIL_POINTILLE = 50            # 50 cycles = 1.25s (augmenté)
+SEUIL_POINTILLE = 70            # 50 cycles = 1.25s (augmenté)
 SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
