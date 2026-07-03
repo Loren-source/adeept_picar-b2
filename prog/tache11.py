@@ -109,6 +109,9 @@ try:
 
 
         print(etat)
+        print(
+            f"etat={etat} angle={round(angle_actuel,1)} cible={cible if 'cible' in locals() else '-'} compteur_perdu={compteur_perdu}"
+        )
 
 
 
