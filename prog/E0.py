@@ -1,84 +1,94 @@
 #!/usr/bin/env python3
+"""
+EvitementObstacle_v2.py
+
+Structure améliorée :
+- Machine à états (AVANCER, SCAN, CONTOURNER)
+- Aucun long sleep pendant les manœuvres
+- Lecture continue de l'ultrason
+- Direction corrigée en continu
+"""
+
 import time
 from motor import RobotMotor
 from servo import RobotServos
 from ultra import Ultrasonic
 from lineTracking import LineTracker
 
-robot=RobotMotor()
-servos=RobotServos()
-ultra=Ultrasonic()
-tracker=LineTracker()
+robot = RobotMotor()
+servos = RobotServos()
+ultra = Ultrasonic()
+tracker = LineTracker()
 
-CENTRE=97
-GAUCHE=140
-DROITE=55
-GAUCHE_LEGER=118
-DROITE_LEGER=76
-SCAN_GAUCHE=150
-SCAN_CENTRE=97
-SCAN_DROITE=40
-DIST_STOP=220
-DIST_OK=350
-VITESSE=35
-VITESSE_EVITEMENT=28
-angle_actuel=CENTRE
+CENTRE = 97
+GAUCHE = 125
+DROITE = 70
 
-def tourner(cible):
-    global angle_actuel
-    angle_actuel=angle_actuel*0.6+cible*0.4
-    servos.set_angle(0,round(angle_actuel,1))
+VITESSE = 30
+DISTANCE_STOP = 250
 
-def scan():
-    m={}
-    for nom,ang in (("gauche",SCAN_GAUCHE),("centre",SCAN_CENTRE),("droite",SCAN_DROITE)):
-        servos.set_angle(1,ang)
-        time.sleep(0.25)
-        m[nom]=ultra.get_distance()
-    servos.set_angle(1,SCAN_CENTRE)
-    return m
+etat = "AVANCER"
+direction = CENTRE
 
-def choisir_direction(m):
-    if m["centre"]>DIST_OK:
-        return "centre"
-    return "gauche" if m["gauche"]>=m["droite"] else "droite"
+def tourner(angle):
+    servos.set_angle(0, angle)
 
-def corriger_bord():
-    s=tracker.get_status()
-    if s["left"]==0:
-        tourner(DROITE_LEGER)
-    elif s["right"]==0:
-        tourner(GAUCHE_LEGER)
-
-print("START")
-tourner(CENTRE)
-servos.set_angle(1,SCAN_CENTRE)
-robot.set_motor(1,30)
-time.sleep(1)
+def distance():
+    try:
+        return ultra.get_distance()
+    except Exception:
+        return 9999
 
 try:
+    tourner(CENTRE)
+    robot.set_motor(1, VITESSE)
+
     while True:
-        corriger_bord()
-        d=ultra.get_distance()
-        print(f"Distance: {d:.0f} mm")
-        if d<DIST_STOP:
-            robot.stopper()
-            mesures=scan()
-            print(mesures)
-            direction=choisir_direction(mesures)
-            if direction=="gauche":
-                tourner(GAUCHE)
-            elif direction=="droite":
-                tourner(DROITE)
-            else:
-                tourner(CENTRE)
-            robot.set_motor(1,VITESSE_EVITEMENT)
-            time.sleep(0.9)
+        d = distance()
+        print(f"Etat={etat} Distance={d:.0f} mm")
+
+        if etat == "AVANCER":
             tourner(CENTRE)
-        else:
-            robot.set_motor(1,VITESSE)
+            robot.set_motor(1, VITESSE)
+
+            if d < DISTANCE_STOP:
+                robot.set_motor(1, 0)
+                etat = "SCAN"
+
+        elif etat == "SCAN":
+            mesures = {}
+
+            for nom, angle in [("gauche",150),("centre",97),("droite",40)]:
+                servos.set_angle(1, angle)
+                time.sleep(0.25)
+                mesures[nom] = distance()
+
+            servos.set_angle(1,97)
+
+            choix = max(mesures, key=mesures.get)
+
+            if choix == "gauche":
+                direction = GAUCHE
+            elif choix == "droite":
+                direction = DROITE
+            else:
+                direction = CENTRE
+
+            etat = "CONTOURNER"
+
+        elif etat == "CONTOURNER":
+            tourner(direction)
+            robot.set_motor(1, 24)
+
+            # boucle continue sans sleep long
+            if distance() > DISTANCE_STOP + 120:
+                tourner(CENTRE)
+                robot.set_motor(1, VITESSE)
+                etat = "AVANCER"
+
         time.sleep(0.05)
+
 except KeyboardInterrupt:
     robot.stopper()
     tourner(CENTRE)
-    servos.set_angle(1,SCAN_CENTRE)
+    servos.set_angle(1,97)
