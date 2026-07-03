@@ -14,23 +14,23 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ==========================
-# PARAMÈTRES
+# PARAMÈTRES (adaptés)
 # ==========================
 CENTRE = 97
-ANGLE_BRAQUAGE = 35
+ANGLE_BRAQUAGE = 45            # augmenté pour tourner plus franchement
 VITESSE_NORMALE = 20
-VITESSE_EVITEMENT = 15
-VITESSE_RECHERCHE = 12
-SEUIL_OBSTACLE = 50
-DISTANCE_SECURITE = 25
-DUREE_MAINTIEN = 0.5
+VITESSE_EVITEMENT = 12         # réduit pour avoir plus de temps
+VITESSE_RECUL = -10            # vitesse de recul en cas d'obstacle trop proche
+SEUIL_OBSTACLE = 50            # détection à 50 cm
+SEUIL_SECURITE = 12            # distance d'arrêt d'urgence
+DUREE_MAINTIEN = 0.8
 TEMPS_BALAYAGE = 0.3
 TEMPS_REPRISE = 0.8
 
-# Angles de la tête (à ajuster selon le montage)
-ANGLE_TETE_CENTRE = 90         # position neutre du servo (par ex 90°)
-ANGLE_TETE_GAUCHE = 0          # position à gauche (par ex 0°)
-ANGLE_TETE_DROITE = 180        # position à droite (par ex 180°)
+# Pour le servo de tête (plage 0° = gauche, 90° = centre, 180° = droite)
+ANGLE_TETE_CENTRE = 90
+ANGLE_TETE_GAUCHE = 10          # un peu à gauche (0° est la butée)
+ANGLE_TETE_DROITE = 170         # un peu à droite (180° est la butée)
 
 # ==========================
 # VARIABLES
@@ -53,14 +53,7 @@ def mesurer_distance():
     return total / 3
 
 def tourner_tete(angle):
-    """Oriente la tête du capteur ultrason (servo canal 1)."""
-    # Assurez-vous que l'angle est dans la plage autorisée [0, 180]
-    if angle < 0:
-        angle = 0
-    elif angle > 180:
-        angle = 180
     servos.set_angle(1, angle)
-    time.sleep(0.05)  # laisser le temps au servo de bouger
 
 def braquer(angle):
     servos.set_angle(0, round(angle))
@@ -93,7 +86,7 @@ def detecter_bord():
 # INITIALISATION
 # ==========================
 print("START Mission C")
-tourner_tete(ANGLE_TETE_CENTRE)  # on place la tête au centre
+tourner_tete(ANGLE_TETE_CENTRE)
 time.sleep(0.5)
 braquer(CENTRE)
 avancer(VITESSE_NORMALE)
@@ -106,6 +99,15 @@ try:
         distance = mesurer_distance()
         bord = detecter_bord()
         print(f"Dist={distance:.1f}cm, mode={mode}, bord={bord}")
+
+        # --- Sécurité : si trop proche, on recule immédiatement ---
+        if distance < SEUIL_SECURITE and mode != "REPRISE":
+            print("!!! TROP PROCHE ! RECUL !")
+            arreter()
+            reculer(12)
+            time.sleep(0.3)
+            arreter()
+            continue
 
         # --- Gestion prioritaire des bords ---
         if bord == "les_deux":
@@ -138,54 +140,69 @@ try:
                 arreter()
                 mode = "EVITEMENT"
 
-                # Balayage : tête à gauche, mesure, tête à droite, mesure
-                print("Balayage gauche...")
+                # Balayage (avec les bons angles)
                 tourner_tete(ANGLE_TETE_GAUCHE)
                 time.sleep(TEMPS_BALAYAGE)
                 dist_gauche = mesurer_distance()
                 print(f"Gauche: {dist_gauche:.1f} cm")
-
-                print("Balayage droite...")
+                
                 tourner_tete(ANGLE_TETE_DROITE)
                 time.sleep(TEMPS_BALAYAGE)
                 dist_droite = mesurer_distance()
                 print(f"Droite: {dist_droite:.1f} cm")
-
-                # Remettre la tête au centre
+                
                 tourner_tete(ANGLE_TETE_CENTRE)
                 time.sleep(0.2)
 
-                # Choix du côté libre
-                if dist_gauche > dist_droite:
+                # Choix du côté libre (avec un minimum de 30 cm pour être sûr)
+                if dist_gauche > dist_droite and dist_gauche > 30:
                     direction_choisie = "gauche"
                     angle_braquage_actuel = ANGLE_BRAQUAGE
-                else:
+                elif dist_droite > dist_gauche and dist_droite > 30:
                     direction_choisie = "droite"
                     angle_braquage_actuel = -ANGLE_BRAQUAGE
+                else:
+                    # Si les deux côtés sont bloqués, on recule
+                    direction_choisie = "reculer"
+                    angle_braquage_actuel = 0
 
                 print(f"Choix: {direction_choisie} (G={dist_gauche:.1f}, D={dist_droite:.1f})")
-                braquer(CENTRE + angle_braquage_actuel)
-                temps_debut_phase = time.time()
+                
+                if direction_choisie == "reculer":
+                    reculer(15)
+                    time.sleep(0.5)
+                    arreter()
+                    mode = "NAVIGATION"
+                    continue
+                else:
+                    braquer(CENTRE + angle_braquage_actuel)
+                    temps_debut_phase = time.time()
 
         # --- Évitement ---
         elif mode == "EVITEMENT":
+            # On continue d'avancer en restant braqué
             avancer(VITESSE_EVITEMENT)
+            
+            # On force le braquage (ne pas le laisser être modifié par les bords)
+            braquer(CENTRE + angle_braquage_actuel)
 
             # Si l'obstacle est dépassé
-            if distance > SEUIL_OBSTACLE:
+            if distance > SEUIL_OBSTACLE + 10:  # un peu de marge
                 if time.time() - temps_debut_phase > DUREE_MAINTIEN:
                     print("--- Obstacle franchi ---")
                     arreter()
                     mode = "REPRISE"
                     temps_debut_phase = time.time()
             else:
+                # Reset le timer tant que l'obstacle est là
                 temps_debut_phase = time.time()
 
-            # Surveillance des bords
+            # Surveillance des bords sans modifier le braquage
             if bord == "gauche":
-                braquer(CENTRE - 10)
+                # Si on touche un bord, on braque plus à droite
+                braquer(CENTRE - 15)
             elif bord == "droite":
-                braquer(CENTRE + 10)
+                braquer(CENTRE + 15)
 
         # --- Reprise ---
         elif mode == "REPRISE":
