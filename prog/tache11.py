@@ -30,7 +30,7 @@ DROITE_FORT = 65
 
 
 VITESSE_LIGNE = 45
-VITESSE_VIRAGE = 24
+VITESSE_VIRAGE = 22
 VITESSE_PERDU = 19
 VITESSE_POINTILLE = 34          # un peu plus rapide pour réduire le temps sans capteurs
 
