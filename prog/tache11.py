@@ -29,14 +29,11 @@ GAUCHE_FORT = 128
 DROITE_FORT = 65
 
 
-VITESSE_LIGNE = 40
+VITESSE_LIGNE = 45
 VITESSE_VIRAGE = 24
 VITESSE_PERDU = 19
 VITESSE_POINTILLE = 30          # vitesse réduite pour les pointillés
 
-# Seuils
-SEUIL_POINTILLE = 60           # 50 cycles = 1.25s (augmenté)
-SEUIL_PERDU_MAX = 150           # 150 cycles = 3.75s avant arrêt total
 
 angle_actuel = CENTRE
 
@@ -51,7 +48,7 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# Mémorisation de la dernière trajectoire
+# --- Mémorisation de la dernière trajectoire ---
 derniere_cible = CENTRE
 derniere_vitesse = VITESSE_LIGNE
 
@@ -241,54 +238,78 @@ try:
 
 
             # ======================
-            # CAS POINTILLÉS (on garde la trajectoire)
+            # CAS POINTILLÉS : on garde le CAP (angle actuel)
             # ======================
 
-            if compteur_perdu <= SEUIL_POINTILLE:
+            if compteur_perdu < 25:   # seuil pour pointillés
 
 
-                # on continue sur la dernière trajectoire connue
-                cible = derniere_cible
+                # NE PAS CHANGER L'ANGLE : on garde le cap actuel
+                # On ne modifie pas la variable "cible" pour éviter de braquer
+                # On applique directement l'angle actuel (on ne fait rien)
+                cible = angle_actuel   # on conserve le cap
                 vitesse = VITESSE_POINTILLE
 
 
 
             # ======================
-            # VRAIE PERTE (on cherche)
+            # VRAIE PERTE (ou fin de piste)
             # ======================
 
             else:
 
-                # Si la perte dure très longtemps, on arrête
-                if compteur_perdu > SEUIL_PERDU_MAX:
-                    print("--- Fin de parcours ou perte définitive ---")
+
+                # Si la perte dure très longtemps (> 100 cycles), on considère que c'est la fin du parcours
+                if compteur_perdu > 100:
+                    print("--- Fin de parcours détectée, arrêt ---")
                     cible = CENTRE
                     vitesse = 0
                     tourner(cible)
                     robot.set_motor(1, 0)
                     break   # sortie de la boucle
 
-                # Sinon, on alterne les directions pour chercher la ligne
-                # Phase alternée toutes les 30 cycles (0.75s)
-                phase = (compteur_perdu - SEUIL_POINTILLE) // 30
-                if phase % 2 == 0:
+                # Sinon, on cherche dans la dernière direction
+                if dernier_sens == 1:
+
+
                     cible = GAUCHE_FORT
-                else:
+
+
+
+                elif dernier_sens == -1:
+
+
                     cible = DROITE_FORT
+
+
+
+                else:
+
+
+                    cible = CENTRE
+
+
 
                 vitesse = VITESSE_PERDU
 
 
 
 
-        tourner(cible)
+        # =====================
+        # APPLICATION (sauf si on est en pointillé et qu'on ne veut pas changer l'angle)
+        # =====================
 
-
-
-        robot.set_motor(
-            1,
-            vitesse
-        )
+        # Si on est en pointillé (compteur_perdu < 25), on ne touche pas à l'angle (il reste le cap)
+        # Mais on doit quand même appliquer la vitesse
+        if etat == (0,0,0) and compteur_perdu < 25:
+            # On ne change pas l'angle, on garde le cap actuel
+            # On applique juste la vitesse
+            robot.set_motor(1, int(vitesse))
+            # On ne met pas à jour l'angle (pas de tourner)
+        else:
+            # Dans tous les autres cas, on applique l'angle et la vitesse
+            tourner(cible)
+            robot.set_motor(1, int(vitesse))
 
 
 
