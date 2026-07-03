@@ -48,10 +48,6 @@ compteur_virage = 0
 dernier_etat = (1,1,1)
 compteur_perdu = 0
 
-# --- Mémorisation de la dernière trajectoire ---
-derniere_cible = CENTRE
-derniere_vitesse = VITESSE_LIGNE
-
 
 # ==========================
 # SERVO
@@ -121,8 +117,6 @@ try:
 
             cible = CENTRE
             vitesse = VITESSE_LIGNE
-            derniere_cible = cible
-            derniere_vitesse = vitesse
 
 
 
@@ -142,9 +136,6 @@ try:
             cible = GAUCHE_LEGER
 
             vitesse = 28
-
-            derniere_cible = cible
-            derniere_vitesse = vitesse
 
 
 
@@ -169,9 +160,6 @@ try:
 
             vitesse = VITESSE_VIRAGE
 
-            derniere_cible = cible
-            derniere_vitesse = vitesse
-
 
 
 
@@ -191,9 +179,6 @@ try:
             cible = DROITE_LEGER
 
             vitesse = 28
-
-            derniere_cible = cible
-            derniere_vitesse = vitesse
 
 
 
@@ -220,9 +205,6 @@ try:
 
             vitesse = VITESSE_VIRAGE
 
-            derniere_cible = cible
-            derniere_vitesse = vitesse
-
 
 
 
@@ -235,81 +217,56 @@ try:
 
             compteur_perdu += 1
 
-
+            # ======================
+            # PREMIER CYCLE DE PERTE
+            # ======================
+            if compteur_perdu == 1:
+                # On mémorise l'état avant la perte
+                if dernier_etat == (1,1,1):
+                    # On était en ligne droite : on va traverser tout droit
+                    angle_pointille = CENTRE
+                else:
+                    # On était en virage : on garde le cap actuel
+                    angle_pointille = angle_actuel
 
             # ======================
-            # CAS POINTILLÉS : on garde le CAP (angle actuel)
+            # CAS POINTILLÉS
             # ======================
-
             if compteur_perdu < 25:   # seuil pour pointillés
 
-
-                # NE PAS CHANGER L'ANGLE : on garde le cap actuel
-                # On ne modifie pas la variable "cible" pour éviter de braquer
-                # On applique directement l'angle actuel (on ne fait rien)
-                cible = angle_actuel   # on conserve le cap
+                # On bloque l'angle sur angle_pointille et on réduit la vitesse
+                # On NE MODIFIE PAS l'angle (pas d'appel à tourner)
                 vitesse = VITESSE_POINTILLE
-
-
+                robot.set_motor(1, int(vitesse))
+                # On saute le reste pour éviter de changer l'angle
+                continue
 
             # ======================
-            # VRAIE PERTE (ou fin de piste)
+            # VRAIE PERTE
             # ======================
-
             else:
-
-
-                # Si la perte dure très longtemps (> 100 cycles), on considère que c'est la fin du parcours
                 if compteur_perdu > 100:
                     print("--- Fin de parcours détectée, arrêt ---")
-                    cible = CENTRE
-                    vitesse = 0
-                    tourner(cible)
                     robot.set_motor(1, 0)
-                    break   # sortie de la boucle
-
-                # Sinon, on cherche dans la dernière direction
-                if dernier_sens == 1:
-
-
-                    cible = GAUCHE_FORT
-
-
-
-                elif dernier_sens == -1:
-
-
-                    cible = DROITE_FORT
-
-
-
+                    break
                 else:
-
-
-                    cible = CENTRE
-
-
-
-                vitesse = VITESSE_PERDU
-
-
+                    if dernier_sens == 1:
+                        cible = GAUCHE_FORT
+                    elif dernier_sens == -1:
+                        cible = DROITE_FORT
+                    else:
+                        cible = CENTRE
+                    vitesse = VITESSE_PERDU
 
 
         # =====================
-        # APPLICATION (sauf si on est en pointillé et qu'on ne veut pas changer l'angle)
+        # APPLICATION (sauf si on est en pointillé)
         # =====================
 
-        # Si on est en pointillé (compteur_perdu < 25), on ne touche pas à l'angle (il reste le cap)
-        # Mais on doit quand même appliquer la vitesse
-        if etat == (0,0,0) and compteur_perdu < 25:
-            # On ne change pas l'angle, on garde le cap actuel
-            # On applique juste la vitesse
-            robot.set_motor(1, int(vitesse))
-            # On ne met pas à jour l'angle (pas de tourner)
-        else:
-            # Dans tous les autres cas, on applique l'angle et la vitesse
-            tourner(cible)
-            robot.set_motor(1, int(vitesse))
+        # Si on est en pointillé, on a déjà fait un "continue" donc on n'arrive pas ici
+        # Sinon, on applique l'angle et la vitesse
+        tourner(cible)
+        robot.set_motor(1, int(vitesse))
 
 
 
@@ -317,7 +274,6 @@ try:
         # MEMOIRE
         # =====================
 
-        # On met à jour dernier_etat UNIQUEMENT si on voit la ligne
         if etat != (0,0,0):
             dernier_etat = etat
 
