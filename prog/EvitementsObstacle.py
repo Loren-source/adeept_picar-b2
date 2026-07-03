@@ -36,11 +36,11 @@ TETE_CENTRE      = 90
 TETE_GAUCHE      = 150   # offset +60
 TETE_DROITE      = 30    # offset -60
 
-ROUES_CENTRE     = 90
+ROUES_CENTRE     = 97
 ROUES_GAUCHE     = 128
 ROUES_DROITE     = 52
 
-VITESSE_MARCHE     = 25
+VITESSE_MARCHE     = 15
 VITESSE_EVITEMENT  = 25
 VITESSE_RECUL      = 14
 
@@ -50,15 +50,15 @@ VITESSE_RECUL      = 14
 SEUIL_OBSTACLE        = 25    # S'arrête si un obstacle est à moins de 25 cm
 SEUIL_COLLISION       = 12    # Recul d'urgence si l'obstacle est à moins de 12 cm
 SEUIL_PASSAGE_LIBRE   = 30    # Voie considérée libre si + de 30 cm de vide au scan
-DISTANCE_MAX_FAUSSE   = 200
+DISTANCE_MAX_FAUSSE   = 150
 
 PERIODE_ULTRASON  = 0.08
 PERIODE_IR        = 0.03
-PERIODE_DECISION  = 0.05
+PERIODE_DECISION  = 0.8
 
 ANGLES_SCAN = list(range(-60, 61, 20))
 
-DUREE_RECUL_URGENCE  = 0.8
+DUREE_RECUL_URGENCE  = 0.08
 DUREE_RECUL_BORDURE  = 0.5
 DUREE_PAS_EVITEMENT  = 1.5
 MAX_PAS_EVITEMENT    = 10
