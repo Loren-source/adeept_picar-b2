@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-
 import time
 import sys
 import os
@@ -22,7 +21,6 @@ if script_dir not in sys.path:
 
 import move
 import ultra
-
 
 PCA_ADDRESS      = 0x5f
 PWM_FREQ         = 50
@@ -46,18 +44,20 @@ VITESSE_MARCHE     = 25
 VITESSE_EVITEMENT  = 25
 VITESSE_RECUL      = 14
 
-# Seuils en CM (ultra.py renvoie des cm)
-SEUIL_OBSTACLE        = 25
-SEUIL_COLLISION       = 12
-SEUIL_PASSAGE_LIBRE   = 30
-DISTANCE_MAX_FAUSSE   = 200   # valeur "pas de mesure fiable"
+# =========================================================================
+# 🛠️ NOUVEAUX SEUILS AJUSTÉS (Évite les détections fantômes à 36 cm)
+# =========================================================================
+SEUIL_OBSTACLE        = 25    # S'arrête si un obstacle est à moins de 25 cm
+SEUIL_COLLISION       = 12    # Recul d'urgence si l'obstacle est à moins de 12 cm
+SEUIL_PASSAGE_LIBRE   = 30    # Voie considérée libre si + de 30 cm de vide au scan
+DISTANCE_MAX_FAUSSE   = 200
 
 PERIODE_ULTRASON  = 0.08
 PERIODE_IR        = 0.03
 PERIODE_DECISION  = 0.05
 
-# Offsets de scan (par rapport au centre 90°), bornés à [-60, +60]
-ANGLES_SCAN = list(range(-60, 61, 10))
+# Offsets de scan (bornés à [-60, +60])
+ANGLES_SCAN = list(range(-60, 61, 20))
 
 DUREE_RECUL_URGENCE  = 0.8
 DUREE_RECUL_BORDURE  = 0.5
@@ -65,7 +65,6 @@ DUREE_PAS_EVITEMENT  = 1.5
 MAX_PAS_EVITEMENT    = 10
 DUREE_RECENTRAGE     = 1.5
 
-# Détection papier bleu (déclenchement de mission, comme ton script d'origine)
 BLUE_LOWER      = np.array([100, 100, 50])
 BLUE_UPPER      = np.array([130, 255, 255])
 BLUE_MIN_PIXELS = 500
@@ -97,6 +96,7 @@ track_middle = InputDevice(pin=LINE_PIN_MIDDLE)
 track_right  = InputDevice(pin=LINE_PIN_RIGHT)
 
 try:
+    high_precision_sensor = True
     ultrasonic_sensor = ultra.Ultrasonic(ultra.Tr, ultra.Ec)
     print("✅ Capteur Ultrason prêt.")
 except Exception as e:
@@ -112,21 +112,19 @@ etat = {
     "distance": None,
     "pattern": "000",
     "running": True,
+    "scan_en_cours": False,
 }
 
-dernier_angle_direction = 0  # >0 = dernier virage GAUCHE, <0 = dernier virage DROITE
-
-
-RANGE_CAPTEUR_MAX_CM = 220  # max_distance=2m configuré dans ultra.py, + marge
+dernier_angle_direction = 0 
+RANGE_CAPTEUR_MAX_CM = 220 
 
 def get_distance_cm():
-    """Moyenne de 3 mesures ultrason, en CM. Renvoie None si rien de fiable."""
     if ultrasonic_sensor is None:
         return None
     readings = []
     for _ in range(3):
         try:
-            d_mm = ultrasonic_sensor.get_distance()  # ultra.py renvoie des MM
+            d_mm = ultrasonic_sensor.get_distance() 
             d_cm = d_mm / 10.0
             if 0 < d_cm <= RANGE_CAPTEUR_MAX_CM:
                 readings.append(d_cm)
@@ -137,7 +135,6 @@ def get_distance_cm():
 
 
 def lire_pattern_ir():
-    """'1' = bordure détectée sur ce capteur. Inverse ici si ta polarité est opposée."""
     g = int(bool(track_left.value))
     m = int(bool(track_middle.value))
     d = int(bool(track_right.value))
@@ -148,11 +145,18 @@ def thread_ultrason():
     while True:
         with etat_lock:
             running = etat["running"]
+            scan_en_cours = etat["scan_en_cours"]
         if not running:
             break
+        
+        if scan_en_cours:
+            time.sleep(PERIODE_ULTRASON)
+            continue
+            
         d = get_distance_cm()
         with etat_lock:
-            etat["distance"] = d
+            if not etat["scan_en_cours"]:
+                etat["distance"] = d
         time.sleep(PERIODE_ULTRASON)
 
 
@@ -173,10 +177,14 @@ def lire_etat():
         return etat["distance"], etat["pattern"]
 
 
+def modifier_mode_scan(en_cours):
+    with etat_lock:
+        etat["scan_en_cours"] = en_cours
+
+
 def arreter_threads():
     with etat_lock:
         etat["running"] = False
-
 
 
 def positionner_servos_centre():
@@ -192,7 +200,6 @@ def stop_robot():
 
 
 def set_head_offset(offset):
-    """Fait pivoter les DEUX yeux (CH00+CH01) ensemble, offset borné à [-60,+60]."""
     offset = max(-60, min(60, offset))
     angle = TETE_CENTRE + offset
     servo_yeux_0.angle = angle
@@ -200,7 +207,6 @@ def set_head_offset(offset):
 
 
 def offset_vers_angle_roues(offset):
-    """Convertit un offset de scan (-60..+60) en angle absolu du servo de direction."""
     offset = max(-60, min(60, offset))
     if offset >= 0:
         return ROUES_CENTRE + (offset / 60.0) * (ROUES_GAUCHE - ROUES_CENTRE)
@@ -215,7 +221,6 @@ def avancer_tout_droit():
 
 
 def obstacle_detecte(distance):
-    
     return distance is None or distance < SEUIL_OBSTACLE
 
 
@@ -228,15 +233,10 @@ def bordure_detectee(pattern):
 
 
 def alerte_sonore(msg):
-    # Pas de buzzer câblé sur ce robot -> on garde une trace console.
     print(f"🔔 {msg}")
 
 
-
 def recul_urgence():
-    print("[URGENCE] Obstacle trop proche -> recul")
-    alerte_sonore("Recul d'urgence")
-
     stop_robot()
     time.sleep(0.1)
 
@@ -268,9 +268,6 @@ def tourner_roues(offset):
 
 
 def eviter_bordure(pattern):
-    print(f"[BORDURE] Détectée : {pattern}")
-    alerte_sonore("Bordure détectée")
-
     stop_robot()
     time.sleep(0.1)
 
@@ -313,13 +310,13 @@ def eviter_bordure(pattern):
     servo_dir.angle = ROUES_CENTRE
 
 
-
 def scanner_environnement():
     mesures = []
     print("[SCAN] Début scan")
 
     stop_robot()
     time.sleep(0.1)
+    modifier_mode_scan(True)
 
     for offset in ANGLES_SCAN:
         _, pattern = lire_etat()
@@ -328,21 +325,19 @@ def scanner_environnement():
             break
 
         set_head_offset(offset)
-        time.sleep(0.15)
+        time.sleep(0.2)
 
         d = get_distance_cm()
         if d is None:
-            # Fail-safe : une lecture invalide pendant le scan est traitée
-            # comme un obstacle potentiel, pas comme un passage libre.
             d = 0
 
         libre = d >= SEUIL_PASSAGE_LIBRE
-
         mesures.append({"angle": offset, "distance": d, "libre": libre})
         print(f"[SCAN] offset={offset:>4} | distance={d:>5.0f}cm | libre={libre}")
 
     set_head_offset(0)
-    time.sleep(0.1)
+    modifier_mode_scan(False)
+    time.sleep(0.15)
 
     return mesures
 
@@ -386,34 +381,20 @@ def choisir_meilleur_gap(gaps):
 
     if candidats_centraux:
         meilleur_gap = max(candidats_centraux, key=score_gap)
-        print("[CHOIX] Mode central : passage entre obstacles")
     else:
         meilleur_gap = max(gaps, key=score_gap)
-        print("[CHOIX] Mode secours : passage latéral")
 
     point_centre = meilleur_gap[len(meilleur_gap) // 2]
-    angle_choisi = point_centre["angle"]
-
-    print("[CHOIX] Passage choisi :")
-    print(f"        début  = {meilleur_gap[0]['angle']}")
-    print(f"        fin    = {meilleur_gap[-1]['angle']}")
-    print(f"        centre = {angle_choisi}")
-    print(f"        score  = {score_gap(meilleur_gap):.1f}")
-
-    return angle_choisi
+    return point_centre["angle"]
 
 
 def choisir_direction_par_radar():
     mesures = scanner_environnement()
     if not mesures:
-        print("[SCAN] Aucune mesure exploitable")
         return None
-
     gaps = detecter_gaps(mesures)
     if not gaps:
-        print("[SCAN] Aucun passage libre")
         return None
-
     return choisir_meilleur_gap(gaps)
 
 
@@ -428,13 +409,11 @@ def avancer_surveille(duree, vitesse, offset_direction):
         distance, pattern = lire_etat()
 
         if collision_imminente(distance):
-            print("[SURVEILLANCE] Collision imminente")
             stop_robot()
             recul_urgence()
             return False
 
         if bordure_detectee(pattern):
-            print("[SURVEILLANCE] Bordure pendant mouvement")
             stop_robot()
             eviter_bordure(pattern)
             return False
@@ -445,8 +424,6 @@ def avancer_surveille(duree, vitesse, offset_direction):
 
 
 def recentrer_sur_voie(offset_precedent, duree_max=DUREE_RECENTRAGE):
-    print("[RECENTRAGE] Contre-braquage adaptatif")
-
     offset_recentrage = -offset_precedent
     debut = time.time()
 
@@ -499,8 +476,6 @@ def contourner_obstacle_gap():
             continue
 
         if not obstacle_detecte(distance):
-            print("[OBSTACLE] Plus d'obstacle devant -> recentrage obligatoire")
-
             ok = avancer_surveille(1.5, VITESSE_EVITEMENT, -dernier_angle_direction)
             if not ok:
                 continue
@@ -508,28 +483,21 @@ def contourner_obstacle_gap():
             ok = avancer_surveille(0.50, VITESSE_MARCHE, 0)
             if not ok:
                 continue
-
-            print("[OBSTACLE] Recentrage terminé")
             return
 
         angle_scan = choisir_direction_par_radar()
 
         if angle_scan is None:
-            print("[ACTION] Aucun gap -> recul")
             recul_urgence()
             continue
 
         offset_actuel = angle_scan
         dernier_angle_direction = angle_scan
 
-        print(f"[ACTION] pas {i + 1}/{MAX_PAS_EVITEMENT}")
-        print(f"         offset choisi = {angle_scan}")
-
         ok = avancer_surveille(DUREE_PAS_EVITEMENT, VITESSE_EVITEMENT, angle_scan)
         if not ok:
             continue
 
-    print("[SÉCURITÉ] Trop de tentatives -> recul long")
     recul_urgence()
     recentrer_sur_voie(offset_actuel)
 
@@ -555,6 +523,9 @@ def detect_blue(picam2):
     return blue_pixels >= BLUE_MIN_PIXELS
 
 
+# ==========================================
+# BOUCLE PRINCIPALE MODIFIÉE AVEC SUPER-DEBUG
+# ==========================================
 def main():
     print("============================================")
     print("MISSION C — RADAR + THREADS + BORDURE IR")
@@ -583,7 +554,6 @@ def main():
 
     try:
         print("\n🤖 Mode autonome activé. Le robot navigue...")
-        print("🚀 Propulsion initiale pour quitter la marque bleue de départ...")
         servo_dir.angle = ROUES_CENTRE
         set_head_offset(0)
         move.move(VITESSE_MARCHE, 1, "mid")
@@ -596,18 +566,21 @@ def main():
         while True:
             distance, pattern = lire_etat()
 
-            if distance is not None:
-                print(f"[INFO] distance={distance:.0f}cm | pattern={pattern}")
-            else:
-                print(f"[INFO] distance=None | pattern={pattern}")
+            # -------------------------------------------------------------------------
+            # 🔍 ZONE DU SUPER-DEBUG DANS LE CODE PRINCIPAL
+            # -------------------------------------------------------------------------
+            print(f"🔍 [MONITOR] Distance: {distance} cm | Sol IR: {pattern}")
 
             if collision_imminente(distance):
+                print(f"🚨 RECUL DE SÉCURITÉ -> Déclenché par COLLISION (Distance lue = {distance})")
                 recul_urgence()
 
             elif bordure_detectee(pattern):
+                print(f"🚨 RECUL DE SÉCURITÉ -> Déclenché par BORDURE IR (Pattern détecté = {pattern})")
                 eviter_bordure(pattern)
 
             elif obstacle_detecte(distance):
+                print(f"🤔 OBSTACLE DÉTECTÉ à {distance} cm -> Lancement du scan...")
                 contourner_obstacle_gap()
 
             else:
@@ -620,23 +593,18 @@ def main():
 
     finally:
         print("[SÉCURITÉ] Arrêt complet")
-
         arreter_threads()
         time.sleep(0.2)
-
         try:
             picam2.stop()
         except Exception:
             pass
-
         stop_robot()
         positionner_servos_centre()
-
         try:
             pca.deinit()
         except Exception:
             pass
-
         print("✅ Système sécurisé.")
 
 
