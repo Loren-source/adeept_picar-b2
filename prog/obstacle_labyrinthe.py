@@ -48,7 +48,7 @@ TURN_HOLD_OPPOSITE = 0.6
 TURN_OBSTACLE_DIST         = 30   # cm: if obstacle closer than this during a turn, interrupt
 TURN_OBSTACLE_BACKUP_TIME  = 0.3  # seconds: how long to reverse after an obstacle mid-turn
 
-ALIGN_THRESHOLD_PX = 75   # pixels: max acceptable centroid offset from frame centre (frame ~640 px wide)
+ALIGN_THRESHOLD_PX = 100   # pixels: max acceptable centroid offset from frame centre (frame ~640 px wide)
 ALIGN_SPEED        = 25   # throttle % for alignment nudges — slower than DRIVE_SPEED for finer correction
 ALIGN_NUDGE_FWD    = 0.15 # seconds: forward arc per nudge — short, small correction step
 ALIGN_NUDGE_BWD    = 0.15 # seconds: backward arc per nudge — equal to FWD so there is no net translation
