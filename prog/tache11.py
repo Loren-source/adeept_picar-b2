@@ -29,7 +29,7 @@ DROITE_FORT = 65
 VITESSE_LIGNE = 45
 VITESSE_VIRAGE = 22          # réduite pour plus de sécurité
 VITESSE_PERDU = 19
-VITESSE_POINTILLE = 36
+VITESSE_POINTILLE = 38
 
 # Seuils
 SEUIL_POINTILLE = 50          # 1.25s avant de considérer une perte (uniquement pour les états modérés)
