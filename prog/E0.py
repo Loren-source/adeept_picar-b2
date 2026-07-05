@@ -5,7 +5,7 @@ import threading
 
 from motor import RobotMotor
 from servo import RobotServos
-from ultrasonic import Ultrasonic
+from ultra import Ultrasonic
 from lineTracking import LineTracker
 
 
