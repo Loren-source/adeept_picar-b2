@@ -1,19 +1,13 @@
 from servo import RobotServos
 import time
 
-servos=RobotServos()
+servos = RobotServos()
 
-print("Centre 97")
-servos.set_angle(0,97)
-time.sleep(3)
+servos.set_angle(1, 150)
+time.sleep(2)
 
-print("Test 125")
-servos.set_angle(0,125)
-time.sleep(5)
+servos.set_angle(1, 97)
+time.sleep(2)
 
-print("Test 70")
-servos.set_angle(0,70)
-time.sleep(5)
-
-print("Retour centre")
-servos.set_angle(0,97)
+servos.set_angle(1, 40)
+time.sleep(2)
