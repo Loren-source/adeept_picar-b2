@@ -265,69 +265,46 @@ try:
         # =====================================================
         # APPROCHE
         # =====================================================
-
-        elif etat_robot == ETAT_ARRET:
-
-            # On s'approche doucement jusqu'à 30 cm
-
-            if distance > SEUIL_ARRET:
-
-                avancer(VITESSE_CONTOURNEMENT)
-
-            else:
-
-                stopper()
-
-                time.sleep(0.2)
-
-                etat_robot = ETAT_BRAQUER
-
+             elif etat_robot == ETAT_ARRET:
+                # On commence déjà à braquer pendant l'approche
+                    if direction == "gauche":
+                        tourner_gauche()
+                    else:
+                        tourner_droite()
+                
+                    # On avance lentement roues déjà braquées
+                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
+                
+                    # Quand on est à 30 cm, on passe directement au contournement
+                    if distance <= SEUIL_ARRET:
+                        stopper()
+                        time.sleep(0.15)
+                        etat_robot = ETAT_BRAQUER
         # =====================================================
         # BRAQUER
         # =====================================================
 
         elif etat_robot == ETAT_BRAQUER:
-            if direction == "gauche":
+            while not bordure_detectee():
         
-                while not bordure_detectee():
+                robot.set_motor(1, VITESSE_CONTOURNEMENT)
         
-                    tourner_gauche()          # on maintient le braquage
-                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
-        
-                    time.sleep(0.02)
-        
-            else:
-        
-                while not bordure_detectee():
-        
-                    tourner_droite()          # on maintient le braquage
-                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
-        
-                    time.sleep(0.02)
+                time.sleep(0.02)
         
             stopper()
-
+        
             etat_robot = ETAT_CONTOURNER
 
         # =====================================================
         # CONTOURNEMENT
         # =====================================================
-
         elif etat_robot == ETAT_CONTOURNER:
-
-            robot.set_motor(1, VITESSE_AVANCE)
-
-            # On longe la bordure
-
+            recentrer()
             while bordure_detectee():
-                 recentrer() 
-                 robot.set_motor(1, VITESSE_AVANCE)
-                 time.sleep(0.02)
-
+                robot.set_motor(1, VITESSE_AVANCE)
+                time.sleep(0.02)
             stopper()
-
             etat_robot = ETAT_RECENTRER
-
         # =====================================================
         # RECENTRAGE
         # =====================================================
