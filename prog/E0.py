@@ -16,32 +16,36 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ============================================================
-# RÉGLAGES (conformes à vos demandes)
+# RÉGLAGES
 # ============================================================
+# Direction des roues (servo canal 0)
 ANGLE_CENTRE = 97
-ANGLE_GAUCHE = 135
-ANGLE_DROITE = 55
+ANGLE_GAUCHE = 135              # braquage pour tourner à gauche
+ANGLE_DROITE = 55               # braquage pour tourner à droite
 
+# Tête du capteur ultrason (servo canal 1)
 ANGLE_SCAN_GAUCHE = 150
 ANGLE_SCAN_CENTRE = 97
 ANGLE_SCAN_DROITE = 40
 
-VITESSE_AVANCE = 20
+# Vitesses (valeur entre 0 et 100 pour le moteur)
+VITESSE_AVANCE = 35
 VITESSE_APPROCHE_18 = 18
 VITESSE_APPROCHE_15 = 15
 VITESSE_APPROCHE_12 = 12
 VITESSE_APPROCHE_8 = 8
-VITESSE_SORTIE = 18
+VITESSE_CONTOURNEMENT = 22
 VITESSE_RECUL = 15
 
-DISTANCE_SCAN = 450          # 45 cm
-DISTANCE_APPROCHE_FIN = 300  # 30 cm
-DISTANCE_SORTIE = 400        # 50 cm (obstacle derrière)
-DISTANCE_CRITIQUE = 200      # sécurité (si plus bas, recul)
+# Distances en mm
+DISTANCE_SCAN = 450          # début du scan (45 cm)
+DISTANCE_APPROCHE_FIN = 300  # fin de l'approche (30 cm), début contournement
+DISTANCE_SORTIE = 500        # obstacle considéré dépassé (50 cm)
+DISTANCE_CRITIQUE = 200      # sécurité (20 cm) – recul d'urgence
 
-DISTANCE_FAUSSE = 3000
+DISTANCE_FAUSSE = 3000       # valeur par défaut si mesure invalide
 
-# États
+# États de la machine à états
 ETAT_AVANCER = 0
 ETAT_SCAN = 1
 ETAT_APPROCHE = 2
@@ -50,33 +54,39 @@ ETAT_SCAN_SORTIE = 4
 ETAT_RECENTRER = 5
 
 etat_robot = ETAT_AVANCER
-direction = None
+direction = None               # "gauche" ou "droite"
 distance = DISTANCE_FAUSSE
 
 # ============================================================
 # FONCTIONS DE DÉPLACEMENT
 # ============================================================
 def avancer(vitesse):
+    """Avance tout droit."""
     servos.set_angle(0, ANGLE_CENTRE)
     robot.set_motor(1, vitesse)
 
 def avancer_braque(angle, vitesse):
+    """Avance avec un braquage donné."""
     servos.set_angle(0, angle)
     robot.set_motor(1, vitesse)
 
 def reculer(vitesse):
+    """Recule (vitesse négative)."""
     robot.set_motor(-1, vitesse)
 
 def stopper():
+    """Arrête le moteur."""
     robot.set_motor(1, 0)
 
 def recentrer():
+    """Remet les roues au centre."""
     servos.set_angle(0, ANGLE_CENTRE)
 
 # ============================================================
-# ULTRASON
+# MESURE DE DISTANCE ULTRASON
 # ============================================================
 def mesurer_distance():
+    """Retourne la distance en mm, ou DISTANCE_FAUSSE en cas d'erreur."""
     try:
         d = ultrasonic.get_distance()
         if d <= 0:
@@ -86,9 +96,13 @@ def mesurer_distance():
         return DISTANCE_FAUSSE
 
 # ============================================================
-# SCAN (peut être appelé plusieurs fois)
+# SCANNER (balayage de la tête)
 # ============================================================
 def scanner_obstacle():
+    """
+    Effectue un scan à gauche, centre, droite et choisit le côté le plus libre.
+    Met à jour la variable globale 'direction'.
+    """
     global direction
     print("\n===== SCAN =====")
     servos.set_angle(1, ANGLE_SCAN_GAUCHE)
@@ -109,9 +123,10 @@ def scanner_obstacle():
     print("Direction choisie :", direction)
 
 # ============================================================
-# CAPTEURS IR (pour rester dans l'arène)
+# LECTURE DES CAPTEURS IR (pour rester dans le périmètre)
 # ============================================================
 def lire_ir():
+    """Retourne un tuple (gauche, milieu, droite) avec 1 pour noir, 0 pour blanc."""
     s = tracker.get_status()
     return (s["left"], s["middle"], s["right"])
 
@@ -119,7 +134,7 @@ def lire_ir():
 # BOUCLE PRINCIPALE
 # ============================================================
 print("\n==================================================")
-print("MISSION C - ÉVITEMENT D'OBSTACLES (AVEC SCAN FINAL)")
+print("MISSION C - ÉVITEMENT D'OBSTACLES (AVEC SURVEILLANCE DES BORDS)")
 print("==================================================")
 servos.set_angle(0, ANGLE_CENTRE)
 servos.set_angle(1, ANGLE_SCAN_CENTRE)
@@ -132,25 +147,28 @@ try:
         distance = mesurer_distance()
         print(f"Etat={etat_robot} | Distance={distance:.0f} mm")
 
-        # ---- 1. AVANCER ----
+        # ----------------------------------------------------------
+        # ÉTAT 0 : AVANCER
+        # ----------------------------------------------------------
         if etat_robot == ETAT_AVANCER:
             avancer(VITESSE_AVANCE)
             if distance <= DISTANCE_SCAN:
                 stopper()
                 etat_robot = ETAT_SCAN
 
-        # ---- 2. SCAN (initial) ----
+        # ----------------------------------------------------------
+        # ÉTAT 1 : SCAN (premier balayage)
+        # ----------------------------------------------------------
         elif etat_robot == ETAT_SCAN:
             scanner_obstacle()
             etat_robot = ETAT_APPROCHE
 
-        # ---- 3. APPROCHE (braqué dès le début, vitesse progressive) ----
+        # ----------------------------------------------------------
+        # ÉTAT 2 : APPROCHE (progressif, déjà braqué)
+        # ----------------------------------------------------------
         elif etat_robot == ETAT_APPROCHE:
-            if direction == "gauche":
-                angle_braque = ANGLE_GAUCHE
-            else:
-                angle_braque = ANGLE_DROITE
-
+            angle = ANGLE_GAUCHE if direction == "gauche" else ANGLE_DROITE
+            # Vitesse progressive selon la distance
             if distance > 400:
                 vitesse = VITESSE_APPROCHE_18
             elif distance > 350:
@@ -159,34 +177,35 @@ try:
                 vitesse = VITESSE_APPROCHE_12
             else:
                 vitesse = VITESSE_APPROCHE_8
-
-            avancer_braque(angle_braque, vitesse)
-
+            avancer_braque(angle, vitesse)
             if distance <= DISTANCE_APPROCHE_FIN:
                 etat_robot = ETAT_CONTOURNER
 
-        # ---- 4. CONTOURNEMENT (reste braqué, suit la bordure) ----
+        # ----------------------------------------------------------
+        # ÉTAT 3 : CONTOURNEMENT (reste braqué, surveille les bords)
+        # ----------------------------------------------------------
         elif etat_robot == ETAT_CONTOURNER:
-            if direction == "gauche":
-                angle_braque = ANGLE_GAUCHE
-            else:
-                angle_braque = ANGLE_DROITE
+            angle = ANGLE_GAUCHE if direction == "gauche" else ANGLE_DROITE
+            avancer_braque(angle, VITESSE_CONTOURNEMENT)
 
-            avancer_braque(angle_braque, VITESSE_SORTIE)
-
+            # Lecture des capteurs IR pour rester dans l'arène
             ir = lire_ir()
+            # Correction de bordure (sans recentrer complètement)
             if ir[0] == 1 and ir[2] == 0:
+                # Bord gauche détecté → braquer à droite
                 servos.set_angle(0, ANGLE_DROITE)
             elif ir[2] == 1 and ir[0] == 0:
+                # Bord droit détecté → braquer à gauche
                 servos.set_angle(0, ANGLE_GAUCHE)
+            # Si les deux ou aucun, on garde l'angle initial (pas de changement)
 
-            # Sortie : obstacle dépassé ET arène retrouvée
+            # Conditions de sortie du contournement : obstacle dépassé ET arène retrouvée
             if distance > DISTANCE_SORTIE and ir == (0, 0, 0):
-                print("Obstacle dépassé, on va faire un scan final.")
+                print("Obstacle dépassé, scan final.")
                 stopper()
                 etat_robot = ETAT_SCAN_SORTIE
 
-            # Sécurité recul
+            # Sécurité : recul d'urgence si trop proche
             if distance < DISTANCE_CRITIQUE:
                 print("Distance critique ! Recul d'urgence.")
                 stopper()
@@ -195,15 +214,19 @@ try:
                 time.sleep(0.6)
                 stopper()
 
-        # ---- 5. SCAN FINAL (après obstacle) ----
+        # ----------------------------------------------------------
+        # ÉTAT 4 : SCAN FINAL (après obstacle)
+        # ----------------------------------------------------------
         elif etat_robot == ETAT_SCAN_SORTIE:
             scanner_obstacle()
             etat_robot = ETAT_RECENTRER
 
-        # ---- 6. RECENTRAGE ----
+        # ----------------------------------------------------------
+        # ÉTAT 5 : RECENTRAGE
+        # ----------------------------------------------------------
         elif etat_robot == ETAT_RECENTRER:
             recentrer()
-            avancer(VITESSE_SORTIE)
+            avancer(VITESSE_CONTOURNEMENT)
             time.sleep(0.6)
             stopper()
             etat_robot = ETAT_AVANCER
