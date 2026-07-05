@@ -26,7 +26,7 @@ ANGLE_SCAN_GAUCHE = 150
 ANGLE_SCAN_CENTRE = 97
 ANGLE_SCAN_DROITE = 40
 
-VITESSE_AVANCE = 20
+VITESSE_AVANCE = 35
 VITESSE_APPROCHE_18 = 18
 VITESSE_APPROCHE_15 = 15
 VITESSE_APPROCHE_12 = 12
@@ -34,13 +34,15 @@ VITESSE_APPROCHE_8 = 8
 VITESSE_CONTOURNEMENT = 22
 VITESSE_RECUL = 15
 
-DISTANCE_SCAN = 400         # début du scan (40 cm)
+DISTANCE_SCAN = 700          # détection précoce (70 cm)
 DISTANCE_APPROCHE_FIN = 300  # fin de l'approche (30 cm)
 DISTANCE_SORTIE = 500        # obstacle derrière (50 cm)
 DISTANCE_CRITIQUE = 200      # sécurité (recul si < 20 cm)
 
+CONFIRMATION_SORTIE = 10     # cycles consécutifs pour confirmer le dépassement
+
 DISTANCE_FAUSSE = 3000
-ANGLES_SCAN = list(range(-60, 61, 10))  # angles de balayage de la tête
+ANGLES_SCAN = list(range(-60, 61, 10))
 
 # États
 ETAT_AVANCER = 0
@@ -103,14 +105,13 @@ def scanner_obstacle():
         d = mesurer_distance()
         if d is None or d > 3000:
             d = 3000
-        libre = d >= DISTANCE_SORTIE  # seuil de passage libre (50 cm)
+        libre = d >= DISTANCE_SORTIE
         mesures.append({"angle": angle, "distance": d, "libre": libre})
         print(f"[SCAN] angle={angle:>4} | distance={d:>5.0f} | libre={libre}")
 
     tourner_tete(ANGLE_SCAN_CENTRE)
     time.sleep(0.1)
 
-    # Détection des gaps (zones libres consécutives)
     gaps = []
     gap_actuel = []
     for point in mesures:
@@ -124,10 +125,9 @@ def scanner_obstacle():
         gaps.append(gap_actuel)
 
     if not gaps:
-        print("[SCAN] Aucun passage libre, je vais tourner à droite par défaut")
+        print("[SCAN] Aucun passage libre -> droite par défaut")
         return "droite"
 
-    # Choix du meilleur gap (plus large et le plus central possible)
     meilleur_gap = max(gaps, key=lambda g: (abs(g[-1]["angle"] - g[0]["angle"]), -abs(g[len(g)//2]["angle"])))
     angle_centre = meilleur_gap[len(meilleur_gap)//2]["angle"]
     print(f"[CHOIX] Gap: {meilleur_gap[0]['angle']}° -> {meilleur_gap[-1]['angle']}°, centre={angle_centre}°")
@@ -137,13 +137,13 @@ def scanner_obstacle():
     elif angle_centre > 10:
         return "droite"
     else:
-        return "gauche"  # par défaut si on est centré
+        return "gauche"
 
 # ============================================================
 # BOUCLE PRINCIPALE
 # ============================================================
 print("\n==================================================")
-print("MISSION C - ÉVITEMENT D'OBSTACLES (SIMPLIFIÉ)")
+print("MISSION C - ÉVITEMENT D'OBSTACLES (AVEC CONFIRMATION)")
 print("==================================================")
 servos.set_angle(0, ANGLE_CENTRE)
 tourner_tete(ANGLE_SCAN_CENTRE)
@@ -153,12 +153,13 @@ print("\nRobot prêt.\n")
 
 etat_robot = ETAT_AVANCER
 direction = "gauche"
+compteur_sortie = 0
 
 try:
     while True:
         distance = mesurer_distance()
         ir = lire_ir()
-        print(f"Etat={etat_robot} | Dist={distance:.0f} mm | IR={ir}")
+        print(f"Etat={etat_robot} | Dist={distance:.0f} mm | IR={ir} | compteur={compteur_sortie}")
 
         # ---- 1. AVANCER ----
         if etat_robot == ETAT_AVANCER:
@@ -194,17 +195,22 @@ try:
             avancer_braque(angle_braque, VITESSE_CONTOURNEMENT)
 
             # Correction des bords IR
-            if ir[0] == 1:      # bord gauche détecté
+            if ir[0] == 1:
                 servos.set_angle(0, ANGLE_DROITE)
-            elif ir[2] == 1:    # bord droit détecté
+            elif ir[2] == 1:
                 servos.set_angle(0, ANGLE_GAUCHE)
             # Sinon, on garde le braquage initial
 
-            # Sortie si obstacle dépassé ET arène retrouvée
+            # Détection de dépassement avec confirmation
             if distance > DISTANCE_SORTIE and ir == (0, 0, 0):
-                print("Obstacle dépassé, scan final.")
-                stopper()
-                etat_robot = ETAT_SCAN_SORTIE
+                compteur_sortie += 1
+                if compteur_sortie >= CONFIRMATION_SORTIE:
+                    print("Obstacle dépassé confirmé, scan final.")
+                    stopper()
+                    etat_robot = ETAT_SCAN_SORTIE
+                    compteur_sortie = 0
+            else:
+                compteur_sortie = 0  # réinitialiser si conditions non remplies
 
             # Sécurité recul
             if distance < DISTANCE_CRITIQUE:
