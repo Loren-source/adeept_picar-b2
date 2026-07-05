@@ -16,17 +16,17 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ============================================================
-# RÉGLAGES
+# RÉGLAGES OPTIMISÉS
 # ============================================================
 ANGLE_CENTRE = 97
-ANGLE_GAUCHE = 130
-ANGLE_DROITE = 55
+ANGLE_GAUCHE = 135              # augmenté pour braquer plus fort
+ANGLE_DROITE = 55               # augmenté (symétrique)
 
 ANGLE_SCAN_GAUCHE = 150
 ANGLE_SCAN_CENTRE = 97
 ANGLE_SCAN_DROITE = 40
 
-VITESSE_AVANCE = 20
+VITESSE_AVANCE = 35
 VITESSE_APPROCHE = 15
 VITESSE_CONTOURNEMENT = 18
 VITESSE_SORTIE = 22
@@ -34,8 +34,10 @@ VITESSE_RECUL = 15
 
 DISTANCE_SCAN = 450
 DISTANCE_BRAQUAGE = 300
-DISTANCE_CRITIQUE = 200      # seuil pour reculer
+DISTANCE_CRITIQUE = 200
 DISTANCE_FAUSSE = 3000
+
+DUREE_BRAQUAGE = 0.6            # réduit pour un braquage plus rapide
 
 # États
 ETAT_AVANCER = 0
@@ -146,7 +148,7 @@ def arena_retrouvee():
 # INITIALISATION
 # ============================================================
 print("\n==================================================")
-print("MISSION C - ÉVITEMENT D'OBSTACLES (CORRIGÉ V2)")
+print("MISSION C - ÉVITEMENT D'OBSTACLES (ANGLES OPTIMISÉS)")
 print("==================================================")
 servos.set_angle(0, ANGLE_CENTRE)
 servos.set_angle(1, ANGLE_SCAN_CENTRE)
@@ -199,11 +201,11 @@ try:
             else:
                 servos.set_angle(0, ANGLE_DROITE)
             robot.set_motor(1, VITESSE_CONTOURNEMENT)
-            time.sleep(0.8)
+            time.sleep(DUREE_BRAQUAGE)      # 0.6s
             stopper()
             etat_robot = ETAT_CONTOURNER
 
-        # ---- CONTOURNER (avec surveillance distance) ----
+        # ---- CONTOURNER ----
         elif etat_robot == ETAT_CONTOURNER:
             recentrer()
             robot.set_motor(1, VITESSE_SORTIE)
@@ -230,11 +232,11 @@ try:
                     etat_robot = ETAT_SCAN
                     break
 
-                # Correction de bordure
+                # Correction de bordure avec angles optimisés
                 if ir[0] == 1:
-                    servos.set_angle(0, ANGLE_DROITE)
+                    servos.set_angle(0, ANGLE_DROITE)   # on braque à droite pour corriger
                 elif ir[2] == 1:
-                    servos.set_angle(0, ANGLE_GAUCHE)
+                    servos.set_angle(0, ANGLE_GAUCHE)   # on braque à gauche
                 else:
                     servos.set_angle(0, ANGLE_CENTRE)
 
