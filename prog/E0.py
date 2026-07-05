@@ -59,6 +59,7 @@ ETAT_ARRET = 2
 ETAT_BRAQUER = 3
 ETAT_CONTOURNER = 4
 ETAT_RECENTRER = 5
+ETAT_SORTIE = 6
 
 
 etat_robot = ETAT_AVANCER
@@ -177,13 +178,14 @@ def scanner_obstacle():
 # ============================================================
 
 def choisir_direction():
+    if abs(distance_gauche - distance_droite) < 80:
+        return "gauche"
 
-    if distance_gauche >= distance_droite:
+    if distance_gauche > distance_droite:
         return "gauche"
 
     return "droite"
-
-
+  
 # ============================================================
 # DETECTION DES BORDURES
 # 1 = NOIR
@@ -327,7 +329,14 @@ try:
             time.sleep(0.5)
 
             stopper()
+            etat_robot = ETAT_SORTIE
 
+        elif etat_robot == ETAT_SORTIE:
+            recentrer()
+            robot.set_motor(1, VITESSE_AVANCE)
+            # on avance 1 seconde sans regarder l'ultrason
+            time.sleep(1.0)
+        
             etat_robot = ETAT_AVANCER
 
         time.sleep(0.02)
