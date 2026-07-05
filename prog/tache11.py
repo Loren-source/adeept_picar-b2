@@ -5,12 +5,11 @@ import time
 from motor import RobotMotor
 from servo import RobotServos
 from lineTracking import LineTracker
-import rgb
+
 
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
-rgb.setup()
 
 
 # ==========================
@@ -79,16 +78,10 @@ time.sleep(1)
 # ==========================
 
 try:
-    cligno = False
-    temps_cligno = time.time()
     while True:
         s = tracker.get_status()
         etat = (s["left"], s["middle"], s["right"])
         print(etat)
-        # Gestion du clignotement (2 Hz)
-        if time.time() - temps_cligno > 0.25:
-            cligno = not cligno
-            temps_cligno = time.time()
 
         # --- ÉTATS VISIBLES ---
 
@@ -100,7 +93,6 @@ try:
             vitesse = VITESSE_LIGNE
             derniere_cible = cible
             derniere_vitesse = vitesse
-            rgb.eteindre()
 
         elif etat == (1,1,0):
             compteur_pointille = 0
@@ -111,14 +103,12 @@ try:
             vitesse = 28
             derniere_cible = cible
             derniere_vitesse = vitesse
-            rgb.clignotant_gauche(cligno)
 
         elif etat == (1,0,0):
             compteur_pointille = 0
             compteur_perdu = 0
             compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = 1
-            rgb.clignotant_gauche(cligno)
             if compteur_virage > 3:
                 cible = GAUCHE_FORT
             else:
@@ -136,14 +126,12 @@ try:
             vitesse = 28
             derniere_cible = cible
             derniere_vitesse = vitesse
-            rgb.clignotant_droite(cligno)
 
         elif etat == (0,0,1):
             compteur_pointille = 0
             compteur_perdu = 0
             compteur_virage = min(compteur_virage + 1, 5)
             dernier_sens = -1
-            rgb.clignotant_droite(cligno)
             if compteur_virage > 3:
                 cible = DROITE_FORT
             else:
@@ -177,7 +165,6 @@ try:
                 # Pointillé probable (état modéré + angle proche du centre)
                 compteur_pointille += 1
                 if compteur_pointille <= SEUIL_POINTILLE:
-                    rgb.warnings(cligno)
                     # Transition douce
                     if compteur_pointille == 1:
                         cible = derniere_cible
@@ -188,7 +175,6 @@ try:
                     vitesse = VITESSE_POINTILLE
                 else:
                     # Pointillé trop long → recherche
-                    rgb.perte_ligne()
                     compteur_perdu += 1
                     if compteur_perdu > SEUIL_PERDU_MAX:
                         print("--- Fin de parcours ---")
@@ -202,7 +188,6 @@ try:
                     vitesse = VITESSE_PERDU
             else:
                 # Autre cas (par exemple angle éloigné ou état inattendu) → recherche immédiate
-                rgb.perte_ligne()
                 compteur_perdu += 1
                 if compteur_perdu > SEUIL_PERDU_MAX:
                     print("--- Fin de parcours ---")
@@ -231,6 +216,3 @@ except KeyboardInterrupt:
     print("STOP")
     robot.stopper()
     servos.set_angle(0, CENTRE)
-    rgb.eteindre()
-    rgb.destroy()
-
