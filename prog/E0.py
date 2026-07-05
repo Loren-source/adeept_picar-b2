@@ -142,28 +142,28 @@ def scanner_obstacle():
 
     # ----------- Gauche -----------
 
-    servos.set_angle(1, SERVO_GAUCHE)
+    servos.set_angle(1, ANGLE_SCAN_GAUCHE)
     time.sleep(0.35)
 
     distance_gauche = mesurer_distance()
 
     # ----------- Centre -----------
 
-    servos.set_angle(1, SERVO_CENTRE)
+    servos.set_angle(1, ANGLE_SCAN_CENTRE)
     time.sleep(0.35)
 
     distance_centre = mesurer_distance()
 
     # ----------- Droite -----------
 
-    servos.set_angle(1, SERVO_DROITE)
+    servos.set_angle(1, ANGLE_SCAN_DROITE)
     time.sleep(0.35)
 
     distance_droite = mesurer_distance()
 
     # Retour au centre
 
-    servos.set_angle(1, SERVO_CENTRE)
+    servos.set_angle(1, ANGLE_SCAN_CENTRE)
 
     print(
         f"G={distance_gauche:.0f}  "
@@ -219,7 +219,7 @@ def obstacle_devant():
 
     print(f"[Distance] {d:.0f} mm")
 
-    return d < DISTANCE_DETECTION
+    return d < SEUIL_SCAN
 # ============================================================
 # BOUCLE PRINCIPALE
 # ============================================================
@@ -243,7 +243,7 @@ try:
             avancer()
 
             # Détection d'un obstacle à environ 45 cm
-            if distance < DISTANCE_DETECTION:
+            if distance < SEUIL_SCAN:
 
                 stopper()
                 etat_robot = ETAT_SCAN
@@ -272,7 +272,7 @@ try:
 
             if distance > DISTANCE_STOP:
 
-                avancer(VITESSE_LENTE)
+                avancer(VITESSE_CONTOURNEMENT)
 
             else:
 
@@ -296,11 +296,11 @@ try:
 
                 tourner_droite()
 
-            robot.set_motor(1, VITESSE_TOURNER)
+            robot.set_motor(1, VITESSE_CONTOURNEMENT)
 
             # Tant qu'on ne voit PAS la bordure noire
             while not bordure_detectee():
-                 robot.set_motor(1, VITESSE_TOURNER)
+                 robot.set_motor(1, VITESSE_CONTOURNEMENT)
                  time.sleep(0.02)
 
             stopper()
