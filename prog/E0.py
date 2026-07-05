@@ -49,58 +49,6 @@ SEUIL_DANGER = 180        # Distance critique
 # Valeur de secours si le capteur renvoie une erreur
 
 DISTANCE_FAUSSE = 3000
-#!/usr/bin/env python3
-
-import time
-import threading
-
-from motor import RobotMotor
-from servo import RobotServos
-from ultrasonic import Ultrasonic
-from lineTracking import LineTracker
-
-
-# ============================================================
-# INITIALISATION
-# ============================================================
-
-robot = RobotMotor()
-servos = RobotServos()
-tracker = LineTracker()
-ultrasonic = Ultrasonic()
-
-
-# ============================================================
-# REGLAGES
-# ============================================================
-
-ANGLE_CENTRE = 97
-
-ANGLE_GAUCHE = 125
-ANGLE_DROITE = 65
-
-ANGLE_SCAN_GAUCHE = 150
-ANGLE_SCAN_CENTRE = 97
-ANGLE_SCAN_DROITE = 40
-
-
-VITESSE_AVANCE = 35
-VITESSE_CONTOURNEMENT = 22
-VITESSE_RECENTRAGE = 28
-VITESSE_STOP = 0
-
-
-# Distances (en mm)
-
-SEUIL_SCAN = 450          # Commencer à analyser l'obstacle (45 cm)
-SEUIL_ARRET = 300         # Arrêt obligatoire à 30 cm
-SEUIL_DANGER = 180        # Distance critique
-
-
-# Valeur de secours si le capteur renvoie une erreur
-
-DISTANCE_FAUSSE = 3000
-
 # ============================================================
 # ETATS DU ROBOT
 # ============================================================
@@ -352,8 +300,8 @@ try:
 
             # Tant qu'on ne voit PAS la bordure noire
             while not bordure_detectee():
-                robot.set_motor(1, VITESSE_TOURNER)
-                time.sleep(0.02)
+                 robot.set_motor(1, VITESSE_TOURNER)
+                 time.sleep(0.02)
 
             stopper()
 
@@ -370,8 +318,8 @@ try:
             # On longe la bordure
 
             while bordure_detectee():
-                robot.set_motor(1, VITESSE_AVANCE)
-                time.sleep(0.02)
+                 robot.set_motor(1, VITESSE_AVANCE)
+                 time.sleep(0.02)
 
             stopper()
 
