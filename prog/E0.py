@@ -1,111 +1,688 @@
 #!/usr/bin/env python3
-"""
-EvitementObstacle_v3.py
-
-Architecture à états :
-- AVANCER
-- SCAN
-- TOURNER
-- LONGER
-- REPRISE
-
-Compatible avec les modules Adeept :
-motor.py, servo.py, Ultra.py, line.py
-"""
+# -*- coding: utf-8 -*-
 
 import time
+import threading
+
 from motor import RobotMotor
 from servo import RobotServos
-from ultra import Ultrasonic
+from Ultra import Ultrasonic
+from line import LineTracker
+
+# ============================================================
+# INITIALISATION
+# ============================================================
 
 robot = RobotMotor()
 servos = RobotServos()
-ultra = Ultrasonic()
+tracker = LineTracker()
+ultrasonic = Ultrasonic()
 
-CENTRE = 97
-GAUCHE = 125
-DROITE = 70
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-VITESSE = 30
-VITESSE_CONTOUR = 22
-STOP = 220
+# Servo de direction (CH0)
+ANGLE_CENTRE = 97
+ANGLE_GAUCHE = 135
+ANGLE_DROITE = 60
 
-etat = "AVANCER"
-direction = CENTRE
-t0 = 0
+# Servo tête (CH1)
+TETE_CENTRE = 97
+SCAN_GAUCHE = 40
+SCAN_DROITE = 150
+PAS_SCAN = 10
 
-def dir_angle(a):
-    servos.set_angle(0, a)
+# Vitesses
+VITESSE_AVANCE = 30
+VITESSE_EVITEMENT = 22
+VITESSE_RECUL = 18
 
-def tete(a):
-    servos.set_angle(1, a)
+# Distances (mm)
+SEUIL_OBSTACLE = 450
+SEUIL_DANGER = 180
+SEUIL_PASSAGE = 500
+DISTANCE_FAUSSE = 3000
 
-def dist():
-    try:
-        return ultra.get_distance()
-    except Exception:
-        return 9999
+# Temporisations
+PERIODE_ULTRASON = 0.05
+PERIODE_IR = 0.03
+PERIODE_DECISION = 0.05
 
-dir_angle(CENTRE)
-tete(97)
-robot.set_motor(1, VITESSE)
+DUREE_RECUL = 0.6
+DUREE_CORRECTION = 0.35
 
-try:
-    while True:
-        d = dist()
-        print(etat, d)
+MAX_PAS_EVITEMENT = 10
 
-        if etat == "AVANCER":
-            dir_angle(CENTRE)
-            robot.set_motor(1, VITESSE)
-            if d < STOP:
-                robot.set_motor(1, 0)
-                etat = "SCAN"
+# ============================================================
+# ETAT PARTAGE ENTRE THREADS
+# ============================================================
 
-        elif etat == "SCAN":
-            mesures = {}
-            for nom, ang in [("gauche",150),("centre",97),("droite",40)]:
-                tete(ang)
-                time.sleep(0.25)
-                mesures[nom] = dist()
-            tete(97)
+etat = {
+    "distance": DISTANCE_FAUSSE,
+    "pattern": (1, 1, 1),
+    "running": True
+}
 
-            meilleur = max(mesures, key=mesures.get)
-            direction = GAUCHE if meilleur=="gauche" else DROITE if meilleur=="droite" else CENTRE
+lock = threading.Lock()
 
-            dir_angle(direction)
-            robot.set_motor(1, VITESSE_CONTOUR)
-            t0 = time.time()
-            etat = "TOURNER"
+# ============================================================
+# FONCTIONS SERVO
+# ============================================================
 
-        elif etat == "TOURNER":
-            dir_angle(direction)
-            robot.set_motor(1, VITESSE_CONTOUR)
+def roues(angle):
+    angle = max(0, min(180, angle))
+    servos.set_angle(0, angle)
 
-            # garde le braquage pendant 0.8 s
-            if time.time()-t0 > 0.8:
-                t0 = time.time()
-                etat = "LONGER"
 
-        elif etat == "LONGER":
-            dir_angle(direction)
-            robot.set_motor(1, VITESSE_CONTOUR)
+def tete(angle):
+    angle = max(0, min(180, angle))
+    servos.set_angle(1, angle)
 
-            # obstacle dépassé
-            if dist() > 450 and time.time()-t0 > 0.6:
-                t0 = time.time()
-                etat = "REPRISE"
+# ============================================================
+# FONCTIONS MOTEUR
+# ============================================================
 
-        elif etat == "REPRISE":
-            dir_angle(CENTRE)
-            robot.set_motor(1, VITESSE)
+def avancer(vitesse=VITESSE_AVANCE):
+    robot.drive_with_ramp(vitesse, 1, 0.05)
 
-            if time.time()-t0 > 0.6:
-                etat = "AVANCER"
 
-        time.sleep(0.05)
+def reculer(vitesse=VITESSE_RECUL):
+    robot.drive_with_ramp(vitesse, -1, 0.05)
 
-except KeyboardInterrupt:
+
+def stop():
     robot.stopper()
-    dir_angle(CENTRE)
-    tete(97)
+
+# ============================================================
+# THREAD ULTRASON
+# ============================================================
+
+def lecture_ultrason():
+
+    while True:
+
+        with lock:
+            if not etat["running"]:
+                break
+
+        distance = ultrasonic.get_distance()
+
+        if distance <= 0:
+            distance = DISTANCE_FAUSSE
+
+        with lock:
+            etat["distance"] = distance
+
+        time.sleep(PERIODE_ULTRASON)
+
+# ============================================================
+# THREAD IR
+# ============================================================
+
+def lecture_ir():
+
+    while True:
+
+        with lock:
+            if not etat["running"]:
+                break
+
+        valeurs = tracker.get_status()
+
+        pattern = (
+            valeurs["left"],
+            valeurs["middle"],
+            valeurs["right"]
+        )
+
+        with lock:
+            etat["pattern"] = pattern
+
+        time.sleep(PERIODE_IR)
+
+# ============================================================
+# LECTURE SYNCHRONISEE
+# ============================================================
+
+def lire_etat():
+
+    with lock:
+        return (
+            etat["distance"],
+            etat["pattern"]
+        )
+
+# ============================================================
+# DEMARRAGE
+# ============================================================
+
+def demarrer_threads():
+
+    t1 = threading.Thread(
+        target=lecture_ultrason,
+        daemon=True
+    )
+
+    t2 = threading.Thread(
+        target=lecture_ir,
+        daemon=True
+    )
+
+    t1.start()
+    t2.start()
+
+    return t1, t2
+
+
+def arreter_threads():
+
+    with lock:
+        etat["running"] = False
+
+# ============================================================
+# DETECTION
+# ============================================================
+
+def obstacle_detecte(distance):
+    return distance < SEUIL_OBSTACLE
+
+
+def collision_imminente(distance):
+    return distance < SEUIL_DANGER
+
+
+def bordure_detectee(pattern):
+    """
+    1 = noir
+    0 = blanc
+
+    Si un capteur voit du blanc,
+    on considère que le robot approche
+    de la limite de la zone.
+    """
+    return 0 in pattern
+
+
+# ============================================================
+# SCAN RADAR
+# ============================================================
+
+def scanner():
+
+    mesures = []
+
+    stop()
+
+    time.sleep(0.10)
+
+    for angle in range(SCAN_GAUCHE,
+                       SCAN_DROITE + PAS_SCAN,
+                       PAS_SCAN):
+
+        tete(angle)
+
+        time.sleep(0.12)
+
+        distance = ultrasonic.get_distance()
+
+        if distance <= 0:
+            distance = DISTANCE_FAUSSE
+
+        libre = distance >= SEUIL_PASSAGE
+
+        mesures.append({
+            "angle": angle,
+            "distance": distance,
+            "libre": libre
+        })
+
+        print(
+            f"[SCAN] {angle:3d}° "
+            f"{distance:5.0f} mm "
+            f"libre={libre}"
+        )
+
+    tete(TETE_CENTRE)
+
+    return mesures
+
+
+# ============================================================
+# RECHERCHE DES PASSAGES
+# ============================================================
+
+def detecter_gaps(mesures):
+
+    gaps = []
+
+    courant = []
+
+    for point in mesures:
+
+        if point["libre"]:
+
+            courant.append(point)
+
+        else:
+
+            if courant:
+
+                gaps.append(courant)
+
+            courant = []
+
+    if courant:
+
+        gaps.append(courant)
+
+    return gaps
+
+
+# ============================================================
+# SCORE D'UN PASSAGE
+# ============================================================
+
+def score_gap(gap):
+
+    largeur = len(gap)
+
+    distance = sum(
+        p["distance"] for p in gap
+    ) / largeur
+
+    centre = gap[largeur // 2]["angle"]
+
+    penalite = abs(centre - TETE_CENTRE)
+
+    return (
+        largeur * 250
+        + distance
+        - penalite * 12
+    )
+
+
+# ============================================================
+# CHOIX DU MEILLEUR PASSAGE
+# ============================================================
+
+def choisir_gap(gaps):
+
+    if not gaps:
+        return None
+
+    meilleur = max(
+        gaps,
+        key=score_gap
+    )
+
+    debut = meilleur[0]["angle"]
+    fin = meilleur[-1]["angle"]
+    centre = meilleur[len(meilleur)//2]["angle"]
+
+    print()
+
+    print("Passage choisi")
+    print("----------------------")
+    print("Début :", debut)
+    print("Fin   :", fin)
+    print("Centre:", centre)
+    print("Score :", score_gap(meilleur))
+
+    return centre
+
+
+# ============================================================
+# CONVERSION EN ANGLE DES ROUES
+# ============================================================
+
+def angle_direction(angle_scan):
+
+    erreur = angle_scan - TETE_CENTRE
+
+    if abs(erreur) < 8:
+
+        return ANGLE_CENTRE
+
+    if erreur < 0:
+
+        return ANGLE_GAUCHE
+
+    return ANGLE_DROITE
+
+
+# ============================================================
+# DECISION
+# ============================================================
+
+def choisir_direction():
+
+    mesures = scanner()
+
+    if not mesures:
+        return None
+
+    gaps = detecter_gaps(mesures)
+
+    if not gaps:
+
+        print("Aucun passage trouvé")
+
+        return None
+
+    angle_scan = choisir_gap(gaps)
+
+    if angle_scan is None:
+        return None
+
+    return angle_direction(angle_scan)
+
+# ============================================================
+# SECURITES
+# ============================================================
+
+def recul_urgence():
+
+    print("[URGENCE] Obstacle trop proche")
+
+    stop()
+    time.sleep(0.15)
+
+    roues(ANGLE_CENTRE)
+
+    reculer()
+    time.sleep(DUREE_RECUL)
+
+    stop()
+    time.sleep(0.2)
+
+
+def corriger_bordure(pattern):
+
+    print(f"[IR] {pattern}")
+
+    stop()
+    time.sleep(0.1)
+
+    reculer()
+    time.sleep(0.4)
+
+    stop()
+
+    if pattern[0] == 0:
+        # Bord à gauche
+        roues(ANGLE_DROITE)
+
+    elif pattern[2] == 0:
+        # Bord à droite
+        roues(ANGLE_GAUCHE)
+
+    else:
+        # Devant ou ambigu
+        roues(ANGLE_GAUCHE)
+
+    avancer(VITESSE_EVITEMENT)
+    time.sleep(DUREE_CORRECTION)
+
+    stop()
+
+    roues(ANGLE_CENTRE)
+
+
+# ============================================================
+# AVANCEMENT SURVEILLE
+# ============================================================
+
+def avancer_surveille(duree, angle):
+
+    roues(angle)
+    avancer(VITESSE_EVITEMENT)
+
+    debut = time.time()
+
+    while time.time() - debut < duree:
+
+        distance, pattern = lire_etat()
+
+        if collision_imminente(distance):
+
+            stop()
+            recul_urgence()
+            return False
+
+        if bordure_detectee(pattern):
+
+            stop()
+            corriger_bordure(pattern)
+            return False
+
+        time.sleep(PERIODE_DECISION)
+
+    stop()
+
+    return True
+
+
+# ============================================================
+# CONTOURNEMENT
+# ============================================================
+
+def contourner():
+
+    print()
+    print("===== CONTORNEMENT =====")
+
+    for tentative in range(MAX_PAS_EVITEMENT):
+
+        distance, pattern = lire_etat()
+
+        if collision_imminente(distance):
+
+            recul_urgence()
+            continue
+
+        if bordure_detectee(pattern):
+
+            corriger_bordure(pattern)
+            continue
+
+        if not obstacle_detecte(distance):
+
+            print("Obstacle dépassé")
+
+            roues(ANGLE_CENTRE)
+
+            avancer(VITESSE_AVANCE)
+            time.sleep(0.6)
+
+            stop()
+
+            return
+
+        angle = choisir_direction()
+
+        if angle is None:
+
+            print("Aucun passage")
+
+            recul_urgence()
+
+            continue
+
+        print(f"Direction roues : {angle}")
+
+        ok = avancer_surveille(
+            0.9,
+            angle
+        )
+
+        if not ok:
+
+            continue
+
+    print("Nombre maximum de tentatives atteint")
+
+    recul_urgence()
+
+
+# ============================================================
+# RECENTRAGE
+# ============================================================
+
+def recentrer():
+
+    print("Recentrage")
+
+    roues(ANGLE_CENTRE)
+
+    avancer(VITESSE_AVANCE)
+
+    debut = time.time()
+
+    while time.time() - debut < 1.0:
+
+        distance, pattern = lire_etat()
+
+        if collision_imminente(distance):
+
+            stop()
+            return
+
+        if bordure_detectee(pattern):
+
+            stop()
+            return
+
+        time.sleep(PERIODE_DECISION)
+
+    stop()
+# ============================================================
+# INITIALISATION
+# ============================================================
+
+def initialiser():
+
+    print("=" * 50)
+    print("MISSION C - EVITEMENT D'OBSTACLES")
+    print("=" * 50)
+
+    roues(ANGLE_CENTRE)
+    tete(TETE_CENTRE)
+
+    stop()
+
+    demarrer_threads()
+
+    time.sleep(0.5)
+
+    print("Robot prêt.\n")
+
+
+# ============================================================
+# BOUCLE PRINCIPALE
+# ============================================================
+
+def boucle_principale():
+
+    while True:
+
+        distance, pattern = lire_etat()
+
+        print(
+            f"[INFO] Distance = {distance:.0f} mm | "
+            f"IR = {pattern}"
+        )
+
+        # ---------------------------------------
+        # Bordure détectée
+        # ---------------------------------------
+
+        if bordure_detectee(pattern):
+
+            corriger_bordure(pattern)
+
+            continue
+
+        # ---------------------------------------
+        # Obstacle très proche
+        # ---------------------------------------
+
+        if collision_imminente(distance):
+
+            recul_urgence()
+
+            continue
+
+        # ---------------------------------------
+        # Obstacle détecté
+        # ---------------------------------------
+
+        if obstacle_detecte(distance):
+
+            contourner()
+
+            recentrer()
+
+            continue
+
+        # ---------------------------------------
+        # Route libre
+        # ---------------------------------------
+
+        roues(ANGLE_CENTRE)
+
+        avancer(VITESSE_AVANCE)
+
+        time.sleep(PERIODE_DECISION)
+
+
+# ============================================================
+# FERMETURE
+# ============================================================
+
+def fermeture():
+
+    print("\nArrêt du robot...")
+
+    arreter_threads()
+
+    stop()
+
+    roues(ANGLE_CENTRE)
+    tete(TETE_CENTRE)
+
+    time.sleep(0.3)
+
+    robot.destroy()
+
+    servos.pca.deinit()
+
+    print("Robot arrêté.")
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    try:
+
+        initialiser()
+
+        boucle_principale()
+
+    except KeyboardInterrupt:
+
+        print("\nInterruption utilisateur.")
+
+    finally:
+
+        fermeture()
+
+
+# ============================================================
+
+if __name__ == "__main__":
+
+    main()
