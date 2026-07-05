@@ -201,7 +201,7 @@ def bordure_detectee(pattern):
     on considère que le robot approche
     de la limite de la zone.
     """
-    return 0 in pattern
+    return 1 in pattern
 
 
 # ============================================================
@@ -409,14 +409,13 @@ def corriger_bordure(pattern):
 
     stop()
 
-    if pattern[0] == 0:
+    if pattern[0] == 1:
         # Bord à gauche
         roues(ANGLE_DROITE)
 
-    elif pattern[2] == 0:
+    elif pattern[2] == 1:
         # Bord à droite
         roues(ANGLE_GAUCHE)
-
     else:
         # Devant ou ambigu
         roues(ANGLE_GAUCHE)
