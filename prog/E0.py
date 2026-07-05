@@ -33,16 +33,16 @@ ANGLE_SCAN_CENTRE = 97
 ANGLE_SCAN_DROITE = 40
 
 
-VITESSE_AVANCE = 35
-VITESSE_CONTOURNEMENT = 22
-VITESSE_RECENTRAGE = 28
+VITESSE_AVANCE = 20
+VITESSE_CONTOURNEMENT = 12
+VITESSE_RECENTRAGE = 20
 VITESSE_STOP = 0
 
 
 # Distances (en mm)
 
-SEUIL_SCAN = 450          # Commencer à analyser l'obstacle (45 cm)
-SEUIL_ARRET = 300         # Arrêt obligatoire à 30 cm
+SEUIL_SCAN = 500         # Commencer à analyser l'obstacle (45 cm)
+SEUIL_ARRET = 350         # Arrêt obligatoire à 30 cm
 SEUIL_DANGER = 180        # Distance critique
 
 
@@ -266,20 +266,29 @@ try:
         # APPROCHE
         # =====================================================
         elif etat_robot == ETAT_ARRET:
-                # On commence déjà à braquer pendant l'approche
-                    if direction == "gauche":
-                        tourner_gauche()
-                    else:
-                        tourner_droite()
-                
-                    # On avance lentement roues déjà braquées
-                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
-                
-                    # Quand on est à 30 cm, on passe directement au contournement
-                    if distance <= SEUIL_ARRET:
-                        stopper()
-                        time.sleep(0.15)
-                        etat_robot = ETAT_BRAQUER
+            # On braque déjà vers le côté choisi
+            if direction == "gauche":
+                tourner_gauche()
+            else:
+                tourner_droite()
+        
+            # Vitesse progressive selon la distance
+            if distance > 400:
+                robot.set_motor(1, 18)
+        
+            elif distance > 350:
+                robot.set_motor(1, 15)
+        
+            else:
+                robot.set_motor(1, 10)
+        
+            # À 30 cm, on commence le vrai contournement
+            if distance <= SEUIL_ARRET:
+        
+                stopper()
+                time.sleep(0.15)
+        
+                etat_robot = ETAT_BRAQUER
         # =====================================================
         # BRAQUER
         # =====================================================
@@ -321,7 +330,7 @@ try:
 
             etat_robot = ETAT_AVANCER
 
-        time.sleep(0.03)
+        time.sleep(0.02)
 
 except KeyboardInterrupt:
 
