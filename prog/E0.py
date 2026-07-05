@@ -117,7 +117,7 @@ def recentrer():
 def mesurer_distance():
 
     try:
-        d = ultrasonic.get_distance() * 1000
+        d = ultrasonic.get_distance()
 
         if d <= 0:
             return DISTANCE_FAUSSE
@@ -270,7 +270,7 @@ try:
 
             # On s'approche doucement jusqu'à 30 cm
 
-            if distance > DISTANCE_STOP:
+            if distance > SEUIL_ARRET:
 
                 avancer(VITESSE_CONTOURNEMENT)
 
@@ -287,22 +287,24 @@ try:
         # =====================================================
 
         elif etat_robot == ETAT_BRAQUER:
-
             if direction == "gauche":
-
-                tourner_gauche()
-
+        
+                while not bordure_detectee():
+        
+                    tourner_gauche()          # on maintient le braquage
+                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
+        
+                    time.sleep(0.02)
+        
             else:
-
-                tourner_droite()
-
-            robot.set_motor(1, VITESSE_CONTOURNEMENT)
-
-            # Tant qu'on ne voit PAS la bordure noire
-            while not bordure_detectee():
-                 robot.set_motor(1, VITESSE_CONTOURNEMENT)
-                 time.sleep(0.02)
-
+        
+                while not bordure_detectee():
+        
+                    tourner_droite()          # on maintient le braquage
+                    robot.set_motor(1, VITESSE_CONTOURNEMENT)
+        
+                    time.sleep(0.02)
+        
             stopper()
 
             etat_robot = ETAT_CONTOURNER
@@ -318,6 +320,7 @@ try:
             # On longe la bordure
 
             while bordure_detectee():
+                 recentrer() 
                  robot.set_motor(1, VITESSE_AVANCE)
                  time.sleep(0.02)
 
@@ -354,4 +357,4 @@ finally:
     robot.stopper()
 
     servos.set_angle(0, ANGLE_CENTRE)
-    servos.set_angle(1, SERVO_CENTRE)
+    servos.set_angle(1, ANGLE_SCAN_CENTRE)
