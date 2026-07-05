@@ -265,7 +265,7 @@ try:
         # =====================================================
         # APPROCHE
         # =====================================================
-             elif etat_robot == ETAT_ARRET:
+        elif etat_robot == ETAT_ARRET:
                 # On commence déjà à braquer pendant l'approche
                     if direction == "gauche":
                         tourner_gauche()
