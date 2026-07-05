@@ -16,76 +16,62 @@ ultrasonic = Ultrasonic()
 tracker = LineTracker()
 
 # ============================================================
-# RÉGLAGES OPTIMISÉS
+# RÉGLAGES (conformes à vos demandes)
 # ============================================================
 ANGLE_CENTRE = 97
-ANGLE_GAUCHE = 135              # augmenté pour braquer plus fort
-ANGLE_DROITE = 55               # augmenté (symétrique)
+ANGLE_GAUCHE = 135
+ANGLE_DROITE = 55
 
 ANGLE_SCAN_GAUCHE = 150
 ANGLE_SCAN_CENTRE = 97
 ANGLE_SCAN_DROITE = 40
 
 VITESSE_AVANCE = 35
-VITESSE_APPROCHE = 15
-VITESSE_CONTOURNEMENT = 18
+VITESSE_APPROCHE_18 = 18
+VITESSE_APPROCHE_15 = 15
+VITESSE_APPROCHE_12 = 12
+VITESSE_APPROCHE_8 = 8
 VITESSE_SORTIE = 22
 VITESSE_RECUL = 15
 
-DISTANCE_SCAN = 450
-DISTANCE_BRAQUAGE = 300
-DISTANCE_CRITIQUE = 200
-DISTANCE_FAUSSE = 3000
+DISTANCE_SCAN = 450          # 45 cm
+DISTANCE_APPROCHE_FIN = 300  # 30 cm
+DISTANCE_SORTIE = 500        # 50 cm (obstacle derrière)
+DISTANCE_CRITIQUE = 200      # sécurité (si plus bas, recul)
 
-DUREE_BRAQUAGE = 0.6            # réduit pour un braquage plus rapide
+DISTANCE_FAUSSE = 3000
 
 # États
 ETAT_AVANCER = 0
 ETAT_SCAN = 1
 ETAT_APPROCHE = 2
-ETAT_BRAQUER = 3
-ETAT_CONTOURNER = 4
+ETAT_CONTOURNER = 3
+ETAT_SCAN_SORTIE = 4
 ETAT_RECENTRER = 5
 
 etat_robot = ETAT_AVANCER
 direction = None
 distance = DISTANCE_FAUSSE
-distance_gauche = DISTANCE_FAUSSE
-distance_centre = DISTANCE_FAUSSE
-distance_droite = DISTANCE_FAUSSE
-
 
 # ============================================================
 # FONCTIONS DE DÉPLACEMENT
 # ============================================================
-def avancer(vitesse=VITESSE_AVANCE):
+def avancer(vitesse):
     servos.set_angle(0, ANGLE_CENTRE)
     robot.set_motor(1, vitesse)
 
-def avancer_braque():
-    if direction == "gauche":
-        servos.set_angle(0, ANGLE_GAUCHE)
-    else:
-        servos.set_angle(0, ANGLE_DROITE)
-    robot.set_motor(1, VITESSE_APPROCHE)
+def avancer_braque(angle, vitesse):
+    servos.set_angle(0, angle)
+    robot.set_motor(1, vitesse)
 
-def tourner_gauche():
-    servos.set_angle(0, ANGLE_GAUCHE)
-    robot.set_motor(1, VITESSE_CONTOURNEMENT)
-
-def tourner_droite():
-    servos.set_angle(0, ANGLE_DROITE)
-    robot.set_motor(1, VITESSE_CONTOURNEMENT)
-
-def recentrer():
-    servos.set_angle(0, ANGLE_CENTRE)
+def reculer(vitesse):
+    robot.set_motor(-1, vitesse)
 
 def stopper():
     robot.set_motor(1, 0)
 
-def reculer(vitesse=VITESSE_RECUL):
-    robot.set_motor(-1, vitesse)
-
+def recentrer():
+    servos.set_angle(0, ANGLE_CENTRE)
 
 # ============================================================
 # ULTRASON
@@ -99,56 +85,41 @@ def mesurer_distance():
     except:
         return DISTANCE_FAUSSE
 
-
 # ============================================================
-# SCAN
+# SCAN (peut être appelé plusieurs fois)
 # ============================================================
 def scanner_obstacle():
-    global distance_gauche, distance_centre, distance_droite
+    global direction
     print("\n===== SCAN =====")
     servos.set_angle(1, ANGLE_SCAN_GAUCHE)
     time.sleep(0.35)
-    distance_gauche = mesurer_distance()
+    dist_g = mesurer_distance()
     servos.set_angle(1, ANGLE_SCAN_CENTRE)
     time.sleep(0.35)
-    distance_centre = mesurer_distance()
+    dist_c = mesurer_distance()
     servos.set_angle(1, ANGLE_SCAN_DROITE)
     time.sleep(0.35)
-    distance_droite = mesurer_distance()
+    dist_d = mesurer_distance()
     servos.set_angle(1, ANGLE_SCAN_CENTRE)
-    print(f"G={distance_gauche:.0f} mm | C={distance_centre:.0f} mm | D={distance_droite:.0f} mm")
-
-
-# ============================================================
-# CHOIX DE LA DIRECTION
-# ============================================================
-def choisir_direction():
-    if distance_gauche >= distance_droite:
-        return "gauche"
-    return "droite"
-
+    print(f"G={dist_g:.0f} mm | C={dist_c:.0f} mm | D={dist_d:.0f} mm")
+    if dist_g >= dist_d:
+        direction = "gauche"
+    else:
+        direction = "droite"
+    print("Direction choisie :", direction)
 
 # ============================================================
-# CAPTEURS IR
+# CAPTEURS IR (pour rester dans l'arène)
 # ============================================================
 def lire_ir():
     s = tracker.get_status()
     return (s["left"], s["middle"], s["right"])
 
-def bordure_detectee():
-    etat = lire_ir()
-    return etat[0] == 1 or etat[2] == 1
-
-def arena_retrouvee():
-    etat = lire_ir()
-    return etat == (0, 0, 0)
-
-
 # ============================================================
-# INITIALISATION
+# BOUCLE PRINCIPALE
 # ============================================================
 print("\n==================================================")
-print("MISSION C - ÉVITEMENT D'OBSTACLES (ANGLES OPTIMISÉS)")
+print("MISSION C - ÉVITEMENT D'OBSTACLES (AVEC SCAN FINAL)")
 print("==================================================")
 servos.set_angle(0, ANGLE_CENTRE)
 servos.set_angle(1, ANGLE_SCAN_CENTRE)
@@ -156,109 +127,87 @@ stopper()
 time.sleep(1)
 print("\nRobot prêt.\n")
 
-
-# ============================================================
-# BOUCLE PRINCIPALE
-# ============================================================
 try:
     while True:
         distance = mesurer_distance()
         print(f"Etat={etat_robot} | Distance={distance:.0f} mm")
 
-        # ---- AVANCER ----
+        # ---- 1. AVANCER ----
         if etat_robot == ETAT_AVANCER:
-            avancer()
+            avancer(VITESSE_AVANCE)
             if distance <= DISTANCE_SCAN:
                 stopper()
                 etat_robot = ETAT_SCAN
 
-        # ---- SCAN ----
+        # ---- 2. SCAN (initial) ----
         elif etat_robot == ETAT_SCAN:
             scanner_obstacle()
-            direction = choisir_direction()
-            print("Direction :", direction)
             etat_robot = ETAT_APPROCHE
 
-        # ---- APPROCHE ----
+        # ---- 3. APPROCHE (braqué dès le début, vitesse progressive) ----
         elif etat_robot == ETAT_APPROCHE:
-            avancer_braque()
-            if distance > 400:
-                robot.set_motor(1, 18)
-            elif distance > 350:
-                robot.set_motor(1, 15)
-            else:
-                robot.set_motor(1, 10)
-            if distance <= DISTANCE_BRAQUAGE:
-                stopper()
-                time.sleep(0.15)
-                etat_robot = ETAT_BRAQUER
-
-        # ---- BRAQUER ----
-        elif etat_robot == ETAT_BRAQUER:
-            print("[BRAQUER] Direction:", direction)
             if direction == "gauche":
-                servos.set_angle(0, ANGLE_GAUCHE)
+                angle_braque = ANGLE_GAUCHE
             else:
-                servos.set_angle(0, ANGLE_DROITE)
-            robot.set_motor(1, VITESSE_CONTOURNEMENT)
-            time.sleep(DUREE_BRAQUAGE)      # 0.6s
-            stopper()
-            etat_robot = ETAT_CONTOURNER
+                angle_braque = ANGLE_DROITE
 
-        # ---- CONTOURNER ----
+            if distance > 400:
+                vitesse = VITESSE_APPROCHE_18
+            elif distance > 350:
+                vitesse = VITESSE_APPROCHE_15
+            elif distance > 300:
+                vitesse = VITESSE_APPROCHE_12
+            else:
+                vitesse = VITESSE_APPROCHE_8
+
+            avancer_braque(angle_braque, vitesse)
+
+            if distance <= DISTANCE_APPROCHE_FIN:
+                etat_robot = ETAT_CONTOURNER
+
+        # ---- 4. CONTOURNEMENT (reste braqué, suit la bordure) ----
         elif etat_robot == ETAT_CONTOURNER:
-            recentrer()
-            robot.set_motor(1, VITESSE_SORTIE)
-            debut = time.time()
-            dist_precedente = distance
-            while True:
-                dist_act = mesurer_distance()
-                ir = lire_ir()
-                print(f"[CONTOURNER] dist={dist_act:.0f}, IR={ir}")
+            if direction == "gauche":
+                angle_braque = ANGLE_GAUCHE
+            else:
+                angle_braque = ANGLE_DROITE
 
-                # Sortie si obstacle franchi
-                if dist_act > DISTANCE_SCAN:
-                    print("Plus d'obstacle, sortie du contournement")
-                    break
+            avancer_braque(angle_braque, VITESSE_SORTIE)
 
-                # Si distance critique -> recul et re-scan
-                if dist_act < DISTANCE_CRITIQUE or (dist_act < dist_precedente - 30):
-                    print("Trop proche ou rapprochement -> recul et re-scan")
-                    stopper()
-                    time.sleep(0.2)
-                    reculer(VITESSE_RECUL)
-                    time.sleep(0.6)
-                    stopper()
-                    etat_robot = ETAT_SCAN
-                    break
+            ir = lire_ir()
+            if ir[0] == 1 and ir[2] == 0:
+                servos.set_angle(0, ANGLE_DROITE)
+            elif ir[2] == 1 and ir[0] == 0:
+                servos.set_angle(0, ANGLE_GAUCHE)
 
-                # Correction de bordure avec angles optimisés
-                if ir[0] == 1:
-                    servos.set_angle(0, ANGLE_DROITE)   # on braque à droite pour corriger
-                elif ir[2] == 1:
-                    servos.set_angle(0, ANGLE_GAUCHE)   # on braque à gauche
-                else:
-                    servos.set_angle(0, ANGLE_CENTRE)
-
-                # Sécurité anti-boucle
-                if time.time() - debut > 8.0:
-                    print("Temps max atteint, sortie")
-                    break
-
-                dist_precedente = dist_act
-                time.sleep(0.05)
-
-            if etat_robot != ETAT_SCAN:
+            # Sortie : obstacle dépassé ET arène retrouvée
+            if distance > DISTANCE_SORTIE and ir == (0, 0, 0):
+                print("Obstacle dépassé, on va faire un scan final.")
                 stopper()
-                etat_robot = ETAT_RECENTRER
+                etat_robot = ETAT_SCAN_SORTIE
 
-        # ---- RECENTRER ----
+            # Sécurité recul
+            if distance < DISTANCE_CRITIQUE:
+                print("Distance critique ! Recul d'urgence.")
+                stopper()
+                time.sleep(0.2)
+                reculer(VITESSE_RECUL)
+                time.sleep(0.6)
+                stopper()
+
+        # ---- 5. SCAN FINAL (après obstacle) ----
+        elif etat_robot == ETAT_SCAN_SORTIE:
+            scanner_obstacle()
+            etat_robot = ETAT_RECENTRER
+
+        # ---- 6. RECENTRAGE ----
         elif etat_robot == ETAT_RECENTRER:
             recentrer()
-            robot.set_motor(1, VITESSE_SORTIE)
+            avancer(VITESSE_SORTIE)
             time.sleep(0.6)
             stopper()
             etat_robot = ETAT_AVANCER
+            print("Recentrage terminé, retour à l'avance.")
 
         time.sleep(0.03)
 
