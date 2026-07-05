@@ -7,11 +7,10 @@ from servo import RobotServos
 from lineTracking import LineTracker
 import rgb
 
-rgb.setup()
-
 robot = RobotMotor()
 servos = RobotServos()
 tracker = LineTracker()
+rgb.setup()
 
 
 # ==========================
