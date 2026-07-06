@@ -34,9 +34,10 @@ CAPTURE_INTERVAL = 0.5   # seconds: pause between frame captures during detectio
 
 # Absolute servo angles for channel 0 (steering) — same scale as tache11.py.
 # Centre is slightly above 90 to match the physical servo neutral.
-ANGLE_CENTER = 97    # straight ahead
-ANGLE_LEFT   = 130   # full left turn
-ANGLE_RIGHT  = 65    # full right turn
+ANGLE_CENTER      = 97    # straight ahead
+ANGLE_LEFT        = 130   # full left turn
+ANGLE_RIGHT       = 65    # full right turn
+ANGLE_SLIGHT_LEFT = 107   # very small left angle used while backing up blind
 
 DRIVE_SPEED  = 30    # throttle % for driving forward  (0–100)
 TURN_SPEED   = 35    # throttle % during cornering — needs more torque than straight driving
@@ -60,6 +61,8 @@ def steer(servos, direction):
         servos.set_angle(STEERING_CANAL, ANGLE_LEFT)
     elif direction == 'right':
         servos.set_angle(STEERING_CANAL, ANGLE_RIGHT)
+    elif direction == 'slight_left':
+        servos.set_angle(STEERING_CANAL, ANGLE_SLIGHT_LEFT)
     else:
         servos.set_angle(STEERING_CANAL, ANGLE_CENTER)
 
@@ -186,10 +189,11 @@ def main():
                 if direction is None:
                     # ── Step 5: no arrow found — reverse slightly and retry ────
                     print(f"  No arrow found after {ARROW_TIMEOUT:.0f} s — reversing to retry...")
-                    steer(servos, 'forward')
+                    steer(servos, 'slight_left')   # nudge wheels slightly left while backing up blind
                     move.video_Tracking_Move(BACKUP_SPEED, -1)   # reverse
                     time.sleep(BACKUP_TIME)
                     move.motorStop()
+                    steer(servos, 'forward')       # re-centre before driving forward again
                     continue   # restart the main loop
 
                 # ── Step 4: steer and drive through the junction ─────────────
