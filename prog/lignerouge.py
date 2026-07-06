@@ -229,6 +229,8 @@ class CVThread(threading.Thread):
             self._control_motors()
             self.threading = False
             self.pause()
+    def stop(self):
+    self.stopped = True
 
 
 # ==========================================
