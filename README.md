@@ -1,42 +1,76 @@
-# Adeept PiCar-B for RPi
-Adeept PiCar-B is an open source intelligent robotics product for artificial intelligence, robotics enthusiasts and students. This product is based on the Raspberry Pi motherboard using the python language and is compatible with the following Raspberry Pi models: 3B,3B+,4,5, etc.
+# Adeept PiCar-B2 – Robot autonome (Raspberry Pi)
 
+Fork du dépôt officiel [adeept/adeept_picar-b2](https://github.com/adeept/adeept_picar-b2), enrichi dans le cadre du **Mastercamp EFREI** avec des algorithmes de navigation autonome développés sur la plateforme robotique **PiCar-B2** (Raspberry Pi + capteurs IR + servomoteurs).
 
-## Resources Links
+## Ce qui a été développé (dossier `prog/`)
 
-[RobotName]: Adeept PiCar-B \
-[Item Code]: ADR012 \
-[Official Raspberry Pi website]: https://www.raspberrypi.org/downloads/    \
-[Official website]:  https://www.adeept.com/     \
-[Web Source Code]: https://github.com/adeept/Adeept_Bot_Controller_WebUI.git
+Le dossier `examples/` reste celui d'origine Adeept (code de référence du fabricant). **Tout le développement personnel a été fait dans `prog/`** :
 
+**Navigation autonome**
+- `lineTracking.py`, `suivi-ligne.py`, `lignerouge.py` — suivi de ligne par capteurs infrarouges
+- `lightTracking.py` — suivi de source lumineuse
+- `EvitementsObstacle.py`, `obstacle.py`, `obstacle_labyrinthe.py`, `avancer-distance-check.py` — détection et évitement d'obstacles (capteur ultrason), y compris en environnement labyrinthe
 
-## Getting Support or Providing Advice
+**Vision / détection**
+- `arrow_detector.py` — détection de flèches directionnelles
+- `panel_detector.py` — détection de panneaux
+- `Caméra.py` — gestion du flux caméra
 
-Adeept provides free and responsive product and technical support, including but not limited to:   
-* Product quality issues 
-* Product use and build issues
-* Questions regarding the technology employed in our products for learning and education
-* Your input and opinions are always welcome
+**Orchestration de mission**
+- `main.py` — point d'entrée du programme
+- `mission_manager.py`, `mission_state.py` — gestion des états et de l'enchaînement des missions du robot
+- `resource_manager.py` — gestion des ressources (capteurs/actionneurs partagés entre threads)
 
-We also encourage your ideas and suggestions for new products and product improvements
-For any of the above, you may send us an email to:     \
-Technical support: support@adeept.com      \
-Customer Service: service@adeept.com
+**Contrôle matériel bas niveau**
+- `motor.py`, `move.py` — pilotage moteurs et déplacements
+- `servo.py`, `RPIservo.py`, `initPosServos.py` — pilotage et initialisation des servomoteurs
+- `ultra.py` — capteur ultrason
+- `LED.py`, `RGB.py` / `rgb.py`, `ws2812.py`, `Spi_WS2812.py` — pilotage des LEDs (dont bandeau WS2812)
+- `buzzer.py` — buzzer
+- `BatteryLevelMonitoring.py` — surveillance du niveau de batterie
 
+**Tests et étapes de développement (Mastercamp)**
+- `E0.py`, `Tache10.py`, `tache11.py`, `test.py`, `test_main_menu.py` — scripts de test et jalons du projet
 
-## About Adeept
+**Système**
+- `setup.py` — configuration/installation
+- `wifi_hotspot_manager.sh` — gestion du point d'accès Wi-Fi du robot
 
-Adeept was founded in 2015 and is a company dedicated to open source hardware and STEM education services. The Adeept technical team continuously develops new technologies, uses excellent products as technology and service carriers, and provides comprehensive tutorials and after-sales technical support to help users combine learning with entertainment. The main products include various learning kits and robots for Arduino, Raspberry Pi, ESP32 and BBC micro:bit.    \
-Adeept is committed to assist customers in their education of robotics, programming and electronic circuits so that they may transform their creative ideas into prototypes and new and innovative products. To this end, our services include but are not limited to:   
-* Educational and Entertaining Project Kits for Robots, Smart Cars and Drones
-* Educational Kits to Learn Robotic Software Systems for Arduino, Raspberry Pi and micro: bit
-* Electronic Component Assortments, Electronic Modules and Specialized Tools
-* Product Development and Customization Services
+## Matériel
 
+- Raspberry Pi (châssis PiCar-B2, Adeept)
+- Capteurs infrarouges (suivi de ligne)
+- Capteur ultrason (évitement d'obstacles)
+- Capteurs de luminosité (suivi de lumière)
+- Caméra (détection de flèches/panneaux)
+- Bandeau LED WS2812 + buzzer
+- Servomoteurs (direction + caméra)
 
-## Copyright
+## Structure du repo
 
-Adeept brand and logo are copyright of Shenzhen Adeept Technology Co., Ltd. and cannot be used without written permission.
+```
+├── examples/               # Code d'exemple fourni par Adeept (base d'origine)
+├── prog/                   # Programme du robot, développé pendant le Mastercamp
+│   ├── main.py              # Point d'entrée
+│   ├── mission_manager.py / mission_state.py   # Orchestration des missions
+│   ├── lineTracking.py / lightTracking.py       # Suivi de ligne / lumière
+│   ├── EvitementsObstacle.py / obstacle*.py      # Évitement d'obstacles
+│   ├── arrow_detector.py / panel_detector.py     # Vision
+│   ├── motor.py / servo.py / ultra.py / LED.py / buzzer.py  # Contrôle matériel
+│   └── ...
+├── web/                    # Interface web de contrôle du robot
+├── flask-video-streaming/    # Streaming vidéo (sous-module)
+└── README.md
+```
 
+## Contexte
 
+Projet réalisé lors du Mastercamp EFREI Paris, incluant également un volet gestion de projet dont le planning,registre des risques non présent dans ce dépôt technique.
+
+## Origine
+
+Base matérielle et logicielle initiale : [Adeept](https://github.com/adeept/adeept_picar-b2) et l'école. Ce fork contient les développements algorithmiques réalisés dans le cadre du projet académique.
+
+## Auteur
+
+Loren Koudoukpo et son groupe — EFREI Paris, Master Camp, Systèmes embarqués
